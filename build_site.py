@@ -50,15 +50,47 @@ INDEX_CODES = set(INDEX_YAHOO)
 
 # --- 한글 폰트 ---
 def _setup_korean_font():
+    """
+    한글 폰트 파일을 matplotlib에 직접 등록.
+    koreanize-matplotlib 패키지는 Python 3.12에서 import 자체가 실패하므로(distutils 제거),
+    import 하지 않고 패키지 안에 들어 있는 나눔고딕 파일만 찾아서 씀. 없으면 시스템 한글 폰트 사용.
+    """
+    import importlib.util
+    from matplotlib import font_manager as fm
+    cands = []
     try:
-        import koreanize_matplotlib  # noqa: F401
-        mpl.rcParams["axes.unicode_minus"] = False
-        return True
+        spec = importlib.util.find_spec("koreanize_matplotlib")   # 최상위 패키지는 import 없이 위치만 찾음
+        for loc in (spec.submodule_search_locations or []) if spec else []:
+            cands.append(os.path.join(loc, "fonts", "NanumGothic.ttf"))
     except Exception:
-        print("[경고] 한글 폰트(koreanize-matplotlib) 없음 → 차트 제목은 종목코드로 표시")
-        return False
+        pass
+    cands += [
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "C:/Windows/Fonts/malgun.ttf",
+        "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+    ]
+    for path in cands:
+        if not os.path.exists(path):
+            continue
+        try:
+            fm.fontManager.addfont(path)
+            name = fm.FontProperties(fname=path).get_name()
+            mpl.rcParams["font.family"] = name
+            mpl.rcParams["axes.unicode_minus"] = False
+            print(f"[폰트] {name} ({path})")
+            return True
+        except Exception:
+            continue
+    print("[경고] 한글 폰트를 찾지 못함 → 차트 글자를 영문·숫자로만 표시")
+    return False
 
 KFONT = _setup_korean_font()
+# 차트 안 글자 (한글 폰트가 없으면 영문으로 대체해 □□ 깨짐 방지)
+TXT = ({"ma": "{}일", "sup": "지지 추세선", "res": "저항 추세선", "eok": "억", "man": "만"} if KFONT else
+       {"ma": "MA{}", "sup": "Support", "res": "Resistance", "eok": "e8", "man": "e4"})
 
 
 # --- 데이터 수신 ---
@@ -220,8 +252,8 @@ def _fmt_price(x, is_index):
 
 
 def _fmt_vol(y, _):
-    if y >= 1e8: return f"{y/1e8:.1f}억"
-    if y >= 1e4: return f"{y/1e4:,.0f}만"
+    if y >= 1e8: return f"{y/1e8:.1f}{TXT['eok']}"
+    if y >= 1e4: return f"{y/1e4:,.0f}{TXT['man']}"
     return f"{y:,.0f}"
 
 
@@ -266,7 +298,7 @@ def render_chart(code, name, df_full, is_index=False):
     for w in MA_LIST:
         col = MA_COLORS.get(w, "#555555")
         ax.plot(x, d[f"MA{w}"].values, color=col, linewidth=1.1 if w > 5 else 0.9, zorder=4)
-        handles.append(Line2D([0], [0], color=col, lw=1.5, label=f"{w}일"))
+        handles.append(Line2D([0], [0], color=col, lw=1.5, label=TXT["ma"].format(w)))
 
     x_end = n - 1 + TREND_EXTEND
     sets = [(TREND_LONG, "-", 1.6, 0.95)]
@@ -282,9 +314,9 @@ def render_chart(code, name, df_full, is_index=False):
                     linestyle=ls, linewidth=lw, alpha=alpha, zorder=5)
             drew.add(kind)
     if "support" in drew:
-        handles.append(Line2D([0], [0], color=SUPPORT_COLOR, lw=1.6, label="지지 추세선"))
+        handles.append(Line2D([0], [0], color=SUPPORT_COLOR, lw=1.6, label=TXT["sup"]))
     if "resistance" in drew:
-        handles.append(Line2D([0], [0], color=RESIST_COLOR, lw=1.6, label="저항 추세선"))
+        handles.append(Line2D([0], [0], color=RESIST_COLOR, lw=1.6, label=TXT["res"]))
 
     last, prev = c[-1], (df_full["Close"].iloc[-2] if len(df_full) > 1 else c[-1])
     chg = (last / prev - 1) * 100
