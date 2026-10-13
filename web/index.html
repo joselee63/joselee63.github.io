@@ -29,6 +29,8 @@ a{color:inherit}
 header{position:sticky;top:0;z-index:21;background:var(--card);border-bottom:1px solid var(--line)}
 .top{max-width:1840px;margin:0 auto;padding:11px 18px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
 .top h1{font-size:18px;margin:0;letter-spacing:-.2px}
+.home{color:inherit;text-decoration:none;cursor:pointer}
+@media (hover:hover){ .home:hover{opacity:.7} }
 .meta{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;color:var(--muted);font-size:12.5px}
 .meta b{color:var(--fg);font-weight:600}
 .meta .upd b{font-size:13.5px}
@@ -128,7 +130,9 @@ a.go:hover{text-decoration:underline;text-decoration-color:currentColor}
 .flt input{width:58px;padding:2px 5px;display:block;margin:1px 0 1px auto}
 #rtbl th,#rtbl td{padding:7px 8px}
 #rtbl .ar{margin-left:2px;width:9px}
-#rtbl td.e{max-width:150px;overflow:hidden;text-overflow:ellipsis}
+#rtbl td.e{max-width:122px;overflow:hidden;text-overflow:ellipsis}
+#rtbl td.nmc{max-width:150px;overflow:hidden;text-overflow:ellipsis}
+#rtbl tr.h th{line-height:1.25;vertical-align:bottom}
 #rtbl a.go{font-weight:600}
 
 /* 차트 */
@@ -184,7 +188,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
 <body>
 <header id="hdr">
   <div class="top">
-    <h1>한국 증시 섹터 차트</h1>
+    <h1><a href="./" id="home" class="home" title="처음 화면으로">한국 증시 섹터 차트</a></h1>
     <div class="meta" id="meta"><span>불러오는 중…</span></div>
     <div class="act">
       <span class="status" id="status"><span class="dot"></span><span id="stxt"></span></span>
@@ -213,7 +217,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
   <section id="sector" class="card" style="display:none">
     <div class="card-h">
       <h2>섹터 강도</h2>
-      <p class="sub">제목 클릭 = 정렬(다시 클릭하면 반대로) · 섹션 이름 클릭 = 결과표에서 그 섹션만 보기 · 거래대금 = 종가×거래량 근사 · 지수·ETF 섹션 제외</p>
+      <p class="sub">제목 클릭 = 정렬(다시 클릭하면 반대로) · 섹션 이름 클릭 = 결과표에서 그 섹션만 보기 · 거래대금 = KRX 집계(목록이 없는 날은 종가×거래량 근사) · 저항 돌파/지지 이탈 = 돌파·이탈 후 유지 중인 종목 수 · 지수·ETF 섹션 제외</p>
     </div>
     <div class="card-b"><div class="box" id="sectbox"><table class="tbl sect" id="secttbl"><thead></thead><tbody></tbody></table></div></div>
   </section>
@@ -221,7 +225,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
   <section id="result" class="card" style="display:none">
     <div class="card-h">
       <h2>종목별 결과표</h2>
-      <p class="sub">숫자 칸 아래 입력창: 위 = 최소, 아래 = 최대 (예: 5일% 최소 5, 거래량배수 최소 2) · 제목 클릭 = 정렬 · 종목명 클릭 = 차트로 이동</p>
+      <p class="sub">숫자 칸 아래 입력창: 위 = 최소, 아래 = 최대 (예: 5일% 최소 5, 거래량배수 최소 2) · 제목 클릭 = 정렬 · 종목명 클릭 = 차트로 이동<br>경과일 = 추세선 돌파·이탈 후 지난 거래일 (D+0 = 오늘 돌파, 돌파한 선 아래로 다시 마감하면 해제) · 시가총액 = 상장주식수 × 종가 (ETF·지수 제외)</p>
     </div>
     <div class="card-b">
       <div class="bar">
@@ -258,14 +262,16 @@ footer ul{margin:4px 0 10px;padding-left:18px}
   "use strict";
   var TOKEN_KEY = "krsc_gh_token";
   var COLS = [
-    ["섹션","s"],["종목","s"],["코드","s"],["설명","s"],["종가","price"],
+    ["섹션","s"],["종목","s"],["코드","s"],["설명","s"],["종가","price"],["시가총액(억)","int"],
     ["1일%","pct"],["5일%","pct"],["20일%","pct"],["52주고가대비%","pct"],
-    ["MA20이격%","pct"],["거래대금(억)","int"],["거래량배수","x"],["추세선","s"]
+    ["MA20이격%","pct"],["거래대금(억)","int"],["거래량배수","x"],["추세선","s"],["경과일","days"]
   ];
   var SCOLS = [   // 섹터 강도 표: [키, 제목, 형식]
     ["섹션","섹션","s"],["평균 5일%","평균 5일%","bar"],["평균 1일%","평균 1일%","pct"],["평균 20일%","평균 20일%","pct"],
     ["거래대금 합(억)","거래대금 합(억)","int"],["_ma20","MA20 위","ratio"],["저항돌파","저항 돌파","n"],["지지이탈","지지 이탈","n"]
   ];
+  var HEAD = { "시가총액(억)": "시가총액<br>(억)", "52주고가대비%": "52주<br>고가대비%", "MA20이격%": "MA20<br>이격%",
+               "거래대금(억)": "거래대금<br>(억)", "거래량배수": "거래량<br>배수", "경과일": "돌파·이탈<br>경과일" };   // 긴 제목은 두 줄로
   var TEXT_KEYS = /^(섹션|종목|코드|설명|추세선)$/;
   var SECTIONS = ["sector", "result", "charts"];
   var S = null;                                  // 현재 데이터
@@ -406,7 +412,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
       var th = document.createElement("th");
       th.className = "sortable" + (isNum(c[1]) ? "" : " l");
       th.setAttribute("data-k", c[0]);
-      th.innerHTML = esc(c[0]) + '<span class="ar">↕</span>';
+      th.innerHTML = (HEAD[c[0]] || esc(c[0])) + '<span class="ar">↕</span>';
       hr.appendChild(th);
       var tf = document.createElement("th");
       if (isNum(c[1])) {
@@ -438,13 +444,17 @@ footer ul{margin:4px 0 10px;padding-left:18px}
     if (t === "price") return "<td" + k + ">" + comma(v, r._idx ? 2 : 0) + "</td>";
     if (t === "int") return "<td" + k + ">" + comma(v, 0) + "</td>";
     if (t === "x") return "<td" + k + ">" + v.toFixed(1) + "</td>";
+    if (t === "days") {                                  // 추세선 돌파·이탈 후 지난 거래일 (D+0 = 오늘)
+      var dc = r["추세선"] === "저항선 돌파" ? "var(--up)" : (r["추세선"] === "지지선 이탈" ? "var(--dn)" : "inherit");
+      return "<td" + k + ' title="' + esc(r["추세선"]) + ' 후 ' + Math.round(v) + '거래일"><span style="color:' + dc + ';font-weight:600">D+' + Math.round(v) + "</span></td>";
+    }
     if (t === "pct") return "<td" + k + ">" + pct(v) + "</td>";
     if (c[0] === "추세선") {
       if (v === "저항선 돌파") return "<td" + kl + '"><span class="b up">' + v + "</span></td>";
       if (v === "지지선 이탈") return "<td" + kl + '"><span class="b dn">' + v + "</span></td>";
       return "<td" + kl + ' d">' + esc(v) + "</td>";
     }
-    if (c[0] === "종목") return "<td" + kl + '"><a class="go nm" href="#c-' + esc(r["코드"]) + '" data-c="' + esc(r["코드"]) + '">' + esc(v) + "</a></td>";
+    if (c[0] === "종목") return "<td" + kl + ' nmc" title="' + esc(v) + '"><a class="go nm" href="#c-' + esc(r["코드"]) + '" data-c="' + esc(r["코드"]) + '">' + esc(v) + "</a></td>";
     if (c[0] === "섹션" || c[0] === "설명") return "<td" + kl + ' d e" title="' + esc(v) + '">' + esc(v) + "</td>";
     return "<td" + kl + ' d">' + esc(v) + "</td>";
   }
@@ -524,8 +534,9 @@ footer ul{margin:4px 0 10px;padding-left:18px}
       for (j = 0; j < rows.length; j++) {
         r = rows[j];
         var flags = "";
-        if (r["추세선"] === "저항선 돌파") flags += ' <span class="b up">저항선 돌파</span>';
-        if (r["추세선"] === "지지선 이탈") flags += ' <span class="b dn">지지선 이탈</span>';
+        var dd = (r["경과일"] !== null && r["경과일"] !== undefined) ? " D+" + Math.round(r["경과일"]) : "";
+        if (r["추세선"] === "저항선 돌파") flags += ' <span class="b up">저항선 돌파' + dd + '</span>';
+        if (r["추세선"] === "지지선 이탈") flags += ' <span class="b dn">지지선 이탈' + dd + '</span>';
         if (r["거래량배수"] !== null && r["거래량배수"] >= 2) flags += ' <span class="b" style="background:rgba(217,119,6,.15);color:var(--warn)">거래량 ' + r["거래량배수"].toFixed(1) + '배</span>';
         if (r["마지막일"] && r["마지막일"] < S.meta.ref_date) flags += ' <span class="b" style="color:var(--up)">⚠ 마지막 거래 ' + esc(r["마지막일"]) + '</span>';
         h += '<div class="cell" id="c-' + esc(r["코드"]) + '"><div class="cap"><b>' + esc(r["종목"]) + '</b> <span class="c">' + esc(r["코드"]) +
@@ -551,6 +562,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
       h += "</ul>";
     }
     h += "데이터: 네이버 금융 일봉" + (m.n_yahoo ? " (일부 " + m.n_yahoo + "종목은 Yahoo Finance)" : "") +
+         (m.listing_day ? " · 상장주식수·거래대금 KRX " + esc(m.listing_day) + (m.amount_actual ? "" : " (거래대금은 근사)") : " · 시가총액 자료 없음") +
          " · 이동평균 " + (m.ma || []).join("·") + " · 빌드 " + m.build_seconds + "초" +
          (m.repo ? ' · <a href="https://github.com/' + esc(m.repo) + '/actions" target="_blank" rel="noopener">실행 기록</a>' : "");
     $("foot").innerHTML = h;
@@ -772,6 +784,21 @@ footer ul{margin:4px 0 10px;padding-left:18px}
     $("fsec").value = a.getAttribute("data-s"); applyFilter();
     $("tbox").scrollTop = 0;
     goSection("result");
+  });
+  $("home").addEventListener("click", function(e){
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;   // 새 탭으로 열기는 그대로
+    e.preventDefault();
+    var ins = document.querySelectorAll("#rtbl input.num");                 // 결과표 필터·정렬 초기화
+    for (var j = 0; j < ins.length; j++) ins[j].value = "";
+    $("q").value = ""; $("fsec").value = ""; $("ftr").value = ""; $("noetf").checked = true;
+    sortKey = null; sortDir = -1;
+    secKey = "평균 5일%"; secDir = -1;                                        // 섹터 강도 표 기본 정렬
+    if (S) { renderSector(); applyFilter(); }
+    $("tbox").scrollTop = 0; $("tbox").scrollLeft = 0; $("sectbox").scrollLeft = 0;
+    backPos = null; hideBack();
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (err) {}
+    setTab("sector"); spyLock = now() + 900;
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (err) { window.scrollTo(0, 0); }
   });
   $("upd").addEventListener("click", requestUpdate);
   $("tokreset").addEventListener("click", function(){
