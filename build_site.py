@@ -32,6 +32,11 @@ TREND_SHORT  = dict(lookback=45,  recent=3, min_span=8)    # 단기 추세선 (�
 SHOW_SHORT_TREND = True
 TREND_EXTEND = 8                      # 추세선 오른쪽 연장 봉 수
 BREAK_MARGIN = 0.01                   # 종가가 장기 추세선을 1% 넘게 벗어나야 '돌파/이탈'
+EVENT_LOOKBACK = 60                   # 최근 60거래일 안에 일어난 돌파/이탈만 추적 (경과일 계산)
+PIVOT_K      = 5                      # 추세선 접점 = 좌우 5봉 안에서 가장 낮은(높은) 봉 (작은 눌림·꼬리는 무시)
+PIVOT_TOL    = 0.005                  #   (0.5% 이내 차이는 같은 높이로 봄)
+# 상장주식수·실제 거래대금 (FinanceDataReader가 매일 올리는 KRX 상장 목록)
+LISTING_URL = "https://raw.githubusercontent.com/FinanceData/fdr_krx_data_cache/refs/heads/master/data/listing/krx/{}.csv"
 
 FIG_SIZE, FIG_DPI = (10, 5.4), 90
 MAX_WORKERS   = 6                     # 동시 다운로드 수
@@ -77,6 +82,9 @@ def _setup_korean_font():
             continue
         try:
             fm.fontManager.addfont(path)
+            bold = os.path.join(os.path.dirname(path), "NanumGothicBold.ttf")   # 제목용 굵은 글꼴
+            if os.path.exists(bold):
+                fm.fontManager.addfont(bold)
             name = fm.FontProperties(fname=path).get_name()
             mpl.rcParams["font.family"] = name
             mpl.rcParams["axes.unicode_minus"] = False
@@ -89,8 +97,10 @@ def _setup_korean_font():
 
 KFONT = _setup_korean_font()
 # 차트 안 글자 (한글 폰트가 없으면 영문으로 대체해 □□ 깨짐 방지)
-TXT = ({"ma": "{}일", "sup": "지지 추세선", "res": "저항 추세선", "eok": "억", "man": "만"} if KFONT else
-       {"ma": "MA{}", "sup": "Support", "res": "Resistance", "eok": "e8", "man": "e4"})
+TXT = ({"ma": "{}일", "sup": "지지 추세선", "res": "저항 추세선", "eok": "억", "man": "만",
+        "up": "돌파일(돌파한 선)", "down": "이탈일(이탈한 선)"} if KFONT else
+       {"ma": "MA{}", "sup": "Support", "res": "Resistance", "eok": "e8", "man": "e4",
+        "up": "Breakout", "down": "Breakdown"})
 
 
 # --- 데이터 수신 ---
@@ -177,6 +187,23 @@ def fetch_one(code, retries=2):
     raise RuntimeError(" / ".join(errs[-2:]))
 
 
+def fetch_listing(ref_date):
+    """KRX 상장 목록 (기준일부터 최대 7일 전까지 거슬러 찾음) → (DataFrame[코드→상장주식수·거래대금], 목록 날짜)"""
+    for k in range(8):
+        day = (ref_date - pd.Timedelta(days=k)).strftime("%Y-%m-%d")
+        try:
+            r = _session.get(LISTING_URL.format(day), timeout=20)
+            if r.status_code != 200:
+                continue
+            df = pd.read_csv(io.StringIO(r.content.decode("utf-8-sig")), dtype={"Code": str})
+            df = df.dropna(subset=["Code"]).set_index("Code")
+            df = df[~df.index.duplicated(keep="first")]
+            return df[["Stocks", "Amount", "Close"]], day
+        except Exception:
+            continue
+    return None, None
+
+
 # --- 지표 · 자동 추세선 ---
 def _cross(o, a, b):
     return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
@@ -207,13 +234,65 @@ def trend_line(high, low, kind, lookback, recent, min_span):
         return None
     hull = _hull(pts, lower=(kind == "support"))
     for a, b in reversed(list(zip(hull[:-1], hull[1:]))):
-        if b[0] - a[0] >= min_span:
+        # 두 접점이 모두 '확정된 저점/고점'(좌우 PIVOT_K봉 중 최저·최고, 0.5% 오차 허용)일 때만 인정
+        # → 구간 끝 무렵 아직 내려가는 중인 봉에 선이 걸려 가짜 추세선이 생기는 것 방지
+        if b[0] - a[0] >= min_span and _is_pivot(arr, a[0], kind) and _is_pivot(arr, b[0], kind):
             return (a[0], a[1], (b[1] - a[1]) / (b[0] - a[0]))
     return None
 
 
+def _is_pivot(arr, i, kind, k=None):
+    k = PIVOT_K if k is None else k
+    if i + k >= len(arr):                               # 오른쪽 확인 봉이 부족 → 아직 확정 안 됨
+        return False
+    seg = arr[max(0, i - k): i + k + 1]
+    if kind == "support":
+        return arr[i] <= np.nanmin(seg) * (1 + PIVOT_TOL)
+    return arr[i] >= np.nanmax(seg) * (1 - PIVOT_TOL)
+
+
 def _line_at(line, x):
     return None if line is None else line[1] + line[2] * (x - line[0])
+
+
+def trend_events(df):
+    """
+    돌파/이탈 '사건'을 날짜로 기록하고, 그 뒤로 유지되는지 추적.
+      1) 최근 EVENT_LOOKBACK일 동안 매일, 그날까지의 데이터로 장기 추세선을 다시 그려 상태를 판정
+         (종가 > 저항선×1.01 → 돌파 / 종가 < 지지선×0.99 → 이탈)
+      2) 상태가 바뀐 가장 최근 날 = 돌파일(또는 이탈일), 그날의 추세선 = '돌파한 선'
+      3) 그 뒤 종가가 돌파한 선 아래로(이탈은 위로) 마감한 적이 있으면 무효 → '추세선 안'
+    반환: (상태, 경과일, 사건정보)   경과일 0 = 오늘 돌파
+    """
+    hi, lo, cl = df["High"].values, df["Low"].values, df["Close"].values
+    n = len(cl)
+    start = max(TREND_LONG["lookback"], n - EVENT_LOOKBACK)
+    if n - start < 2:
+        return "추세선 안", None, None
+
+    def state_at(t):
+        res = trend_line(hi[:t + 1], lo[:t + 1], "resistance", **TREND_LONG)
+        sup = trend_line(hi[:t + 1], lo[:t + 1], "support", **TREND_LONG)
+        r, s = _line_at(res, t), _line_at(sup, t)
+        if r is not None and cl[t] > r * (1 + BREAK_MARGIN):
+            return "up", res
+        if s is not None and cl[t] < s * (1 - BREAK_MARGIN):
+            return "down", sup
+        return "in", None
+
+    ev, prev = None, state_at(start - 1)[0]
+    for t in range(start, n):
+        st, line = state_at(t)
+        if st != "in" and st != prev:
+            ev = {"t": t, "kind": st, "line": line}
+        prev = st
+    if ev is None:
+        return "추세선 안", None, None
+    for u in range(ev["t"] + 1, n):                      # 돌파한 선을 다시 넘어 마감했으면 무효
+        lv = _line_at(ev["line"], u)
+        if (ev["kind"] == "up" and cl[u] < lv) or (ev["kind"] == "down" and cl[u] > lv):
+            return "추세선 안", None, None
+    return ("저항선 돌파" if ev["kind"] == "up" else "지지선 이탈"), n - 1 - ev["t"], ev
 
 
 def calc_stats(df, is_index=False):
@@ -222,18 +301,7 @@ def calc_stats(df, is_index=False):
     pct = lambda k: (last / c.iloc[-1 - k] - 1) * 100 if len(c) > k else np.nan
     ma20 = c.rolling(20).mean().iloc[-1]
     vavg = v.iloc[-21:-1].mean() if len(v) > 21 else np.nan
-    disp = df.iloc[-DISPLAY_BARS:]
-    hi, lo = disp["High"].values, disp["Low"].values
-    sup = trend_line(hi, lo, "support", **TREND_LONG)
-    res = trend_line(hi, lo, "resistance", **TREND_LONG)
-    xl = len(disp) - 1
-    sup_v, res_v = _line_at(sup, xl), _line_at(res, xl)
-    if res_v is not None and last > res_v * (1 + BREAK_MARGIN):
-        trend = "저항선 돌파"
-    elif sup_v is not None and last < sup_v * (1 - BREAK_MARGIN):
-        trend = "지지선 이탈"
-    else:
-        trend = "추세선 안"
+    trend, days, ev = trend_events(df)
     return {
         "종가": last,
         "1일%": pct(1), "5일%": pct(5), "20일%": pct(20),
@@ -242,7 +310,9 @@ def calc_stats(df, is_index=False):
         "거래대금(억)": np.nan if is_index else last * float(v.iloc[-1]) / 1e8,
         "거래량배수": float(v.iloc[-1]) / vavg if vavg and vavg > 0 else np.nan,
         "추세선": trend,
+        "경과일": days,
         "마지막일": df.index[-1].strftime("%Y-%m-%d"),
+        "_event": ev,                                   # 차트 표시용 (페이지 데이터에는 안 들어감)
     }
 
 
@@ -270,7 +340,7 @@ def _compress_png(png):
         return png
 
 
-def render_chart(code, name, df_full, is_index=False):
+def render_chart(code, name, df_full, is_index=False, event=None):
     d = df_full.copy()
     for w in MA_LIST:
         d[f"MA{w}"] = d["Close"].rolling(w).mean()
@@ -318,13 +388,30 @@ def render_chart(code, name, df_full, is_index=False):
     if "resistance" in drew:
         handles.append(Line2D([0], [0], color=RESIST_COLOR, lw=1.6, label=TXT["res"]))
 
+    # 돌파일/이탈일 표시: 그날 캔들 아래(위)에 삼각형 + 그때 돌파한 추세선(점선)
+    if event:
+        off = len(df_full) - n
+        xb = event["t"] - off
+        if 0 <= xb < n:
+            up = event["kind"] == "up"
+            col = UP_COLOR if up else DOWN_COLOR
+            gap = (yhi - ylo) * 0.03
+            ax.scatter([xb], [l[xb] - gap if up else h[xb] + gap], marker="^" if up else "v", s=60,
+                       color=col, edgecolors="white", linewidths=0.7, zorder=7)
+            x1, y1, sl = event["line"]
+            xs, xe = max(x1, off), len(df_full) - 1 + TREND_EXTEND
+            ax.plot([xs - off, xe - off], [y1 + sl * (xs - x1), y1 + sl * (xe - x1)],
+                    color=RESIST_COLOR if up else SUPPORT_COLOR, linestyle=(0, (1, 1.6)), linewidth=1.6, zorder=5)
+            handles.append(Line2D([0], [0], color=col, marker="^" if up else "v", markersize=6,
+                                  linestyle=(0, (1, 1.6)), lw=1.4, label=TXT["up" if up else "down"]))
+
     last, prev = c[-1], (df_full["Close"].iloc[-2] if len(df_full) > 1 else c[-1])
     chg = (last / prev - 1) * 100
     lc = UP_COLOR if chg > 0 else DOWN_COLOR if chg < 0 else "#555555"
     ax.axhline(last, color=lc, linestyle=":", linewidth=0.9, zorder=1)
     ax.annotate(_fmt_price(last, is_index), xy=(1.0, last), xycoords=("axes fraction", "data"),
                 xytext=(3, 0), textcoords="offset points", va="center", ha="left",
-                fontsize=8.5, color="white", fontweight="bold",
+                fontsize=8.5, color="white", fontweight=600,
                 bbox=dict(boxstyle="square,pad=0.25", fc=lc, ec=lc), annotation_clip=False)
 
     ax.set_xlim(-1, x_end + 1)
@@ -342,7 +429,7 @@ def render_chart(code, name, df_full, is_index=False):
               ncol=len(handles), frameon=False, handlelength=1.6, columnspacing=1.0, borderaxespad=0.1)
 
     title = f"{name}  {code}" if KFONT else code
-    ax.set_title(title, loc="left", fontsize=12, fontweight="bold", pad=19)
+    ax.set_title(title, loc="left", fontsize=12, fontweight=600, pad=19)   # 나눔고딕 Bold = 600
     ax.set_title(f"{_fmt_price(last, is_index)}  {chg:+.2f}%   ({d.index[-1]:%Y-%m-%d})",
                  loc="right", fontsize=10.5, color=lc, pad=19)
 
@@ -378,8 +465,9 @@ def _render_job(args):
     code, name, df, out_path = args
     is_index = code in INDEX_CODES
     stats = calc_stats(df, is_index)
+    event = stats.pop("_event", None)
     with open(out_path, "wb") as f:
-        f.write(render_chart(code, name, df, is_index))
+        f.write(render_chart(code, name, df, is_index, event))
     return code, stats
 
 
@@ -502,12 +590,25 @@ def main():
                 failed[job[0]] = f"차트 오류: {e2}"[:200]
     print(f"      완료 {len(stats)}개 ({time.time() - t0:.0f}초)")
 
+    # 시가총액(억) = 상장주식수 × 종가 / 거래대금은 같은 날 목록이면 KRX 실제 거래대금으로 교체
+    listing, listing_day = fetch_listing(ref_date)
+    same_day = listing_day == ref_date.strftime("%Y-%m-%d")
+    print(f"      KRX 상장 목록: {listing_day or '받지 못함'}" + (" (거래대금 실제값 사용)" if same_day else ""))
     rows = []
     for s, it in sections:
         for c, nm, desc in it:
-            if c in stats:
-                rows.append({"섹션": s, "종목": nm, "코드": c, "설명": desc, **stats[c],
-                             "_etf": s in ETF_SECTIONS, "_idx": c in INDEX_CODES})
+            if c not in stats:
+                continue
+            st = dict(stats[c])
+            st["시가총액(억)"] = None
+            if listing is not None and c in listing.index:
+                li = listing.loc[c]
+                if pd.notna(li["Stocks"]) and li["Stocks"] > 0:
+                    st["시가총액(억)"] = float(li["Stocks"]) * st["종가"] / 1e8
+                if same_day and pd.notna(li["Amount"]) and li["Amount"] > 0:
+                    st["거래대금(억)"] = float(li["Amount"]) / 1e8
+            rows.append({"섹션": s, "종목": nm, "코드": c, "설명": desc, **st,
+                         "_etf": s in ETF_SECTIONS, "_idx": c in INDEX_CODES})
     summary = pd.DataFrame(rows)
 
     now = dt.datetime.now(KST)
@@ -519,6 +620,7 @@ def main():
         "trigger": trigger,
         "repo": repo, "branch": branch, "workflow": workflow,
         "n_total": len(codes), "n_ok": len(stats), "n_yahoo": n_yahoo,
+        "listing_day": listing_day, "amount_actual": bool(same_day), "event_lookback": EVENT_LOOKBACK,
         "failed": [{"code": c, "name": label.get(c, ""), "error": e} for c, e in failed.items()],
         "mismatch": mismatch,
         "ma": MA_LIST, "display_bars": DISPLAY_BARS,
