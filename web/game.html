@@ -183,6 +183,7 @@ h3{font-size:13.5px;margin:0 0 8px}
         <div><div class="lbl" style="text-align:right">평가자산</div><div class="mid" id="asset">-</div></div>
       </div>
       <div class="kv"><span>현금</span><span id="cash">-</span></div>
+      <div class="kv"><span>평가금액</span><span id="evalamt">-</span></div>
       <div class="kv"><span>보유주식</span><span id="hold">없음</span></div>
       <div class="kv"><span>평가손익</span><span id="pnl">-</span></div>
     </div>
@@ -388,6 +389,7 @@ h3{font-size:13.5px;margin:0 0 8px}
     $("ret").innerHTML = '<span style="color:' + col(ret) + '">' + sgn(ret * 100, 2) + "%</span>";
     $("asset").textContent = won(a);
     $("cash").textContent = won(G.cash);
+    $("evalamt").textContent = won(G.qty * p);            // 평가금액 = 현재가 × 보유수량
     if (G.qty) {
       var net = G.qty * p * (1 - SELL_FEE - TAX), gain = net - G.cost;
       $("hold").textContent = comma(G.qty) + "주 · 평단 " + comma(G.avg);
