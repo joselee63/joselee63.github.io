@@ -225,7 +225,7 @@ h3{font-size:13.5px;margin:0 0 8px}
       <div class="turn">
         <span class="lbl">턴</span>
         <div class="prog"><i id="prog"></i></div>
-        <b id="turn">0 / 50</b>
+        <b id="turn">0 / 100</b>
         <button class="reset" id="reset" type="button" title="지금 판을 끝내고 새 종목·새 시점으로 시작 (N)">다음 종목 ›</button>
       </div>
     </div>
@@ -259,14 +259,14 @@ h3{font-size:13.5px;margin:0 0 8px}
       <div class="hlist" id="hlist"></div>
     </div>
 
-    <p class="note">매수·매도는 그날 종가로 체결 · 비중은 매수 = 현금의 %, 매도 = 보유 수량의 % ·수수료 0.015% · 매도 시 세금 0.15% · 시작 자금 1,000만원 · 50턴이 끝나면 보유 주식은 자동 청산되고 종목과 기간이 공개됩니다.</p>
+    <p class="note">매수·매도는 그날 종가로 체결 · 비중은 매수 = 현금의 %, 매도 = 보유 수량의 % · 수수료 0.015% · 매도 시 세금 0.15% · 시작 자금 1,000만원 · 100턴이 끝나면 보유 주식은 자동 청산되고 종목과 기간이 공개됩니다.</p>
   </aside>
 </div>
 
 <script>
 (function(){
   "use strict";
-  var TURNS = 50, VIEW = 120, WARM = 119, RPAD = 6;   // 턴 수 · 화면에 보이는 봉 수 · MA120 준비 봉 · 오른쪽 여백 칸
+  var TURNS = 100, VIEW = 120, WARM = 119, RPAD = 6;   // 턴 수 · 화면에 보이는 봉 수 · MA120 준비 봉 · 오른쪽 여백 칸
   var CASH0 = 10000000, BUY_FEE = 0.00015, SELL_FEE = 0.00015, TAX = 0.0015;
   var HIST_KEY = "krsc_game_hist";
   var MAS = [10, 20, 60, 120];

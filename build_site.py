@@ -48,7 +48,7 @@ MA_COLORS = {5: "#9B5DE5", 20: "#F4A100", 60: "#2A9D8F", 120: "#7F8C8D",
              50: "#2A9D8F", 200: "#7F8C8D", 10: "#C77DFF"}
 SUPPORT_COLOR, RESIST_COLOR = "#00A6C8", "#E0479E"
 GAME_BARS    = 1250                   # 차트 게임용 과거 일봉 수 (약 5년, 코스피 포함). 0이면 게임 데이터 안 만듦
-GAME_MIN     = 300                    # 이보다 짧은 종목은 게임 풀에서 제외 (지표 준비 + 화면 + 50턴)
+GAME_MIN     = 360                    # 이보다 짧은 종목은 게임 풀에서 제외 (지표 준비 119 + 화면 120 + 100턴 + 여유)
 FETCH_BARS = max(DISPLAY_BARS + max(MA_LIST), 260, GAME_BARS) + 20
 
 INDEX_YAHOO = {"KOSPI": "^KS11", "KOSDAQ": "^KQ11", "KPI200": "^KS200"}
