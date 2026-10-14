@@ -47,7 +47,9 @@ UP_COLOR, DOWN_COLOR = "#E5383B", "#1D63D8"
 MA_COLORS = {5: "#9B5DE5", 20: "#F4A100", 60: "#2A9D8F", 120: "#7F8C8D",
              50: "#2A9D8F", 200: "#7F8C8D", 10: "#C77DFF"}
 SUPPORT_COLOR, RESIST_COLOR = "#00A6C8", "#E0479E"
-FETCH_BARS = max(DISPLAY_BARS + max(MA_LIST), 260) + 20
+GAME_BARS    = 1250                   # 차트 게임용 과거 일봉 수 (약 5년, 코스피 포함). 0이면 게임 데이터 안 만듦
+GAME_MIN     = 300                    # 이보다 짧은 종목은 게임 풀에서 제외 (지표 준비 + 화면 + 50턴)
+FETCH_BARS = max(DISPLAY_BARS + max(MA_LIST), 260, GAME_BARS) + 20
 
 INDEX_YAHOO = {"KOSPI": "^KS11", "KOSDAQ": "^KQ11", "KPI200": "^KS200"}
 INDEX_CODES = set(INDEX_YAHOO)
@@ -502,6 +504,44 @@ def _records(df):
     return out
 
 
+def write_game_data(data, sections, build_id):
+    """
+    차트 게임용 데이터: site/game/{번호}.json (종목마다 하나) + site/game/pool.json (개수)
+      · 지수·ETF는 제외, 일봉이 GAME_MIN개 미만인 종목도 제외
+      · 파일 이름은 매번 섞은 번호라 종목을 알 수 없고, 종목명·날짜는 게임이 끝날 때 공개용으로만 인코딩해 둠
+      · 같은 날짜의 코스피 일봉(×100 정수)을 종목 봉마다 맞춰 함께 넣음 (ko·kh·kl·kc) → 날짜 없이도 같은 시점 표시
+    """
+    import base64, random
+    kospi = data.get("KOSPI", {}).get("df")
+    pool = []
+    for s, it in sections:
+        if s in ETF_SECTIONS:
+            continue
+        for c, nm, _ in it:
+            if c in data and c not in INDEX_CODES and len(data[c]["df"]) >= GAME_MIN:
+                pool.append((c, nm, s))
+    pool = list(dict.fromkeys(pool))
+    random.shuffle(pool)
+    gdir = os.path.join(SITE_DIR, "game")
+    os.makedirs(gdir, exist_ok=True)
+    for i, (c, nm, s) in enumerate(pool):
+        df = data[c]["df"].iloc[-GAME_BARS:]
+        reveal = {"name": nm, "code": c, "sector": s, "d": [int(x.strftime("%Y%m%d")) for x in df.index]}
+        rec = {k: [int(round(x)) for x in df[col].values]
+               for k, col in [("o", "Open"), ("h", "High"), ("l", "Low"), ("c", "Close"), ("v", "Volume")]}
+        if kospi is not None:
+            k = kospi.reindex(df.index).ffill().bfill()          # 코스피에 없는 날은 직전 값으로
+            if k["Close"].notna().all():
+                for key, col in [("ko", "Open"), ("kh", "High"), ("kl", "Low"), ("kc", "Close")]:
+                    rec[key] = [int(round(x * 100)) for x in k[col].values]
+        rec["r"] = base64.b64encode(json.dumps(reveal, ensure_ascii=False).encode("utf-8")).decode("ascii")
+        with open(os.path.join(gdir, f"{i}.json"), "w", encoding="utf-8") as f:
+            json.dump(rec, f, separators=(",", ":"))
+    with open(os.path.join(gdir, "pool.json"), "w", encoding="utf-8") as f:
+        json.dump({"n": len(pool), "build": build_id}, f)
+    return len(pool)
+
+
 def _gh_output(**kv):
     path = os.environ.get("GITHUB_OUTPUT")
     if path:
@@ -638,8 +678,11 @@ def main():
     print("[3/3] 페이지 생성")
     with open(os.path.join(SITE_DIR, "data", "summary.js"), "w", encoding="utf-8") as f:
         f.write("window.__krsc_summary && window.__krsc_summary(" + js + ");\n")
-    shutil.copy(os.path.join(WEB_DIR, "index.html"), os.path.join(SITE_DIR, "index.html"))
+    for page in ("index.html", "game.html"):
+        shutil.copy(os.path.join(WEB_DIR, page), os.path.join(SITE_DIR, page))
     open(os.path.join(SITE_DIR, ".nojekyll"), "w").close()
+    if GAME_BARS:
+        print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'])}개")
 
     size_mb = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(SITE_DIR) for f in fs) / 1e6
     print(f"      site/ {size_mb:.1f}MB · 업데이트 {meta['updated_at']} · 기준일 {meta['ref_date']} "

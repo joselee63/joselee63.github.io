@@ -61,6 +61,7 @@ header{position:sticky;top:0;z-index:21;background:var(--card);border-bottom:1px
 .tab .n{font-size:11px;font-weight:600;padding:1px 7px;border-radius:9px;background:var(--soft);color:var(--muted);min-width:22px;text-align:center}
 .tab.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .tab.on .n{background:rgba(255,255,255,.2);color:var(--accent-fg)}
+.tab.game{margin-left:auto;text-decoration:none}   /* 별도 페이지로 이동하는 탭 */
 @media (prefers-color-scheme: dark){ .tab.on .n{background:rgba(0,0,0,.15)} }
 
 /* ---------- 카드(구역) ---------- */
@@ -173,6 +174,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
   .tabs .in{padding:7px 10px;gap:6px}
   .tab{flex:1;padding:8px 4px;font-size:13px;gap:5px}
   .tab .n{display:none}
+  .tab.game{margin-left:0}
   .wrap{padding:0 10px 100px}
   .card-h{padding:12px 12px 10px}
   .card-b{padding:12px 10px 14px}
@@ -184,6 +186,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
   .bar .q{width:100%}
   .xc{padding:4px 8px 12px}
 }
+@media (max-width:520px){ .tab svg,.tab .sl{display:none} .tab{white-space:nowrap} }
 </style>
 </head>
 <body>
@@ -205,10 +208,13 @@ footer ul{margin:4px 0 10px;padding-left:18px}
       섹터 강도 <span class="n" id="n-sector"></span></button>
     <button class="tab" type="button" data-t="result">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M2 10h12M6 6.5v7"/></svg>
-      종목별 결과표 <span class="n" id="n-result"></span></button>
+      <span class="sl">종목별 </span>결과표 <span class="n" id="n-result"></span></button>
     <button class="tab" type="button" data-t="charts">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 2v12M12 3v11M8 1.5v13"/><rect x="2.8" y="5" width="2.4" height="5" rx=".5" fill="currentColor" stroke="none"/><rect x="6.8" y="3.5" width="2.4" height="5.5" rx=".5" fill="currentColor" stroke="none"/><rect x="10.8" y="6" width="2.4" height="5" rx=".5" fill="currentColor" stroke="none"/></svg>
-      섹터별 차트 <span class="n" id="n-charts"></span></button>
+      <span class="sl">섹터별 </span>차트 <span class="n" id="n-charts"></span></button>
+    <a class="tab game" href="game.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4" width="13" height="8.5" rx="3"/><path d="M5 6.8v3M3.5 8.3h3"/><circle cx="10.6" cy="7.3" r=".6" fill="currentColor"/><circle cx="12" cy="9.3" r=".6" fill="currentColor"/></svg>
+      차트 게임</a>
   </div>
 </nav>
 
@@ -815,6 +821,8 @@ footer ul{margin:4px 0 10px;padding-left:18px}
     renderAll();
     var m = /^#c-(.+)$/.exec(location.hash);          // 주소에 종목 위치가 있으면 그 차트로
     if (m && $("c-" + m[1])) $("c-" + m[1]).scrollIntoView();
+    var sec = location.hash.slice(1);                  // 게임 페이지의 탭에서 넘어온 경우 (#sector 등)
+    if (SECTIONS.indexOf(sec) >= 0) { setTab(sec); spyLock = now() + 900; $(sec).scrollIntoView(); }
     resumeIfRunning();
   });
 })();
