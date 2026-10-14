@@ -134,6 +134,17 @@ a.go:hover{text-decoration:underline;text-decoration-color:currentColor}
 #rtbl td.nmc{max-width:150px;overflow:hidden;text-overflow:ellipsis}
 #rtbl tr.h th{line-height:1.25;vertical-align:bottom}
 #rtbl a.go{font-weight:600}
+/* 결과표 안에서 펼치는 차트 (줄무늬는 펼친 줄과 무관하게 클래스로) */
+#rtbl tbody tr:nth-child(even) td{background-color:var(--card)}
+#rtbl tbody tr.z td{background-color:var(--zebra)}
+@media (hover:hover){ #rtbl tbody tr:not(.xr):hover td{background-color:var(--hover)} }
+#rtbl tbody tr.open td{background-color:var(--hover);border-bottom-color:transparent}
+#rtbl tbody tr.open a.go{text-decoration:underline;text-decoration-color:currentColor}
+#rtbl tbody tr.xr td{padding:0;text-align:left;background-color:var(--hover)}
+.xc{position:sticky;left:0;width:var(--tbw,100%);padding:4px 12px 14px;white-space:normal}
+.xc .cap{font-size:13px;margin:0 0 6px;line-height:1.5}
+.xc .cap .c,.xc .cap .ds{color:var(--muted)}
+.xc img{width:100%;max-width:900px;height:auto;aspect-ratio:900/486;display:block;border:1px solid var(--line);border-radius:6px;background:#fff}
 
 /* 차트 */
 .csec{margin-top:26px;padding-top:12px;border-top:1px solid var(--line)}
@@ -151,16 +162,6 @@ a.go:hover{text-decoration:underline;text-decoration-color:currentColor}
 .jsel{font:inherit;font-size:12.5px;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 7px}
 footer{margin-top:22px;font-size:12px;color:var(--muted)}
 footer ul{margin:4px 0 10px;padding-left:18px}
-
-/* 결과표로 돌아가기 버튼 */
-.backbtn{position:fixed;left:50%;bottom:22px;z-index:40;display:flex;align-items:center;
-  background:var(--accent);color:var(--accent-fg);border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.28);
-  opacity:0;pointer-events:none;transform:translate(-50%,16px);transition:opacity .2s,transform .2s}
-.backbtn.on{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
-.backbtn button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
-.backbtn .go-back{font-size:14px;font-weight:600;padding:11px 8px 11px 20px;white-space:nowrap}
-.backbtn .x{font-size:16px;line-height:1;padding:11px 16px 11px 10px;opacity:.65}
-.backbtn .x:hover{opacity:1}
 
 @media (max-width:1420px){
   #rtbl th,#rtbl td{padding:7px 6px}
@@ -181,7 +182,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
   .grid{grid-template-columns:1fr}
   .act{margin-left:0}
   .bar .q{width:100%}
-  .backbtn{bottom:16px}
+  .xc{padding:4px 8px 12px}
 }
 </style>
 </head>
@@ -225,7 +226,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
   <section id="result" class="card" style="display:none">
     <div class="card-h">
       <h2>종목별 결과표</h2>
-      <p class="sub">숫자 칸 아래 입력창: 위 = 최소, 아래 = 최대 (예: 5일% 최소 5, 거래량배수 최소 2) · 제목 클릭 = 정렬 · 종목명 클릭 = 차트로 이동<br>경과일 = 추세선 돌파·이탈 후 지난 거래일 (D+0 = 오늘 돌파, 돌파한 선 아래로 다시 마감하면 해제) · 시가총액 = 상장주식수 × 종가 (ETF·지수 제외)</p>
+      <p class="sub">숫자 칸 아래 입력창: 위 = 최소, 아래 = 최대 (예: 5일% 최소 5, 거래량배수 최소 2) · 제목 클릭 = 정렬 · 종목명 클릭 = 바로 아래에 차트 펼치기 (다시 클릭하면 접기)<br>경과일 = 추세선 돌파·이탈 후 지난 거래일 (D+0 = 오늘 돌파, 돌파한 선 아래로 다시 마감하면 해제) · 시가총액 = 상장주식수 × 종가 (ETF·지수 제외)</p>
     </div>
     <div class="card-b">
       <div class="bar">
@@ -250,11 +251,6 @@ footer ul{margin:4px 0 10px;padding-left:18px}
   </section>
 
   <footer id="foot" style="display:none"></footer>
-</div>
-
-<div class="backbtn" id="backbtn" role="group" aria-label="이전 위치로 돌아가기">
-  <button class="go-back" id="goback" type="button">↩ 결과표로 돌아가기</button>
-  <button class="x" id="backx" type="button" aria-label="닫기">✕</button>
 </div>
 
 <script>
@@ -454,7 +450,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
       if (v === "지지선 이탈") return "<td" + kl + '"><span class="b dn">' + v + "</span></td>";
       return "<td" + kl + ' d">' + esc(v) + "</td>";
     }
-    if (c[0] === "종목") return "<td" + kl + ' nmc" title="' + esc(v) + '"><a class="go nm" href="#c-' + esc(r["코드"]) + '" data-c="' + esc(r["코드"]) + '">' + esc(v) + "</a></td>";
+    if (c[0] === "종목") return "<td" + kl + ' nmc" title="' + esc(v) + '"><a class="go nm" href="#" role="button" aria-expanded="' + (r["코드"] === openCode) + '" data-c="' + esc(r["코드"]) + '">' + esc(v) + "</a></td>";
     if (c[0] === "섹션" || c[0] === "설명") return "<td" + kl + ' d e" title="' + esc(v) + '">' + esc(v) + "</td>";
     return "<td" + kl + ' d">' + esc(v) + "</td>";
   }
@@ -485,13 +481,17 @@ footer ul{margin:4px 0 10px;padding-left:18px}
       if (ok) rows.push(r);
     }
     if (sortKey) rows.sort(function(a, b){ return cmp(a[sortKey], b[sortKey], sortDir); });
-    var out = [];
+    var out = [], shown = false;
     for (j = 0; j < rows.length; j++) {
-      var line = '<tr data-c="' + esc(rows[j]["코드"]) + '">';
+      var op = rows[j]["코드"] === openCode;
+      var line = '<tr data-c="' + esc(rows[j]["코드"]) + '" class="' + (j % 2 ? "z" : "") + (op ? " open" : "") + '">';
       for (var m = 0; m < COLS.length; m++) line += cell(COLS[m], rows[j][COLS[m][0]], rows[j], COLS[m][0] === sortKey ? "sorted" : "");
       out.push(line + "</tr>");
+      if (op) { out.push(expandRow(rows[j])); shown = true; }
     }
+    if (!shown) openCode = null;                         // 필터로 빠지면 펼침도 해제
     document.querySelector("#rtbl tbody").innerHTML = out.join("");
+    setBoxWidth();
     $("cnt").innerHTML = "표시 <b>" + rows.length + "</b> / 전체 " + DATA.length;
     $("n-result").textContent = rows.length;
     var ths = document.querySelectorAll("#rtbl tr.h th");
@@ -515,10 +515,53 @@ footer ul{margin:4px 0 10px;padding-left:18px}
   }
 
   // ---------- 차트 ----------
+  function chartCap(r){                                  // 종목 차트 위 설명 줄 (섹터별 차트 · 결과표 펼침 공용)
+    var flags = "";
+    var dd = (r["경과일"] !== null && r["경과일"] !== undefined) ? " D+" + Math.round(r["경과일"]) : "";
+    if (r["추세선"] === "저항선 돌파") flags += ' <span class="b up">저항선 돌파' + dd + '</span>';
+    if (r["추세선"] === "지지선 이탈") flags += ' <span class="b dn">지지선 이탈' + dd + '</span>';
+    if (r["거래량배수"] !== null && r["거래량배수"] >= 2) flags += ' <span class="b" style="background:rgba(217,119,6,.15);color:var(--warn)">거래량 ' + r["거래량배수"].toFixed(1) + '배</span>';
+    if (r["마지막일"] && r["마지막일"] < S.meta.ref_date) flags += ' <span class="b" style="color:var(--up)">⚠ 마지막 거래 ' + esc(r["마지막일"]) + '</span>';
+    return '<div class="cap"><b>' + esc(r["종목"]) + '</b> <span class="c">' + esc(r["코드"]) +
+           '</span> – <span class="ds">' + esc(r["설명"]) + '</span> &nbsp;' + pct(r["1일%"], "%") + flags + '</div>';
+  }
+  function chartImg(r, lazy){
+    return '<img' + (lazy ? ' loading="lazy"' : '') + ' alt="' + esc(r["종목"]) + ' 차트" src="charts/' +
+           encodeURIComponent(r["코드"]) + '.png?v=' + S.meta.build_id + '">';
+  }
+
+  // ---------- 결과표 안에서 차트 펼치기 / 접기 ----------
+  var openCode = null;                                   // 지금 펼쳐진 종목코드
+  function expandRow(r){
+    return '<tr class="xr" data-x="' + esc(r["코드"]) + '"><td colspan="' + COLS.length + '"><div class="xc">' +
+           chartCap(r) + chartImg(r, false) + '</div></td></tr>';
+  }
+  function setBoxWidth(){                                // 펼친 차트를 표 가로 스크롤과 상관없이 보이는 폭에 맞춤
+    $("tbox").style.setProperty("--tbw", $("tbox").clientWidth + "px");
+  }
+  function toggleChart(code){
+    var box = $("tbox"), sel = 'tr[data-c="' + code + '"]', tr = box.querySelector(sel);
+    var y = tr ? tr.offsetTop - box.scrollTop : 0;       // 클릭한 줄의 화면 위치
+    openCode = openCode === code ? null : code;
+    applyFilter();
+    tr = box.querySelector(sel);
+    if (!tr) return;
+    box.scrollTop = tr.offsetTop - y;                    // 위쪽 차트가 접혀도 클릭한 줄은 제자리에
+    if (!openCode) return;
+    // 펼친 차트가 표 아래로 잘리면 표 안에서만 살짝 올려 보이게 (페이지는 움직이지 않음)
+    var xr = box.querySelector("tr.xr");
+    var head = box.querySelector("thead").offsetHeight;
+    var bottom = xr.offsetTop + xr.offsetHeight;
+    if (bottom > box.scrollTop + box.clientHeight) {
+      var top = Math.min(tr.offsetTop - head, bottom - box.clientHeight);
+      try { box.scrollTo({ top: top, behavior: "smooth" }); } catch (e) { box.scrollTop = top; }
+    }
+  }
+
   function renderCharts(){
     var bySec = {}, i, r;
     for (i = 0; i < S.rows.length; i++) { r = S.rows[i]; (bySec[r["섹션"]] = bySec[r["섹션"]] || []).push(r); }
-    var v = S.meta.build_id, h = "";
+    var h = "";
     for (i = 0; i < S.sections.length; i++) {
       var name = S.sections[i].name, rows = bySec[name];
       if (!rows) continue;
@@ -533,15 +576,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
            ' · 5일 ' + pct(n5 ? a5 / n5 : null, "%") + ' · 20일 ' + pct(n20 ? a20 / n20 : null, "%") + '</p><div class="grid">';
       for (j = 0; j < rows.length; j++) {
         r = rows[j];
-        var flags = "";
-        var dd = (r["경과일"] !== null && r["경과일"] !== undefined) ? " D+" + Math.round(r["경과일"]) : "";
-        if (r["추세선"] === "저항선 돌파") flags += ' <span class="b up">저항선 돌파' + dd + '</span>';
-        if (r["추세선"] === "지지선 이탈") flags += ' <span class="b dn">지지선 이탈' + dd + '</span>';
-        if (r["거래량배수"] !== null && r["거래량배수"] >= 2) flags += ' <span class="b" style="background:rgba(217,119,6,.15);color:var(--warn)">거래량 ' + r["거래량배수"].toFixed(1) + '배</span>';
-        if (r["마지막일"] && r["마지막일"] < S.meta.ref_date) flags += ' <span class="b" style="color:var(--up)">⚠ 마지막 거래 ' + esc(r["마지막일"]) + '</span>';
-        h += '<div class="cell" id="c-' + esc(r["코드"]) + '"><div class="cap"><b>' + esc(r["종목"]) + '</b> <span class="c">' + esc(r["코드"]) +
-             '</span> – <span class="ds">' + esc(r["설명"]) + '</span> &nbsp;' + pct(r["1일%"], "%") + flags + '</div>' +
-             '<img loading="lazy" alt="' + esc(r["종목"]) + ' 차트" src="charts/' + encodeURIComponent(r["코드"]) + '.png?v=' + v + '"></div>';
+        h += '<div class="cell" id="c-' + esc(r["코드"]) + '">' + chartCap(r) + chartImg(r, true) + '</div>';
       }
       h += "</div></div>";
     }
@@ -573,50 +608,16 @@ footer ul{margin:4px 0 10px;padding-left:18px}
     $("loading").style.display = "none";
     for (var i = 0; i < SECTIONS.length; i++) $(SECTIONS[i]).style.display = "";
     $("foot").style.display = "";
-    stickFilterRow(); setOffsets(); hideBack(); spy();
+    stickFilterRow(); setOffsets(); spy();
   }
 
-  // ---------- 종목 → 차트 이동 / 결과표로 돌아가기 ----------
-  var backPos = null;   // { y: 페이지 스크롤, box: 결과표 내부 스크롤, code: 종목코드 }
-  try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch (e) {}
-
-  function showBack(){ $("backbtn").classList.add("on"); }
-  function hideBack(){ $("backbtn").classList.remove("on"); }
-
-  function jumpToChart(code, push){
-    var el = $("c-" + code);
-    if (!el) return;
-    backPos = { y: window.pageYOffset, box: $("tbox").scrollTop, code: code };
-    if (push) { try { history.pushState({ krsc: "chart", code: code }, "", "#c-" + code); } catch (e) {} }
-    el.scrollIntoView();
-    restartAnim(el, "flash");
-    showBack();
-    spy();
-  }
-  function restoreBack(){
-    if (!backPos) { hideBack(); return; }
-    var p = backPos;
-    backPos = null; hideBack();
-    $("tbox").scrollTop = p.box;
-    window.scrollTo(0, p.y);
-    restartAnim(document.querySelector('#rtbl tr[data-c="' + p.code + '"]'), "flash");
-    spy();
-  }
-  $("goback").addEventListener("click", function(){
-    if (history.state && history.state.krsc === "chart") history.back();   // 기록도 함께 되돌림 → popstate에서 복원
-    else restoreBack();
-  });
-  $("backx").addEventListener("click", function(){ backPos = null; hideBack(); });
-  window.addEventListener("popstate", function(e){
-    if (e.state && e.state.krsc === "chart") jumpToChart(e.state.code, false);   // 앞으로 가기
-    else if (backPos) restoreBack();                                             // 뒤로 가기(휴대폰 뒤로 제스처 포함)
-  });
+  // 종목명 클릭 → 그 줄 바로 아래에 차트 펼치기 / 같은 종목 다시 클릭 → 접기
   document.querySelector("#rtbl tbody").addEventListener("click", function(e){
     var a = e.target;
     while (a && a.tagName !== "A" && a !== this) a = a.parentNode;
     if (!a || a === this || !a.getAttribute("data-c")) return;
     e.preventDefault();
-    jumpToChart(a.getAttribute("data-c"), true);
+    toggleChart(a.getAttribute("data-c"));
   });
 
   // ---------- 업데이트 버튼 (GitHub Actions 실행 요청) ----------
@@ -791,11 +792,10 @@ footer ul{margin:4px 0 10px;padding-left:18px}
     var ins = document.querySelectorAll("#rtbl input.num");                 // 결과표 필터·정렬 초기화
     for (var j = 0; j < ins.length; j++) ins[j].value = "";
     $("q").value = ""; $("fsec").value = ""; $("ftr").value = ""; $("noetf").checked = true;
-    sortKey = null; sortDir = -1;
+    sortKey = null; sortDir = -1; openCode = null;
     secKey = "평균 5일%"; secDir = -1;                                        // 섹터 강도 표 기본 정렬
     if (S) { renderSector(); applyFilter(); }
     $("tbox").scrollTop = 0; $("tbox").scrollLeft = 0; $("sectbox").scrollLeft = 0;
-    backPos = null; hideBack();
     try { history.replaceState(null, "", location.pathname + location.search); } catch (err) {}
     setTab("sector"); spyLock = now() + 900;
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (err) { window.scrollTo(0, 0); }
@@ -805,7 +805,7 @@ footer ul{margin:4px 0 10px;padding-left:18px}
     if (window.confirm("이 기기에 저장된 GitHub 토큰을 지울까요? 다음 업데이트 때 다시 입력합니다.")) setTok("");
   });
   showTokLink();
-  window.addEventListener("resize", function(){ stickFilterRow(); setOffsets(); spy(); });
+  window.addEventListener("resize", function(){ stickFilterRow(); setOffsets(); setBoxWidth(); spy(); });
   window.addEventListener("scroll", onScroll, { passive: true });
   setOffsets();
 
