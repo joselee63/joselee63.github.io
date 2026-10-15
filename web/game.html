@@ -11,7 +11,7 @@
   --bg:#f4f5f7; --fg:#1d2127; --muted:#6b7280; --line:#e2e5ea; --soft:#f1f3f5; --card:#ffffff;
   --accent:#1f2937; --accent-fg:#ffffff; --hoverline:#c5cbd4; --grid:#eef0f3;
   --up:#E5383B; --dn:#1D63D8; --ok:#16a34a; --warn:#d97706;
-  --ma5:#E64980; --ma10:#22A35A; --ma20:#F4A100; --ma60:#9B5DE5; --ma120:#2A9D8F; --res:#E0479E; --sup:#00A6C8;
+  --ma5:#E64980; --ma10:#22A35A; --ma20:#F4A100; --ma60:#9B5DE5; --ma120:#2A9D8F; --res:#E0479E; --sup:#00A6C8; --rf:#C77700;
   --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
   --ch:min(500px,46vh);                  /* 종목 차트 높이 (코스피 차트는 이것의 2/3) → 두 차트가 한 화면에 */
 }
@@ -59,6 +59,13 @@ header{background:var(--card);border-bottom:1px solid var(--line)}
 .info.kinfo{min-height:22px}
 .pane + .pane{border-top:1px solid var(--line);margin-top:4px;padding-top:6px}
 canvas{display:block;width:100%;touch-action:none;cursor:crosshair}
+.prow{display:flex;gap:6px;align-items:flex-start}
+.prow canvas{flex:1;min-width:0}
+.tools{width:34px;flex:none;display:flex;flex-direction:column;gap:6px;padding-top:6px}
+.chartcard:not(.has-tools) .tools{display:none}
+.tbtn{font:inherit;font-size:11.5px;font-weight:700;letter-spacing:-.2px;cursor:pointer;width:34px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--muted);transition:background .15s,color .15s}
+@media (hover:hover){ .tbtn:not(.on):hover{background:var(--soft);color:var(--fg)} }
+.tbtn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 #cv{height:var(--ch)}
 #kcv{height:calc(var(--ch) * 2 / 3)}
 .over{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:5;
@@ -267,11 +274,11 @@ header .lnk,header .status{color:var(--hd-mu)}
   <div class="card chartcard" id="chartcard">
     <div class="pane" id="kpane">
       <div class="info kinfo" id="kinfo"></div>
-      <canvas id="kcv" aria-label="같은 시점 시장 지수 일봉 차트"></canvas>
+      <div class="prow"><div class="tools"></div><canvas id="kcv" aria-label="같은 시점 시장 지수 일봉 차트"></canvas></div>
     </div>
     <div class="pane">
       <div class="info" id="info"></div>
-      <canvas id="cv" aria-label="종목 일봉 차트"></canvas>
+      <div class="prow"><div class="tools" id="tools" role="toolbar" aria-label="차트 지표"><button class="tbtn" type="button" data-ind="ma" title="이동평균선 (5·10·20·60·120일)">MA</button><button class="tbtn" type="button" data-ind="rf" title="라운드 피겨 — 심리적 가격대">RF</button></div><canvas id="cv" aria-label="종목 일봉 차트"></canvas></div>
     </div>
     <div class="loading" id="loading">종목을 고르는 중…</div>
     <div class="over" id="over"><div class="res" id="res"></div></div>
@@ -355,6 +362,9 @@ header .lnk,header .status{color:var(--hd-mu)}
   var HIST_KEY = "krsc_game_hist" + KEY_SUFFIX;
   var MAS = [5, 10, 20, 60, 120];                     // 종목 차트 이동평균
   var IDX_MAS = [10, 20, 60, 120];                    // 위쪽 시장 지수 차트 이동평균
+  var RF = MKT.rf || [];                              // 라운드 피겨 가격 (한국만 설정됨)
+  var IND_KEY = "krsc_game_ind" + (MKT.market === "kr" ? "" : "_" + MKT.market);
+  var IND = { ma: true, rf: false };                  // 종목 차트 오버레이 지표 (툴바 토글, 브라우저에 기억)
 
   var G = null;          // 현재 게임
   var pool = null;       // { n, build }
@@ -875,7 +885,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (!G) return;
     var C = colors();
     if (G.k) drawChart(kcv, G.k, G.k.ma, C, { dec: 2, mas: IDX_MAS });
-    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, avg: G.qty ? G.avg : null, dec: PDEC, mas: MAS });
+    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, avg: G.qty ? G.avg : null, dec: PDEC, mas: RF.length && !IND.ma ? [] : MAS, rf: RF.length && IND.rf ? RF : null });
     renderInfo(hover >= 0 ? hover : G.cur);
   }
 
@@ -948,6 +958,18 @@ header .lnk,header .status{color:var(--hd-mu)}
         var vy = VY(S.v[i]); ctx.fillRect(X(i) - bw / 2, vy, bw, vTop + vH - vy);
       }
       ctx.globalAlpha = 1;
+    }
+
+    // 라운드 피겨: 화면 가격 범위 안의 RF 가격에 가로선
+    if (opt.rf) {
+      ctx.save(); ctx.strokeStyle = css("--rf"); ctx.fillStyle = css("--rf"); ctx.lineWidth = 1; ctx.font = bold; ctx.textAlign = "left";
+      opt.rf.forEach(function(v){
+        if (v <= lo || v >= hi) return;
+        var y = Math.round(Y(v)) + 0.5;
+        ctx.globalAlpha = .85; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(plotW, y); ctx.stroke();
+        ctx.globalAlpha = 1; ctx.fillText("RF " + num(v, opt.dec), 6, y - 7);
+      });
+      ctx.restore();
     }
 
     // 이동평균
@@ -1059,7 +1081,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (vol) {
       var v = S.v[i];
       h += span("거래량", v >= 1e8 ? (v / 1e8).toFixed(1) + "억" : v >= 1e4 ? comma(v / 1e4) + "만" : comma(v)) + "<br>";
-      for (var k = 0; k < MAS.length; k++) {
+      for (var k = 0; k < MAS.length && !(RF.length && !IND.ma); k++) {
         var m = ma[MAS[k]][i];
         h += '<span style="color:var(--ma' + MAS[k] + ')">MA' + MAS[k] + " " + (m === null ? "-" : num(m, dec)) + "</span>";
       }
@@ -1129,6 +1151,27 @@ header .lnk,header .status{color:var(--hd-mu)}
   var pct1 = function(x){ return +(x * 100).toFixed(4) + "%"; };
   $("feenote").textContent = "수수료 " + pct1(BUY_FEE) + (TAX ? " · 매도 시 세금 " + pct1(TAX) : "") + " · 시작 자금 " +
     (MKT.currency === "원" && CASH0 % 10000 === 0 ? comma(CASH0 / 10000) + "만원" : money(CASH0));
+  // 차트 지표 툴바 (RF 가격이 설정된 시장만)
+  if (RF.length) {
+    var saved = store(function(){ return JSON.parse(localStorage.getItem(IND_KEY) || "null"); });
+    if (saved) { IND.ma = saved.ma !== false; IND.rf = !!saved.rf; }
+    $("chartcard").classList.add("has-tools");
+    var syncTools = function(){
+      var bs = document.querySelectorAll("#tools .tbtn");
+      for (var i = 0; i < bs.length; i++) {
+        var on = !!IND[bs[i].getAttribute("data-ind")];
+        bs[i].classList.toggle("on", on); bs[i].setAttribute("aria-pressed", on);
+      }
+    };
+    $("tools").addEventListener("click", function(e){
+      var k = e.target.getAttribute && e.target.getAttribute("data-ind");
+      if (!k) return;
+      IND[k] = !IND[k];
+      store(function(){ localStorage.setItem(IND_KEY, JSON.stringify(IND)); });
+      syncTools(); draw();
+    });
+    syncTools();
+  }
   renderConds();
   renderHist();
   newGame();

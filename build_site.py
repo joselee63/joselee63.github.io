@@ -27,7 +27,10 @@ MARKETS = {
                index_yahoo={"KOSPI": "^KS11", "KOSDAQ": "^KQ11", "KPI200": "^KS200"},
                price_dec=0, cap_unit="억", cap_div=1e8, amt_unit="억", amt_div=1e8,
                currency="원", cash0=10_000_000, buy_fee=0.00015, sell_fee=0.00015, tax=0.0015,
-               schedule="자동 업데이트 평일 21:07", source="네이버 금융 일봉"),
+               schedule="자동 업데이트 평일 21:07", source="네이버 금융 일봉",
+               # 차트 게임 라운드 피겨(RF) — 종목 차트에 가로선으로 표시 (있는 시장만 MA·RF 툴바가 나옴)
+               rf=[500, 1000, 1500, 2000, 3000, 5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000, 100000,
+                   150000, 200000, 300000, 500000, 750000, 1000000, 1500000, 2000000, 3000000, 4000000, 5000000]),
     "us": dict(stocks="stocks_us", site="us", tz="America/New_York", title="미국 증시 섹터 차트",
                index="IXIC", index_name="나스닥", index_label="NASDAQ",      # 차트 게임 기준 지수 = 나스닥 종합
                index_yahoo={"SPX": "^GSPC", "IXIC": "^IXIC", "DJI": "^DJI"},
@@ -662,6 +665,7 @@ def render_page(src, page):
     cfg = {k: MK[k] for k in ("title", "index_name", "index_label", "price_dec", "cap_unit", "amt_unit",
                               "currency", "cash0", "buy_fee", "sell_fee", "tax", "schedule", "source")}
     cfg["market"] = MARKET
+    cfg["rf"] = MK.get("rf", [])
     links = []
     for m, label in (("kr", "한국"), ("us", "미국")):
         here = MARKETS[MARKET]["site"]                       # 지금 페이지 위치에서 상대 경로
