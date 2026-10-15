@@ -1,11 +1,13 @@
 # ======================================
-# 한국 증시 섹터별 차트 — 웹페이지 빌드 (GitHub Actions 배치용)
-#   · 데이터 수신 → 지표·추세선 계산 → 차트 PNG → site/ 폴더에 웹페이지 생성
-#   · 데이터: 네이버 fchart(기본) → Yahoo Finance(폴백, 해외 서버에서 네이버가 막힐 때 대비)
-#   · 로컬 실행: python build_site.py  →  site/index.html 을 브라우저로 열기
+# 한국 · 미국 증시 섹터별 차트 — 웹페이지 빌드 (GitHub Actions 배치용)
+#   · 데이터 수신 → 지표·추세선 계산 → 차트 PNG → 웹페이지 생성
+#   · MARKET=kr (기본): stocks.py  → site/     데이터: 네이버 fchart → Yahoo Finance(폴백)
+#     MARKET=us        : stocks_us.py → site/us/  데이터: Yahoo Finance
+#   · 로컬 실행: python build_site.py  (미국: MARKET=us python build_site.py) → site/index.html 을 브라우저로 열기
 # ======================================
-import os, re, io, sys, json, time, html, shutil
+import os, re, io, sys, json, time, html, shutil, importlib
 import datetime as dt
+from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
 import numpy as np
@@ -17,13 +19,35 @@ from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 from matplotlib.lines import Line2D
 
-from stocks import SECTIONS, ETF_SECTIONS
+# --- 시장별 설정 ---
+MARKET = os.environ.get("MARKET", "kr").lower()
+MARKETS = {
+    "kr": dict(stocks="stocks", site="", tz="Asia/Seoul", title="한국 증시 섹터 차트",
+               index="KOSPI", index_name="코스피", index_label="KOSPI",
+               index_yahoo={"KOSPI": "^KS11", "KOSDAQ": "^KQ11", "KPI200": "^KS200"},
+               price_dec=0, cap_unit="억", cap_div=1e8, amt_unit="억", amt_div=1e8,
+               currency="원", cash0=10_000_000, buy_fee=0.00015, sell_fee=0.00015, tax=0.0015,
+               schedule="자동 업데이트 평일 21:07", source="네이버 금융 일봉"),
+    "us": dict(stocks="stocks_us", site="us", tz="America/New_York", title="미국 증시 섹터 차트",
+               index="SPX", index_name="S&P 500", index_label="S&P 500",
+               index_yahoo={"SPX": "^GSPC", "IXIC": "^IXIC", "DJI": "^DJI"},
+               price_dec=2, cap_unit="$B", cap_div=1e9, amt_unit="$M", amt_div=1e6,
+               currency="$", cash0=100_000, buy_fee=0.001, sell_fee=0.001, tax=0.0,
+               schedule="자동 업데이트 화~토 07:07 (미국장 마감 후)", source="Yahoo Finance 일봉",
+               replace={"거래대금 = KRX 집계(목록이 없는 날은 종가×거래량 근사)": "거래대금 = 종가 × 거래량 (백만 달러)",
+                        "시가총액 = 상장주식수 × 종가 (ETF·지수 제외)": "시가총액 = Yahoo Finance 기준 (십억 달러, ETF·지수 제외)"}),
+}
+MK = MARKETS[MARKET]
+_st = importlib.import_module(MK["stocks"])
+SECTIONS, ETF_SECTIONS = _st.SECTIONS, _st.ETF_SECTIONS
 
 # --- 설정 ---
 ROOT      = os.path.dirname(os.path.abspath(__file__))
-SITE_DIR  = os.path.join(ROOT, "site")          # 배포 폴더 (매번 새로 만듦)
-WEB_DIR   = os.path.join(ROOT, "web")           # 페이지 원본(index.html)
+SITE_ROOT = os.path.join(ROOT, "site")              # 배포 폴더 전체 (한국 = 맨 위, 미국 = us/)
+SITE_DIR  = os.path.join(SITE_ROOT, MK["site"]) if MK["site"] else SITE_ROOT
+WEB_DIR   = os.path.join(ROOT, "web")               # 페이지 원본(index.html · game.html)
 KST       = dt.timezone(dt.timedelta(hours=9))
+MKT_TZ    = ZoneInfo(MK["tz"])                      # '오늘이 거래일인지' 판단할 때 쓰는 그 시장의 날짜
 
 DISPLAY_BARS = 150                    # 차트에 보여줄 거래일 수 (약 7개월)
 MA_LIST      = [5, 20, 60, 120]       # 이동평균. Finviz처럼 보려면 [20, 50, 200]
@@ -51,8 +75,9 @@ GAME_BARS    = 1250                   # 차트 게임용 과거 일봉 수 (약 
 GAME_MIN     = 360                    # 이보다 짧은 종목은 게임 풀에서 제외 (지표 준비 119 + 화면 120 + 100턴 + 여유)
 FETCH_BARS = max(DISPLAY_BARS + max(MA_LIST), 260, GAME_BARS) + 20
 
-INDEX_YAHOO = {"KOSPI": "^KS11", "KOSDAQ": "^KQ11", "KPI200": "^KS200"}
+INDEX_YAHOO = MK["index_yahoo"]
 INDEX_CODES = set(INDEX_YAHOO)
+PRICE_DEC   = MK["price_dec"]
 
 
 # --- 한글 폰트 ---
@@ -154,20 +179,80 @@ def fetch_naver(code, count=FETCH_BARS):
 
 def fetch_yahoo(code, count=FETCH_BARS):
     import yfinance as yf
-    start = (dt.date.today() - dt.timedelta(days=int(count * 1.6) + 30)).isoformat()
-    cands = [INDEX_YAHOO[code]] if code in INDEX_YAHOO else [f"{code}.KS", f"{code}.KQ"]
+    start = _yahoo_start(count)
+    if code in INDEX_YAHOO:
+        cands = [INDEX_YAHOO[code]]
+    else:
+        cands = [code] if MARKET == "us" else [f"{code}.KS", f"{code}.KQ"]
     for t in cands:
         try:
             df = yf.Ticker(t).history(start=start, auto_adjust=False, actions=False)
         except Exception:
             continue
         if df is not None and len(df) >= 5:
-            idx = pd.DatetimeIndex(df.index)
-            if idx.tz is not None:
-                idx = idx.tz_localize(None)
-            df.index = idx.normalize()
-            return _clean_ohlcv(df[["Open", "High", "Low", "Close", "Volume"]]), None
+            return _yahoo_df(df), None
     raise ValueError("Yahoo 데이터 없음")
+
+
+def _yahoo_start(count=FETCH_BARS):
+    return (dt.date.today() - dt.timedelta(days=int(count * 1.6) + 30)).isoformat()
+
+
+def _yahoo_df(df):
+    """Yahoo 일봉 → 공통 형식 (시간대 제거, 날짜만). Close 는 분할 반영·배당 미반영 가격"""
+    idx = pd.DatetimeIndex(df.index)
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    df = df.copy()
+    df.index = idx.normalize()
+    return _clean_ohlcv(df[["Open", "High", "Low", "Close", "Volume"]])
+
+
+def fetch_us_all(codes):
+    """미국: 40종목씩 묶어서 한 번에 받기 (요청 수를 줄여 Yahoo 제한 회피) → 빠진 종목만 하나씩 다시"""
+    import yfinance as yf
+    sym = {c: INDEX_YAHOO.get(c, c) for c in codes}
+    data, failed = {}, {}
+    for k in range(0, len(codes), 40):
+        chunk = codes[k:k + 40]
+        try:
+            raw = yf.download([sym[c] for c in chunk], start=_yahoo_start(), auto_adjust=False, actions=False,
+                              group_by="ticker", threads=True, progress=False)
+        except Exception as e:
+            raw, err = None, str(e)
+        for c in chunk:
+            try:
+                df = _yahoo_df(raw[sym[c]].dropna(how="all"))
+                if len(df) >= 5:
+                    data[c] = dict(df=df, naver_name=None, source="YAHOO")
+            except Exception:
+                pass
+        time.sleep(1)
+    for c in [c for c in codes if c not in data]:          # 묶음에서 빠진 종목은 하나씩 재시도
+        for attempt in range(3):
+            try:
+                df, _ = fetch_yahoo(c)
+                data[c] = dict(df=df, naver_name=None, source="YAHOO")
+                break
+            except Exception as e:
+                failed[c] = f"YAHOO {e}"[:200]
+                time.sleep(1.5 * (attempt + 1))
+        if c in data:
+            failed.pop(c, None)
+    return data, failed
+
+
+def fetch_caps_us(codes):
+    """미국 시가총액(달러) — Yahoo fast_info. 실패한 종목은 비워 둠"""
+    import yfinance as yf
+    def one(c):
+        try:
+            v = yf.Ticker(c).fast_info["market_cap"]
+            return c, float(v) if v else None
+        except Exception:
+            return c, None
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        return dict(ex.map(one, codes))
 
 
 def fetch_one(code, retries=2):
@@ -309,7 +394,7 @@ def calc_stats(df, is_index=False):
         "1일%": pct(1), "5일%": pct(5), "20일%": pct(20),
         "52주고가대비%": (last / df["High"].iloc[-250:].max() - 1) * 100,
         "MA20이격%": (last / ma20 - 1) * 100 if pd.notna(ma20) else np.nan,
-        "거래대금(억)": np.nan if is_index else last * float(v.iloc[-1]) / 1e8,
+        "거래대금": np.nan if is_index else last * float(v.iloc[-1]) / MK["amt_div"],   # 한국 억원 · 미국 백만 달러
         "거래량배수": float(v.iloc[-1]) / vavg if vavg and vavg > 0 else np.nan,
         "추세선": trend,
         "경과일": days,
@@ -320,7 +405,7 @@ def calc_stats(df, is_index=False):
 
 # --- 차트 그리기 ---
 def _fmt_price(x, is_index):
-    return f"{x:,.2f}" if is_index else f"{x:,.0f}"
+    return f"{x:,.2f}" if (is_index or PRICE_DEC) else f"{x:,.0f}"
 
 
 def _fmt_vol(y, _):
@@ -419,7 +504,8 @@ def render_chart(code, name, df_full, is_index=False, event=None):
     ax.set_xlim(-1, x_end + 1)
     ax.set_ylim(ylo, yhi)
     ax.yaxis.tick_right()
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{y:,.0f}"))
+    ydec = 0 if not PRICE_DEC or pmax >= 200 else (1 if pmax >= 20 else 2)   # 저가 미국 주식은 소수점 눈금
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{y:,.{ydec}f}"))
     ax.tick_params(axis="x", labelbottom=False, length=0)
     ax.tick_params(axis="y", labelsize=8.5, length=0, pad=4)
     ax.grid(True, color="#E6E6E6", linewidth=0.6)
@@ -481,7 +567,7 @@ def sector_table(summary):
     sec = (stk.groupby("섹션", sort=False)
               .agg(종목수=("코드", "count"),
                    **{"평균 1일%": ("1일%", "mean"), "평균 5일%": ("5일%", "mean"),
-                      "평균 20일%": ("20일%", "mean"), "거래대금 합(억)": ("거래대금(억)", "sum")},
+                      "평균 20일%": ("20일%", "mean"), "거래대금 합": ("거래대금", "sum")},
                    MA20위=("MA20이격%", lambda s: int((s > 0).sum())),
                    저항돌파=("추세선", lambda s: int((s == "저항선 돌파").sum())),
                    지지이탈=("추세선", lambda s: int((s == "지지선 이탈").sum())))
@@ -509,10 +595,12 @@ def write_game_data(data, sections, build_id):
     차트 게임용 데이터: site/game/{번호}.json (종목마다 하나) + site/game/pool.json (개수)
       · 지수·ETF는 제외, 일봉이 GAME_MIN개 미만인 종목도 제외
       · 파일 이름은 매번 섞은 번호라 종목을 알 수 없고, 종목명·날짜는 게임이 끝날 때 공개용으로만 인코딩해 둠
-      · 같은 날짜의 코스피 일봉(×100 정수)을 종목 봉마다 맞춰 함께 넣음 (ko·kh·kl·kc) → 날짜 없이도 같은 시점 표시
+      · 같은 날짜의 기준 지수(한국 코스피 · 미국 S&P 500) 일봉(×100 정수)을 종목 봉마다 맞춰 함께 넣음 (ko·kh·kl·kc)
+      · 가격은 정수로 저장: 한국은 원 그대로, 미국은 센트(×100) — pool.json 의 scale 로 되돌림
     """
     import base64, random
-    kospi = data.get("KOSPI", {}).get("df")
+    kospi = data.get(MK["index"], {}).get("df")
+    scale = 10 ** PRICE_DEC
     pool = []
     for s, it in sections:
         if s in ETF_SECTIONS:
@@ -527,10 +615,11 @@ def write_game_data(data, sections, build_id):
     for i, (c, nm, s) in enumerate(pool):
         df = data[c]["df"].iloc[-GAME_BARS:]
         reveal = {"name": nm, "code": c, "sector": s, "d": [int(x.strftime("%Y%m%d")) for x in df.index]}
-        rec = {k: [int(round(x)) for x in df[col].values]
-               for k, col in [("o", "Open"), ("h", "High"), ("l", "Low"), ("c", "Close"), ("v", "Volume")]}
+        rec = {k: [int(round(x * scale)) for x in df[col].values]
+               for k, col in [("o", "Open"), ("h", "High"), ("l", "Low"), ("c", "Close")]}
+        rec["v"] = [int(round(x)) for x in df["Volume"].values]
         if kospi is not None:
-            k = kospi.reindex(df.index).ffill().bfill()          # 코스피에 없는 날은 직전 값으로
+            k = kospi.reindex(df.index).ffill().bfill()          # 지수에 없는 날은 직전 값으로
             if k["Close"].notna().all():
                 for key, col in [("ko", "Open"), ("kh", "High"), ("kl", "Low"), ("kc", "Close")]:
                     rec[key] = [int(round(x * 100)) for x in k[col].values]
@@ -538,8 +627,56 @@ def write_game_data(data, sections, build_id):
         with open(os.path.join(gdir, f"{i}.json"), "w", encoding="utf-8") as f:
             json.dump(rec, f, separators=(",", ":"))
     with open(os.path.join(gdir, "pool.json"), "w", encoding="utf-8") as f:
-        json.dump({"n": len(pool), "build": build_id}, f)
+        json.dump({"n": len(pool), "build": build_id, "scale": scale}, f)
     return len(pool)
+
+
+# --- 페이지 만들기: 시장 설정 · 국기 · 한국/미국 전환 ---
+#   (국기 이모지는 윈도우에서 'KR'·'US' 글자로 보여서 SVG로 직접 그림)
+def _trigram(cx, cy, rot, pattern):
+    """태극기 괘: pattern = 바깥→안 순서로 1(긴 막대)/0(끊어진 막대)"""
+    bars = []
+    for i, solid in enumerate(pattern):
+        y = (i - 1) * 1.1 - 0.35
+        bars.append(f'<rect x="-2.1" y="{y:.2f}" width="4.2" height=".7"/>' if solid else
+                    f'<rect x="-2.1" y="{y:.2f}" width="1.85" height=".7"/><rect x=".25" y="{y:.2f}" width="1.85" height=".7"/>')
+    return f'<g transform="translate({cx} {cy}) rotate({rot})">{"".join(bars)}</g>'
+
+FLAG_SVG = {
+    "kr": ('<svg class="flag" viewBox="0 0 36 24" aria-hidden="true"><rect width="36" height="24" fill="#fff"/>'
+           '<g transform="rotate(33.69 18 12)"><path d="M12 12a6 6 0 0 1 12 0a3 3 0 0 0-6 0a3 3 0 0 1-6 0z" fill="#CD2E3A"/>'
+           '<path d="M24 12a6 6 0 0 1-12 0a3 3 0 0 0 6 0a3 3 0 0 1 6 0z" fill="#0047A0"/></g><g fill="#000">'
+           + _trigram(10.1, 6.73, -56.31, (1, 1, 1)) + _trigram(25.9, 17.27, -56.31, (0, 0, 0))
+           + _trigram(25.9, 6.73, 56.31, (0, 1, 0)) + _trigram(10.1, 17.27, 56.31, (1, 0, 1)) + '</g></svg>'),
+    "us": ('<svg class="flag" viewBox="0 0 38 20" aria-hidden="true"><rect width="38" height="20" fill="#B22234"/>'
+           + "".join(f'<rect y="{(2 * i + 1) * 20 / 13:.3f}" width="38" height="{20 / 13:.3f}" fill="#fff"/>' for i in range(6))
+           + '<rect width="15.2" height="10.77" fill="#3C3B6E"/><g fill="#fff">'
+           + "".join(f'<circle cx="{1.27 + 2.53 * x + (1.27 if y % 2 else 0):.2f}" cy="{1.08 * (y + 1):.2f}" r=".42"/>'
+                     for y in range(9) for x in range(6 if y % 2 == 0 else 5))
+           + '</g></svg>'),
+}
+
+
+def render_page(src, page):
+    """web/ 의 페이지 원본 → 시장별 페이지 (제목 · 국기 · 시장 전환 · 시장 설정 window.MKT)"""
+    cfg = {k: MK[k] for k in ("title", "index_name", "index_label", "price_dec", "cap_unit", "amt_unit",
+                              "currency", "cash0", "buy_fee", "sell_fee", "tax", "schedule", "source")}
+    cfg["market"] = MARKET
+    links = []
+    for m, label in (("kr", "한국"), ("us", "미국")):
+        here = MARKETS[MARKET]["site"]                       # 지금 페이지 위치에서 상대 경로
+        there = MARKETS[m]["site"]
+        href = ("../" if here else "") + (there + "/" if there else "")
+        href = (href or "./") + ("" if page == "index.html" else page)
+        links.append(f'<a href="{href}"{" class=\"on\" aria-current=\"page\"" if m == MARKET else ""}>'
+                     f'{FLAG_SVG[m]}<span>{label}</span></a>')
+    out = (src.replace("한국 증시 섹터 차트", MK["title"])
+              .replace("<!--MKT-->", "<script>window.MKT = " + json.dumps(cfg, ensure_ascii=False) + ";</script>")
+              .replace("<!--FLAG-->", FLAG_SVG[MARKET])
+              .replace("<!--SWITCH-->", '<nav class="mkt" aria-label="시장 선택">' + "".join(links) + "</nav>"))
+    for a, b in MK.get("replace", {}).items():
+        out = out.replace(a, b)
+    return out
 
 
 def _gh_output(**kv):
@@ -567,16 +704,19 @@ def main():
         for c, nm, _ in it:
             label.setdefault(c, nm)
 
-    print(f"[1/3] 일봉 데이터 수신: {len(codes)}개 (트리거: {trigger})")
+    print(f"[1/3] {MK['title']} — 일봉 데이터 수신: {len(codes)}개 (트리거: {trigger})")
     data, failed = {}, {}
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-        futs = {ex.submit(fetch_one, c): c for c in codes}
-        for f in as_completed(futs):
-            c = futs[f]
-            try:
-                data[c] = f.result()
-            except Exception as e:
-                failed[c] = str(e)[:200]
+    if MARKET == "us":
+        data, failed = fetch_us_all(codes)
+    else:
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+            futs = {ex.submit(fetch_one, c): c for c in codes}
+            for f in as_completed(futs):
+                c = futs[f]
+                try:
+                    data[c] = f.result()
+                except Exception as e:
+                    failed[c] = str(e)[:200]
     n_yahoo = sum(1 for d in data.values() if d["source"] == "YAHOO")
     print(f"      성공 {len(data)} / 실패 {len(failed)} (야후 폴백 {n_yahoo})")
     for c, e in failed.items():
@@ -587,9 +727,11 @@ def main():
 
     last_dates = pd.Series({c: d["df"].index[-1] for c, d in data.items()})
     ref_date = last_dates.mode().iloc[0]
-    today_kst = dt.datetime.now(KST).date()
-    if trigger == "schedule" and ref_date.date() != today_kst:
-        print(f"[건너뜀] 오늘({today_kst})은 거래일이 아닙니다 (최근 거래일 {ref_date.date()}). 기존 페이지 유지.")
+    today = dt.datetime.now(MKT_TZ).date()                # 그 시장의 오늘 (미국 장 마감 후 = 뉴욕 날짜)
+    check = os.environ.get("CHECK_TODAY")                 # 워크플로가 이 시장의 정기 실행일 때만 1
+    check = (check == "1") if check is not None else (trigger == "schedule")
+    if check and ref_date.date() != today:
+        print(f"[건너뜀] 오늘({today})은 거래일이 아닙니다 (최근 거래일 {ref_date.date()}). 기존 페이지 유지.")
         _gh_output(skip="true", ref_date=str(ref_date.date()))
         return
 
@@ -600,10 +742,17 @@ def main():
         print(f"      종목명 불일치: {mm['code']} 리스트='{mm['mine']}' / 네이버='{mm['naver']}'")
 
     # 출력 폴더 새로 만들기
-    if os.path.isdir(SITE_DIR):
-        shutil.rmtree(SITE_DIR)
-    os.makedirs(os.path.join(SITE_DIR, "charts"))
-    os.makedirs(os.path.join(SITE_DIR, "data"))
+    os.makedirs(SITE_DIR, exist_ok=True)
+    for name in os.listdir(SITE_DIR):                     # 한국(site/)을 비울 때 미국(site/us/)은 남김
+        if SITE_DIR == SITE_ROOT and name in [m["site"] for m in MARKETS.values() if m["site"]]:
+            continue
+        pth = os.path.join(SITE_DIR, name)
+        try:
+            shutil.rmtree(pth) if os.path.isdir(pth) else os.remove(pth)
+        except OSError:                                   # 윈도우·OneDrive 가 폴더를 잡고 있으면 덮어쓰기로 진행
+            pass
+    os.makedirs(os.path.join(SITE_DIR, "charts"), exist_ok=True)
+    os.makedirs(os.path.join(SITE_DIR, "data"), exist_ok=True)
 
     print(f"[2/3] 차트 생성: {len(data)}개 (프로세스 {RENDER_PROCS}개)")
     jobs = [(c, label[c], data[c]["df"], os.path.join(SITE_DIR, "charts", f"{c}.png"))
@@ -630,23 +779,30 @@ def main():
                 failed[job[0]] = f"차트 오류: {e2}"[:200]
     print(f"      완료 {len(stats)}개 ({time.time() - t0:.0f}초)")
 
-    # 시가총액(억) = 상장주식수 × 종가 / 거래대금은 같은 날 목록이면 KRX 실제 거래대금으로 교체
-    listing, listing_day = fetch_listing(ref_date)
-    same_day = listing_day == ref_date.strftime("%Y-%m-%d")
-    print(f"      KRX 상장 목록: {listing_day or '받지 못함'}" + (" (거래대금 실제값 사용)" if same_day else ""))
+    # 한국: 시가총액(억) = 상장주식수 × 종가, 거래대금은 같은 날 KRX 목록이면 실제 거래대금으로 교체
+    # 미국: 시가총액($B) = Yahoo fast_info (ETF·지수 제외)
+    listing, listing_day, same_day, caps = None, None, False, {}
+    if MARKET == "kr":
+        listing, listing_day = fetch_listing(ref_date)
+        same_day = listing_day == ref_date.strftime("%Y-%m-%d")
+        print(f"      KRX 상장 목록: {listing_day or '받지 못함'}" + (" (거래대금 실제값 사용)" if same_day else ""))
+    else:
+        etf_codes = {c for s, it in sections if s in ETF_SECTIONS for c, _, _ in it}
+        caps = fetch_caps_us([c for c in stats if c not in etf_codes and c not in INDEX_CODES])
+        print(f"      시가총액: {sum(1 for v in caps.values() if v)}/{len(caps)}개")
     rows = []
     for s, it in sections:
         for c, nm, desc in it:
             if c not in stats:
                 continue
             st = dict(stats[c])
-            st["시가총액(억)"] = None
+            st["시가총액"] = caps[c] / MK["cap_div"] if caps.get(c) else None
             if listing is not None and c in listing.index:
                 li = listing.loc[c]
                 if pd.notna(li["Stocks"]) and li["Stocks"] > 0:
-                    st["시가총액(억)"] = float(li["Stocks"]) * st["종가"] / 1e8
+                    st["시가총액"] = float(li["Stocks"]) * st["종가"] / MK["cap_div"]
                 if same_day and pd.notna(li["Amount"]) and li["Amount"] > 0:
-                    st["거래대금(억)"] = float(li["Amount"]) / 1e8
+                    st["거래대금"] = float(li["Amount"]) / MK["amt_div"]
             rows.append({"섹션": s, "종목": nm, "코드": c, "설명": desc, **st,
                          "_etf": s in ETF_SECTIONS, "_idx": c in INDEX_CODES})
     summary = pd.DataFrame(rows)
@@ -657,7 +813,7 @@ def main():
         "updated_iso": now.isoformat(timespec="seconds"),
         "build_id": now.strftime("%Y%m%d%H%M%S"),
         "ref_date": ref_date.strftime("%Y-%m-%d"),
-        "trigger": trigger,
+        "trigger": trigger, "market": MARKET,
         "repo": repo, "branch": branch, "workflow": workflow,
         "n_total": len(codes), "n_ok": len(stats), "n_yahoo": n_yahoo,
         "listing_day": listing_day, "amount_actual": bool(same_day), "event_lookback": EVENT_LOOKBACK,
@@ -679,13 +835,16 @@ def main():
     with open(os.path.join(SITE_DIR, "data", "summary.js"), "w", encoding="utf-8") as f:
         f.write("window.__krsc_summary && window.__krsc_summary(" + js + ");\n")
     for page in ("index.html", "game.html"):
-        shutil.copy(os.path.join(WEB_DIR, page), os.path.join(SITE_DIR, page))
+        with open(os.path.join(WEB_DIR, page), encoding="utf-8") as f:
+            src = f.read()
+        with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:
+            f.write(render_page(src, page))
     open(os.path.join(SITE_DIR, ".nojekyll"), "w").close()
     if GAME_BARS:
         print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'])}개")
 
     size_mb = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(SITE_DIR) for f in fs) / 1e6
-    print(f"      site/ {size_mb:.1f}MB · 업데이트 {meta['updated_at']} · 기준일 {meta['ref_date']} "
+    print(f"      {os.path.relpath(SITE_DIR, ROOT)}/ {size_mb:.1f}MB · 업데이트 {meta['updated_at']} · 기준일 {meta['ref_date']} "
           f"· 총 {meta['build_seconds']}초")
     _gh_output(skip="false", ref_date=meta["ref_date"])
 

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>한국 증시 섹터 차트</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<!--MKT-->
 <style>
 :root{
   --bg:#f4f5f7; --fg:#1d2127; --muted:#6b7280; --line:#e2e5ea; --soft:#f1f3f5; --card:#ffffff;
@@ -242,17 +243,27 @@ header .lnk,header .status{color:var(--hd-mu)}
 @media (hover:hover){ .cell:hover{transform:translateY(-4px);box-shadow:var(--lift)} }
 .cell img{border:0;border-radius:10px}
 @media (max-width:900px){ .tabs .in{padding:7px 10px} .card-h{padding:12px 12px 10px} .card-b{padding:12px 10px 14px} .grid{gap:14px} }
+/* 국기 · 한국/미국 전환 (오른쪽 위) */
+.flag{display:block;width:24px;height:16px;border-radius:3px;box-shadow:0 0 0 .5px rgba(0,0,0,.25);flex:none}
+.top h1 a{display:inline-flex;align-items:center;gap:10px}
+.mkt{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:rgba(255,255,255,.1);margin-left:4px}
+.mkt a{display:inline-flex;align-items:center;gap:6px;padding:4px 11px 4px 8px;border-radius:999px;color:var(--hd-mu);
+  text-decoration:none;font-size:12.5px;font-weight:600;transition:background .15s,color .15s}
+.mkt a .flag{width:18px;height:12px;border-radius:2px}
+@media (hover:hover){ .mkt a:not(.on):hover{color:var(--hd-fg);background:rgba(255,255,255,.08)} }
+.mkt a.on{background:rgba(255,255,255,.94);color:#1d1d1f}
 </style>
 </head>
 <body>
 <header id="hdr">
   <div class="top">
-    <h1><a href="./" id="home" class="home" title="처음 화면으로">한국 증시 섹터 차트</a></h1>
+    <h1><a href="./" id="home" class="home" title="처음 화면으로"><!--FLAG-->한국 증시 섹터 차트</a></h1>
     <div class="meta" id="meta"><span>불러오는 중…</span></div>
     <div class="act">
       <span class="status" id="status"><span class="dot"></span><span id="stxt"></span></span>
       <button class="btn" id="upd" type="button">↻ 업데이트</button>
       <button class="lnk" id="tokreset" type="button" style="display:none">토큰 변경</button>
+      <!--SWITCH-->
     </div>
   </div>
 </header>
@@ -317,18 +328,20 @@ header .lnk,header .status{color:var(--hd-mu)}
 <script>
 (function(){
   "use strict";
+  var MKT = window.MKT || { market: "kr", price_dec: 0, cap_unit: "억", amt_unit: "억",   // 시장 설정 (빌드 때 넣음)
+                            schedule: "자동 업데이트 평일 21:07", source: "네이버 금융 일봉" };
   var TOKEN_KEY = "krsc_gh_token";
   var COLS = [
-    ["섹션","s"],["종목","s"],["코드","s"],["설명","s"],["종가","price"],["시가총액(억)","int"],
+    ["섹션","s"],["종목","s"],["코드","s"],["설명","s"],["종가","price"],["시가총액","int"],
     ["1일%","pct"],["5일%","pct"],["20일%","pct"],["52주고가대비%","pct"],
-    ["MA20이격%","pct"],["거래대금(억)","int"],["거래량배수","x"],["추세선","s"],["경과일","days"]
+    ["MA20이격%","pct"],["거래대금","int"],["거래량배수","x"],["추세선","s"],["경과일","days"]
   ];
   var SCOLS = [   // 섹터 강도 표: [키, 제목, 형식]
     ["섹션","섹션","s"],["평균 5일%","평균 5일%","bar"],["평균 1일%","평균 1일%","pct"],["평균 20일%","평균 20일%","pct"],
-    ["거래대금 합(억)","거래대금 합(억)","int"],["_ma20","MA20 위","ratio"],["저항돌파","저항 돌파","n"],["지지이탈","지지 이탈","n"]
+    ["거래대금 합","거래대금 합(" + MKT.amt_unit + ")","int"],["_ma20","MA20 위","ratio"],["저항돌파","저항 돌파","n"],["지지이탈","지지 이탈","n"]
   ];
-  var HEAD = { "시가총액(억)": "시가총액<br>(억)", "52주고가대비%": "52주<br>고가대비%", "MA20이격%": "MA20<br>이격%",
-               "거래대금(억)": "거래대금<br>(억)", "거래량배수": "거래량<br>배수", "경과일": "돌파·이탈<br>경과일" };   // 긴 제목은 두 줄로
+  var HEAD = { "시가총액": "시가총액<br>(" + MKT.cap_unit + ")", "52주고가대비%": "52주<br>고가대비%", "MA20이격%": "MA20<br>이격%",
+               "거래대금": "거래대금<br>(" + MKT.amt_unit + ")", "거래량배수": "거래량<br>배수", "경과일": "돌파·이탈<br>경과일" };   // 긴 제목은 두 줄로
   var TEXT_KEYS = /^(섹션|종목|코드|설명|추세선)$/;
   var SECTIONS = ["sector", "result", "charts"];
   var S = null;                                  // 현재 데이터
@@ -415,7 +428,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     var h = '<span class="upd">업데이트 완료 <b>' + esc(m.updated_at) + '</b> <span class="tag">' + trig + '</span></span>' +
             '<span>데이터 기준일 <b>' + esc(m.ref_date) + '</b></span>' +
             '<span>' + m.n_ok + '종목' + (nf ? ' · <a href="#foot">실패 ' + nf + '</a>' : '') + '</span>' +
-            '<span>자동 업데이트 평일 21:07</span>';
+            '<span>' + esc(MKT.schedule) + '</span>';
     $("meta").innerHTML = h;
     document.title = "한국 증시 섹터 차트 · " + m.ref_date;
   }
@@ -498,8 +511,8 @@ header .lnk,header .status{color:var(--hd-mu)}
   function cell(c, v, r, cls){
     var t = c[1], k = cls ? ' class="' + cls + '"' : "", kl = ' class="l' + (cls ? " " + cls : "");
     if (v === null || v === undefined || v === "") return "<td" + (t === "s" ? kl + '"' : k) + '><span class="na">-</span></td>';
-    if (t === "price") return "<td" + k + ">" + comma(v, r._idx ? 2 : 0) + "</td>";
-    if (t === "int") return "<td" + k + ">" + comma(v, 0) + "</td>";
+    if (t === "price") return "<td" + k + ">" + comma(v, r._idx ? 2 : MKT.price_dec) + "</td>";
+    if (t === "int") return "<td" + k + ">" + comma(v, v < 10 && v % 1 ? 1 : 0) + "</td>";   // 미국 시총 $B 처럼 작은 값은 소수 1자리
     if (t === "x") return "<td" + k + ">" + v.toFixed(1) + "</td>";
     if (t === "days") {                                  // 추세선 돌파·이탈 후 지난 거래일 (D+0 = 오늘)
       var dc = r["추세선"] === "저항선 돌파" ? "var(--up)" : (r["추세선"] === "지지선 이탈" ? "var(--dn)" : "inherit");
@@ -657,8 +670,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       for (var j = 0; j < m.mismatch.length; j++) h += "<li>" + esc(m.mismatch[j].code) + ": 리스트 '" + esc(m.mismatch[j].mine) + "' / 네이버 '" + esc(m.mismatch[j].naver) + "'</li>";
       h += "</ul>";
     }
-    h += "데이터: 네이버 금융 일봉" + (m.n_yahoo ? " (일부 " + m.n_yahoo + "종목은 Yahoo Finance)" : "") +
-         (m.listing_day ? " · 상장주식수·거래대금 KRX " + esc(m.listing_day) + (m.amount_actual ? "" : " (거래대금은 근사)") : " · 시가총액 자료 없음") +
+    h += "데이터: " + esc(MKT.source) + (MKT.market === "kr" && m.n_yahoo ? " (일부 " + m.n_yahoo + "종목은 Yahoo Finance)" : "") +
+         (MKT.market !== "kr" ? "" : m.listing_day ? " · 상장주식수·거래대금 KRX " + esc(m.listing_day) + (m.amount_actual ? "" : " (거래대금은 근사)") : " · 시가총액 자료 없음") +
          " · 이동평균 " + (m.ma || []).join("·") + " · 빌드 " + m.build_seconds + "초" +
          (m.repo ? ' · <a href="https://github.com/' + esc(m.repo) + '/actions" target="_blank" rel="noopener">실행 기록</a>' : "");
     $("foot").innerHTML = h;

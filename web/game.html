@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>차트 게임 · 한국 증시 섹터 차트</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<!--MKT-->
 <style>
 :root{
   --bg:#f4f5f7; --fg:#1d2127; --muted:#6b7280; --line:#e2e5ea; --soft:#f1f3f5; --card:#ffffff;
@@ -225,13 +226,24 @@ header .lnk,header .status{color:var(--hd-mu)}
 .res{border-radius:20px}
 .ev .item{border-radius:12px}
 @media (max-width:1000px){ .tabs .in{padding:7px 10px} }
+/* 국기 · 한국/미국 전환 (오른쪽 위) */
+.flag{display:block;width:24px;height:16px;border-radius:3px;box-shadow:0 0 0 .5px rgba(0,0,0,.25);flex:none}
+.top h1 a{display:inline-flex;align-items:center;gap:10px}
+.mkt{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:rgba(255,255,255,.1);margin-left:4px}
+.mkt a{display:inline-flex;align-items:center;gap:6px;padding:4px 11px 4px 8px;border-radius:999px;color:var(--hd-mu);
+  text-decoration:none;font-size:12.5px;font-weight:600;transition:background .15s,color .15s}
+.mkt a .flag{width:18px;height:12px;border-radius:2px}
+@media (hover:hover){ .mkt a:not(.on):hover{color:var(--hd-fg);background:rgba(255,255,255,.08)} }
+.mkt a.on{background:rgba(255,255,255,.94);color:#1d1d1f}
+.top .mkt{margin-left:auto}
 </style>
 </head>
 <body>
 <header>
   <div class="top">
-    <h1><a href="./">한국 증시 섹터 차트</a></h1>
+    <h1><a href="./"><!--FLAG-->한국 증시 섹터 차트</a></h1>
     <span class="meta">차트 게임 — 종목과 날짜를 모른 채 차트만 보고 매매해 보세요</span>
+    <!--SWITCH-->
   </div>
 </header>
 <nav class="tabs" aria-label="페이지 이동">
@@ -255,7 +267,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   <div class="card chartcard" id="chartcard">
     <div class="pane" id="kpane">
       <div class="info kinfo" id="kinfo"></div>
-      <canvas id="kcv" aria-label="같은 시점 코스피 일봉 차트"></canvas>
+      <canvas id="kcv" aria-label="같은 시점 시장 지수 일봉 차트"></canvas>
     </div>
     <div class="pane">
       <div class="info" id="info"></div>
@@ -328,7 +340,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       <div class="hlist" id="hlist"></div>
     </div>
 
-    <p class="note">매수·매도는 그날 종가로 체결 · 비중은 매수 = 현금의 %, 매도 = 보유 수량의 % · 수수료 0.015% · 매도 시 세금 0.15% · 시작 자금 1,000만원 · 100턴이 끝나면 보유 주식은 자동 청산되고 종목과 기간이 공개됩니다.</p>
+    <p class="note">매수·매도는 그날 종가로 체결 · 비중은 매수 = 현금의 %, 매도 = 보유 수량의 % · <span id="feenote">수수료 0.015% · 매도 시 세금 0.15% · 시작 자금 1,000만원</span> · 100턴이 끝나면 보유 주식은 자동 청산되고 종목과 기간이 공개됩니다.</p>
   </aside>
 </div>
 
@@ -336,8 +348,11 @@ header .lnk,header .status{color:var(--hd-mu)}
 (function(){
   "use strict";
   var TURNS = 100, VIEW = 120, WARM = 119, RPAD = 6;   // 턴 수 · 화면에 보이는 봉 수 · MA120 준비 봉 · 오른쪽 여백 칸
-  var CASH0 = 10000000, BUY_FEE = 0.00015, SELL_FEE = 0.00015, TAX = 0.0015;
-  var HIST_KEY = "krsc_game_hist";
+  var MKT = window.MKT || { market: "kr", index_name: "코스피", index_label: "KOSPI", price_dec: 0, currency: "원",   // 시장 설정 (빌드 때 넣음)
+                            cash0: 10000000, buy_fee: 0.00015, sell_fee: 0.00015, tax: 0.0015 };
+  var CASH0 = MKT.cash0, BUY_FEE = MKT.buy_fee, SELL_FEE = MKT.sell_fee, TAX = MKT.tax, PDEC = MKT.price_dec;
+  var KEY_SUFFIX = MKT.market === "kr" ? "" : "_" + MKT.market;           // 누적 기록·조건은 시장별로 따로 저장
+  var HIST_KEY = "krsc_game_hist" + KEY_SUFFIX;
   var MAS = [10, 20, 60, 120];
 
   var G = null;          // 현재 게임
@@ -352,7 +367,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (!dec) return comma(v);
     var p = v.toFixed(dec).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return p.join(".");
   }
-  function won(v){ return comma(v) + "원"; }
+  function money(v){ return MKT.currency === "원" ? comma(v) + "원" : MKT.currency + comma(v); }   // 자산·금액
+  function px(v){ return num(v, PDEC); }                                                          // 가격
+  function pxu(v){ return MKT.currency === "원" ? px(v) + "원" : MKT.currency + px(v); }            // 가격 + 단위
   function sgn(v, d){ v = Math.round(v * Math.pow(10, d)) / Math.pow(10, d); return (v > 0 ? "+" : "") + v.toFixed(d); }
   function col(v){ return v > 0 ? "var(--up)" : (v < 0 ? "var(--dn)" : "inherit"); }
   function pctHtml(v){ return '<span style="color:' + col(v) + '">' + sgn(v * 100, 2) + "%</span>"; }
@@ -431,12 +448,12 @@ header .lnk,header .status{color:var(--hd-mu)}
       f: function(P, i){ return (hiN(P.d.h, i, 20) - loN(P.d.l, i, 20)) / P.d.c[i] <= 0.12; } },
     { id: "tlbreak", g: "종목", t: "저항 추세선을 돌파한 날 (종가가 장기 저항선 +1% 위로 처음 마감)",
       f: function(P, i){ return aboveRes(P, i) && !aboveRes(P, i - 1); } },
-    { id: "kbull", g: "시장 (KOSPI)", t: "코스피 60·120일선 정배열 (상승장)", x: "kbear",
+    { id: "kbull", g: "시장 (" + MKT.index_label + ")", t: MKT.index_name + " 60·120일선 정배열 (상승장)", x: "kbear",
       f: function(P, i){ return !!P.k && P.k.ma[60][i] > P.k.ma[120][i]; } },
-    { id: "kbear", g: "시장 (KOSPI)", t: "코스피 60·120일선 역배열 (하락장)", x: "kbull",
+    { id: "kbear", g: "시장 (" + MKT.index_label + ")", t: MKT.index_name + " 60·120일선 역배열 (하락장)", x: "kbull",
       f: function(P, i){ return !!P.k && P.k.ma[60][i] < P.k.ma[120][i]; } }
   ];
-  var COND_KEY = "krsc_game_conds";
+  var COND_KEY = "krsc_game_conds" + KEY_SUFFIX;
   var condOn = (store(function(){ return JSON.parse(localStorage.getItem(COND_KEY) || "[]"); }) || []);
   function activeConds(){ return CONDS.filter(function(c){ return condOn.indexOf(c.id) >= 0; }); }
   function renderConds(){
@@ -461,8 +478,12 @@ header .lnk,header .status{color:var(--hd-mu)}
     renderConds();
   }
 
-  function prep(d){                                      // 종목 + 같은 날짜 코스피 + 이동평균
-    var n = d.c.length, k = null;
+  function prep(d){                                      // 종목 + 같은 날짜 시장 지수 + 이동평균
+    var n = d.c.length, k = null, sc = (pool && pool.scale) || 1;
+    if (sc !== 1) {                                      // 미국: 센트(×100) 정수로 저장된 가격 되돌림
+      var un = function(a){ return a.map(function(x){ return x / sc; }); };
+      d = { o: un(d.o), h: un(d.h), l: un(d.l), c: un(d.c), v: d.v, r: d.r, ko: d.ko, kh: d.kh, kl: d.kl, kc: d.kc };
+    }
     if (d.kc && d.kc.length === n) {                     // 같은 날짜로 맞춘 코스피 (×100 정수로 저장됨)
       var dv = function(a){ return a.map(function(x){ return x / 100; }); };
       k = { o: dv(d.ko), h: dv(d.kh), l: dv(d.kl), c: dv(d.kc) };
@@ -574,8 +595,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       '<div class="pd">' + esc(rv.sector || "") + (rec.from ? " · " + ymd(rec.from) + " ~ " + ymd(rec.to) : "") + '</div>' +
       '<div class="cmp"><div><b style="color:' + col(ret) + '">' + sgn(ret * 100, 2) + '%</b><span>내 수익률</span></div>' +
       '<div><b style="color:' + col(bh) + '">' + sgn(bh * 100, 2) + '%</b><span>종목 등락</span></div>' +
-      (kr === null ? "" : '<div><b style="color:' + col(kr) + '">' + sgn(kr * 100, 2) + '%</b><span>코스피</span></div>') + '</div>' +
-      '<div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">매수 ' + nb + '회 · 최종 자산 ' + won(G.cash) + '</div>' +
+      (kr === null ? "" : '<div><b style="color:' + col(kr) + '">' + sgn(kr * 100, 2) + '%</b><span>' + esc(MKT.index_name) + '</span></div>') + '</div>' +
+      '<div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">매수 ' + nb + '회 · 최종 자산 ' + money(G.cash) + '</div>' +
       '<div class="btns"><button class="act ghost" id="evbtn" type="button">매매 평가</button>' +
       '<button class="act buy" id="again" type="button">다음 종목 <small>N</small></button></div><div id="evbox"></div>';
     $("over").classList.add("on");
@@ -619,7 +640,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     else if (rr >= 2) add("g", "기대 손익비 1:" + rr.toFixed(1) + " — 잃을 폭보다 먹을 폭이 넉넉한 자리", 20);
     else if (rr >= 1) add("n", "기대 손익비 1:" + rr.toFixed(1) + " — 무난하지만 여유는 크지 않음", 5);
     else add("b", "기대 손익비 1:" + rr.toFixed(1) + " — 저항까지 " + pc(up) + "인데 지지까지 " + pc(-dn) + " (불리한 자리)", -15);
-    if (L.res && up < 0.03) add("b", "저항(" + L.res.l + " " + comma(L.res.v) + ") 바로 밑에서 매수 — 위로 " + pc(up) + "밖에 안 남음", -10);
+    if (L.res && up < 0.03) add("b", "저항(" + L.res.l + " " + px(L.res.v) + ") 바로 밑에서 매수 — 위로 " + pc(up) + "밖에 안 남음", -10);
     if (L.near >= 3) add("b", "위 10% 안에 고점 " + L.near + "개 — 물린 매물이 많은 구간", -5);
     if (dn > 0.12) add("b", "가까운 지지까지 " + pc(-dn) + " — 틀렸을 때 손실 폭이 큼", -5);
     var m20 = G.ma[20][i], m60 = G.ma[60][i], m120 = G.ma[120][i];
@@ -635,8 +656,8 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (va > 0 && d.v[i] / va >= 2) add(day > 0 ? "g" : "n", "거래량 평소의 " + (d.v[i] / va).toFixed(1) + "배 — " + (day > 0 ? "매수세 유입일" : "매도 물량 출회일"), day > 0 ? 3 : 0);
     if (G.k) {
       var kc = G.k.c[i], k20 = G.k.ma[20][i], k60 = G.k.ma[60][i];
-      if (kc > k20 && k20 > k60) add("g", "시장(KOSPI)이 상승 추세일 때 매수", 5);
-      else if (kc < k20 && k20 < k60) add("b", "시장(KOSPI)이 하락 추세일 때 매수", -5);
+      if (kc > k20 && k20 > k60) add("g", "시장(" + MKT.index_label + ")이 상승 추세일 때 매수", 5);
+      else if (kc < k20 && k20 < k60) add("b", "시장(" + MKT.index_label + ")이 하락 추세일 때 매수", -5);
     }
     return { t: t, L: L, up: up, dn: dn, rr: rr, flags: f, score: Math.max(0, Math.min(100, sc)) };
   }
@@ -666,7 +687,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     var sup = ent && ent.L.sup, brk = -1;
     if (sup && sup.l.indexOf("가정") < 0) {
       for (j = first.i + 1; j <= last.i; j++) if (d.c[j] < sup.v * 0.98) { brk = j; break; }
-      if (brk >= 0 && last.i - brk > 2) add("b", "매수 때 지지(" + sup.l + " " + comma(sup.v) + ")가 깨진 뒤에도 " + (last.i - brk) + "일 더 보유");
+      if (brk >= 0 && last.i - brk > 2) add("b", "매수 때 지지(" + sup.l + " " + px(sup.v) + ")가 깨진 뒤에도 " + (last.i - brk) + "일 더 보유");
       else if (brk >= 0) add("g", "지지(" + sup.l + ") 이탈 직후 정리 — 원칙적인 손절");
     }
     if (last.auto) add("n", "게임 종료로 자동 청산 (마지막 날 종가)");
@@ -742,11 +763,11 @@ header .lnk,header .status{color:var(--hd-mu)}
       E.entries.forEach(function(e, n){
         var t = e.t, chip = e.score >= 65 ? ["g", "좋은 자리"] : e.score >= 45 ? ["n", "보통"] : ["b", "불리한 자리"];
         var upW = e.up === null ? 60 : e.up / (e.up + e.dn) * 100;
-        h += '<div class="item"><div class="ih"><b>매수 ' + (n + 1) + "</b><span>" + (t.i - G.s + 1) + "턴 · " + comma(t.p) + "원 × " + comma(t.q) + "주</span>" +
+        h += '<div class="item"><div class="ih"><b>매수 ' + (n + 1) + "</b><span>" + (t.i - G.s + 1) + "턴 · " + pxu(t.p) + " × " + comma(t.q) + "주</span>" +
              '<span class="chip ' + chip[0] + '">' + chip[1] + " " + e.score + '</span><button class="see" type="button" data-f="' + e.idx + '">차트에서 보기</button></div>' +
              '<div class="rr"><i style="width:' + (100 - upW) + '%;background:var(--sup)"></i><i style="width:' + upW + '%;background:var(--res)"></i></div>' +
-             '<div class="rrl"><span>지지 ' + comma(e.L.sup.v) + " (" + pc(-e.dn) + ", " + esc(e.L.sup.l) + ")</span><span>" +
-             (e.L.res ? "저항 " + comma(e.L.res.v) + " (" + pc(e.up) + ", " + esc(e.L.res.l) + ")" : "위 저항 없음") + "</span></div>" + flagList(e.flags) + "</div>";
+             '<div class="rrl"><span>지지 ' + px(e.L.sup.v) + " (" + pc(-e.dn) + ", " + esc(e.L.sup.l) + ")</span><span>" +
+             (e.L.res ? "저항 " + px(e.L.res.v) + " (" + pc(e.up) + ", " + esc(e.L.res.l) + ")" : "위 저항 없음") + "</span></div>" + flagList(e.flags) + "</div>";
       });
       h += "<h4>청산</h4>";
       E.trips.forEach(function(x, n){
@@ -788,13 +809,13 @@ header .lnk,header .status{color:var(--hd-mu)}
   function renderPanel(){
     var a = asset(), ret = a / CASH0 - 1, p = price();
     $("ret").innerHTML = '<span style="color:' + col(ret) + '">' + sgn(ret * 100, 2) + "%</span>";
-    $("asset").textContent = won(a);
-    $("cash").textContent = won(G.cash);
-    $("evalamt").textContent = won(G.qty * p);            // 평가금액 = 현재가 × 보유수량
+    $("asset").textContent = money(a);
+    $("cash").textContent = money(G.cash);
+    $("evalamt").textContent = money(G.qty * p);            // 평가금액 = 현재가 × 보유수량
     if (G.qty) {
       var net = G.qty * p * (1 - SELL_FEE - TAX), gain = net - G.cost;
-      $("hold").textContent = comma(G.qty) + "주 · 평단 " + comma(G.avg);
-      $("pnl").innerHTML = pctHtml(net / G.cost - 1) + ' <span style="color:var(--muted)">(' + (gain > 0 ? "+" : gain < 0 ? "-" : "") + won(Math.abs(gain)) + ')</span>';
+      $("hold").textContent = comma(G.qty) + "주 · 평단 " + px(G.avg);
+      $("pnl").innerHTML = pctHtml(net / G.cost - 1) + ' <span style="color:var(--muted)">(' + (gain > 0 ? "+" : gain < 0 ? "-" : "") + money(Math.abs(gain)) + ')</span>';
     } else { $("hold").textContent = "없음"; $("pnl").textContent = "-"; }
     $("turn").textContent = G.turn + " / " + TURNS;
     $("prog").style.width = (G.turn / TURNS * 100) + "%";
@@ -804,14 +825,14 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("bNext").disabled = G.done;
     var sq = sellQty();
     $("buyinfo").innerHTML = G.done ? "게임이 끝났습니다" :
-      "매수 <b>" + comma(q) + "주</b> (" + won(q * p) + ")" +
+      "매수 <b>" + comma(q) + "주</b> (" + money(q * p) + ")" +
       (sq ? " · 매도 <b>" + comma(sq) + "주</b>" + (sq === G.qty ? " (전량)" : "") : "") +
-      " <span style=\"opacity:.7\">· 종가 " + comma(p) + "</span>";
+      " <span style=\"opacity:.7\">· 종가 " + px(p) + "</span>";
     var lg = "";
     for (var i = G.trades.length - 1; i >= 0; i--) {
       var t = G.trades[i], buy = t.side === "B";
       lg += '<div><span class="s" style="color:' + (buy ? "var(--up)" : "var(--dn)") + '">' + (buy ? "매수" : (t.auto ? "청산" : "매도")) + '</span>' +
-            '<span>' + (t.auto ? "종료" : (t.i - G.s + 1) + "턴") + '</span><span>' + comma(t.p) + ' × ' + comma(t.q) + '</span>' +
+            '<span>' + (t.auto ? "종료" : (t.i - G.s + 1) + "턴") + '</span><span>' + px(t.p) + ' × ' + comma(t.q) + '</span>' +
             '<span class="p">' + (buy ? "" : pctHtml(t.r)) + '</span></div>';
     }
     $("log").innerHTML = lg || '<span class="empty">아직 매매가 없습니다</span>';
@@ -853,7 +874,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (!G) return;
     var C = colors();
     if (G.k) drawChart(kcv, G.k, G.k.ma, C, { dec: 2 });
-    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, avg: G.qty ? G.avg : null });
+    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, avg: G.qty ? G.avg : null, dec: PDEC });
     renderInfo(hover >= 0 ? hover : G.cur);
   }
 
@@ -893,7 +914,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     for (var p = Math.ceil(lo / step) * step; p <= hi; p += step) {
       var y = Math.round(Y(p)) + 0.5;
       ctx.strokeStyle = C.grid; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(plotW, y); ctx.stroke();
-      ctx.fillStyle = C.mu; ctx.textAlign = "left"; ctx.fillText(comma(p), plotW + 8, y);
+      ctx.fillStyle = C.mu; ctx.textAlign = "left"; ctx.fillText(num(p, step >= 1 ? 0 : step >= .1 ? 1 : 2), plotW + 8, y);
     }
     ctx.strokeStyle = C.line;
     ctx.beginPath(); ctx.moveTo(plotW + 0.5, 0); ctx.lineTo(plotW + 0.5, H - xlab); ctx.stroke();
@@ -983,8 +1004,8 @@ header .lnk,header .status{color:var(--hd-mu)}
         ctx.fillStyle = C.card; ctx.globalAlpha = .88; ctx.fillRect(tx - 3, ty - 8, tw + 6, 16); ctx.globalAlpha = 1;
         ctx.fillStyle = color; ctx.fillText(txt, tx, ty);
       };
-      lvl(fe.L.sup.v, css("--sup"), "지지 " + comma(fe.L.sup.v) + " (" + pc(-fe.dn) + ") " + fe.L.sup.l, true);
-      if (fe.L.res) lvl(fe.L.res.v, css("--res"), "저항 " + comma(fe.L.res.v) + " (" + pc(fe.up) + ") " + fe.L.res.l, false);
+      lvl(fe.L.sup.v, css("--sup"), "지지 " + px(fe.L.sup.v) + " (" + pc(-fe.dn) + ") " + fe.L.sup.l, true);
+      if (fe.L.res) lvl(fe.L.res.v, css("--res"), "저항 " + px(fe.L.res.v) + " (" + pc(fe.up) + ") " + fe.L.res.l, false);
       ctx.save(); ctx.strokeStyle = C.warn; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(fx, Y(fe.t.p), 9, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     }
@@ -1005,7 +1026,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (opt.avg) {
       dashed(opt.avg, C.warn, 1, [6, 4]);
       ctx.fillStyle = C.warn; ctx.textAlign = "left"; ctx.font = bold;
-      ctx.fillText("평단 " + comma(opt.avg), 6, Y(opt.avg) - 9);
+      ctx.fillText("평단 " + px(opt.avg), 6, Y(opt.avg) - 9);
     }
     dashed(last, lc, .8, [3, 3]);
     if (opt.avg) {                                       // 현재가 라벨과 겹치면 평단 라벨을 비켜 그림
@@ -1038,15 +1059,15 @@ header .lnk,header .status{color:var(--hd-mu)}
       h += span("거래량", v >= 1e8 ? (v / 1e8).toFixed(1) + "억" : v >= 1e4 ? comma(v / 1e4) + "만" : comma(v)) + "<br>";
       for (var k = 0; k < MAS.length; k++) {
         var m = ma[MAS[k]][i];
-        h += '<span style="color:var(--ma' + MAS[k] + ')">MA' + MAS[k] + " " + (m === null ? "-" : comma(m)) + "</span>";
+        h += '<span style="color:var(--ma' + MAS[k] + ')">MA' + MAS[k] + " " + (m === null ? "-" : num(m, dec)) + "</span>";
       }
     }
     if (i !== G.cur) h += '<span class="k">' + (i - G.cur) + "일</span>";
     return h;
   }
   function renderInfo(i){
-    $("info").innerHTML = infoLine(G.d, G.ma, i, 0, "", true);
-    if (G.k) $("kinfo").innerHTML = infoLine(G.k, G.k.ma, i, 2, "KOSPI", false);
+    $("info").innerHTML = infoLine(G.d, G.ma, i, PDEC, "", true);
+    if (G.k) $("kinfo").innerHTML = infoLine(G.k, G.k.ma, i, 2, esc(MKT.index_label), false);
   }
 
   function pointer(e){
@@ -1103,6 +1124,9 @@ header .lnk,header .status{color:var(--hd-mu)}
   $("condapply").addEventListener("click", function(){ newGame(); });
   $("condclear").addEventListener("click", function(){ condOn = []; store(function(){ localStorage.setItem(COND_KEY, "[]"); }); renderConds(); });
 
+  var pct1 = function(x){ return +(x * 100).toFixed(4) + "%"; };
+  $("feenote").textContent = "수수료 " + pct1(BUY_FEE) + (TAX ? " · 매도 시 세금 " + pct1(TAX) : "") + " · 시작 자금 " +
+    (MKT.currency === "원" && CASH0 % 10000 === 0 ? comma(CASH0 / 10000) + "만원" : money(CASH0));
   renderConds();
   renderHist();
   newGame();

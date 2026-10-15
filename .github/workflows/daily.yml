@@ -2,9 +2,11 @@ name: daily-build
 
 on:
   schedule:
-    - cron: "7 21 * * 1-5"          # 평일 21:07 (정각은 지연이 잦아 7분으로)
+    - cron: "7 21 * * 1-5"          # 한국: 평일 21:07 (정각은 지연이 잦아 7분으로)
       timezone: "Asia/Seoul"
-  workflow_dispatch:                 # 수동 실행 (Actions 탭 버튼 · 웹페이지 '업데이트' 버튼)
+    - cron: "7 7 * * 2-6"           # 미국: 화~토 07:07 = 미국 장 마감(뉴욕 16:00) 후
+      timezone: "Asia/Seoul"
+  workflow_dispatch:                 # 수동 실행 (Actions 탭 버튼 · 웹페이지 '업데이트' 버튼) → 두 시장 모두 갱신
 
 permissions:
   contents: write                    # gh-pages 브랜치에 결과를 올리기 위해 필요
@@ -20,6 +22,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: 지금 배포된 페이지 가져오기 (빌드가 실패한 시장은 이걸로 유지)
+        uses: actions/checkout@v7
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: prev
+
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -28,17 +37,53 @@ jobs:
       - name: 패키지 설치
         run: pip install -r requirements.txt
 
-      - name: 데이터 수집 · 차트 생성
-        id: build
+      # 정기 실행이면 그 시장만 '오늘이 거래일인지' 확인 (휴장일이면 배포하지 않음)
+      - name: 한국 — 데이터 수집 · 차트 생성
+        id: kr
+        continue-on-error: true
         env:
+          MARKET: kr
           TRIGGER: ${{ github.event_name }}
+          CHECK_TODAY: ${{ github.event_name == 'schedule' && github.event.schedule == '7 21 * * 1-5' && '1' || '0' }}
         run: python build_site.py
 
+      - name: 미국 — 데이터 수집 · 차트 생성
+        id: us
+        if: steps.kr.outputs.skip != 'true'
+        continue-on-error: true
+        env:
+          MARKET: us
+          TRIGGER: ${{ github.event_name }}
+          CHECK_TODAY: ${{ github.event_name == 'schedule' && github.event.schedule == '7 7 * * 2-6' && '1' || '0' }}
+        run: python build_site.py
+
+      - name: 실패한 시장은 이전 페이지로 유지
+        id: merge
+        run: |
+          if [ "${{ steps.kr.outputs.skip }}" = "true" ] || [ "${{ steps.us.outputs.skip }}" = "true" ]; then
+            echo "휴장일 — 기존 페이지 유지"; echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          KR="${{ steps.kr.outcome }}"; US="${{ steps.us.outcome }}"
+          if [ "$KR" != "success" ] && [ "$US" != "success" ]; then echo "두 시장 모두 빌드 실패"; exit 1; fi
+          mkdir -p site
+          if [ "$KR" != "success" ]; then
+            [ -f prev/index.html ] || { echo "한국 빌드 실패, 이전 페이지도 없음"; exit 1; }
+            find site -mindepth 1 -maxdepth 1 ! -name us -exec rm -rf {} +
+            (cd prev && find . -mindepth 1 -maxdepth 1 ! -name us ! -name .git -exec cp -r {} ../site/ \;)
+            echo "::warning::한국 빌드 실패 → 이전 페이지 유지"
+          fi
+          if [ "$US" != "success" ]; then
+            rm -rf site/us
+            [ -d prev/us ] && cp -r prev/us site/us
+            echo "::warning::미국 빌드 실패 → 이전 페이지 유지"
+          fi
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+
       - name: gh-pages 브랜치에 배포
-        if: steps.build.outputs.skip != 'true'
+        if: steps.merge.outputs.deploy == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REF_DATE: ${{ steps.build.outputs.ref_date }}
+          REF_DATE: "kr ${{ steps.kr.outputs.ref_date }} · us ${{ steps.us.outputs.ref_date }}"
         run: |
           cd site
           git init -q -b gh-pages

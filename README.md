@@ -1,6 +1,9 @@
-# 한국 증시 섹터 차트 (웹 버전)
+# 한국 · 미국 증시 섹터 차트 (웹 버전)
 
-평일 21:07에 자동으로 데이터를 모아 차트와 결과표를 만들고, GitHub Pages 웹페이지로 보여줍니다.
+자동으로 데이터를 모아 차트와 결과표를 만들고, GitHub Pages 웹페이지로 보여줍니다.
+- 한국: `https://<아이디>.github.io/<저장소>/` — 평일 21:07 자동 업데이트 (네이버 금융)
+- 미국: `https://<아이디>.github.io/<저장소>/us/` — 화~토 07:07 자동 업데이트, 미국장 마감 후 (Yahoo Finance)
+- 페이지 오른쪽 위 국기 버튼으로 한국 ↔ 미국을 오갑니다.
 서버 없이 GitHub 무료 기능(Actions + Pages)만 사용합니다. 공개 저장소 기준 비용 0원.
 
 - 페이지 상단: **업데이트 완료 시각**, 데이터 기준일, **↻ 업데이트 버튼**(지금 바로 갱신)
@@ -9,10 +12,11 @@
 ```
 kr-sector-charts/
 ├─ build_site.py              데이터 수집 · 차트 생성 · 페이지 만들기
-├─ stocks.py                  섹터별 종목 리스트 (여기만 고치면 종목 변경)
+├─ stocks.py                  한국 섹터별 종목 리스트 (여기만 고치면 종목 변경)
+├─ stocks_us.py               미국 섹터별 종목 리스트 (티커는 Yahoo Finance 기준)
 ├─ requirements.txt
 ├─ web/index.html             웹페이지
-└─ .github/workflows/daily.yml  자동 실행 일정 (평일 21:07)
+└─ .github/workflows/daily.yml  자동 실행 일정 (한국 평일 21:07 · 미국 화~토 07:07)
 ```
 
 ---
@@ -107,6 +111,7 @@ git push -u origin main
 로컬 미리보기 (선택)
 ```bash
 pip install -r requirements.txt
-python build_site.py          # site/ 폴더 생성
+python build_site.py          # 한국 → site/ 폴더 생성
+MARKET=us python build_site.py   # 미국 → site/us/ 폴더 생성
 # site/index.html 을 브라우저로 열기 (업데이트 버튼은 GitHub에 올린 뒤에만 동작)
 ```
