@@ -839,6 +839,9 @@ def main():
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:
             f.write(render_page(src, page))
+    for extra in ("secret.js", "secret.json"):           # 숨은 사진 (secret.json 은 직접 만들었을 때만 있음)
+        if os.path.exists(os.path.join(WEB_DIR, extra)):
+            shutil.copy(os.path.join(WEB_DIR, extra), os.path.join(SITE_DIR, extra))
     open(os.path.join(SITE_DIR, ".nojekyll"), "w").close()
     if GAME_BARS:
         print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'])}개")
