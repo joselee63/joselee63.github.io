@@ -11,14 +11,14 @@
   --bg:#f4f5f7; --fg:#1d2127; --muted:#6b7280; --line:#e2e5ea; --soft:#f1f3f5; --card:#ffffff;
   --accent:#1f2937; --accent-fg:#ffffff; --hoverline:#c5cbd4; --grid:#eef0f3;
   --up:#E5383B; --dn:#1D63D8; --ok:#16a34a; --warn:#d97706;
-  --ma10:#22A35A; --ma20:#F4A100; --ma60:#9B5DE5; --ma120:#2A9D8F; --res:#E0479E; --sup:#00A6C8;
+  --ma5:#E64980; --ma10:#22A35A; --ma20:#F4A100; --ma60:#9B5DE5; --ma120:#2A9D8F; --res:#E0479E; --sup:#00A6C8;
   --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
   --ch:min(500px,46vh);                  /* 종목 차트 높이 (코스피 차트는 이것의 2/3) → 두 차트가 한 화면에 */
 }
 @media (prefers-color-scheme: dark){
   :root{ --bg:#0f1114; --fg:#e7e9ec; --muted:#9aa1ab; --line:#2a2f36; --soft:#1c1f24; --card:#171a1e;
          --accent:#e7e9ec; --accent-fg:#121417; --hoverline:#4a515c; --grid:#22262c;
-         --up:#ff5a5f; --dn:#4b8dff; --ma10:#3ccf78; --shadow:none; }
+         --up:#ff5a5f; --dn:#4b8dff; --ma5:#f06595; --ma10:#3ccf78; --shadow:none; }
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
@@ -353,7 +353,8 @@ header .lnk,header .status{color:var(--hd-mu)}
   var CASH0 = MKT.cash0, BUY_FEE = MKT.buy_fee, SELL_FEE = MKT.sell_fee, TAX = MKT.tax, PDEC = MKT.price_dec;
   var KEY_SUFFIX = MKT.market === "kr" ? "" : "_" + MKT.market;           // 누적 기록·조건은 시장별로 따로 저장
   var HIST_KEY = "krsc_game_hist" + KEY_SUFFIX;
-  var MAS = [10, 20, 60, 120];
+  var MAS = [5, 10, 20, 60, 120];                     // 종목 차트 이동평균
+  var IDX_MAS = [10, 20, 60, 120];                    // 위쪽 시장 지수 차트 이동평균
 
   var G = null;          // 현재 게임
   var pool = null;       // { n, build }
@@ -867,19 +868,20 @@ header .lnk,header .status{color:var(--hd-mu)}
   }
   function colors(){
     return { up: css("--up"), dn: css("--dn"), fg: css("--fg"), mu: css("--muted"), grid: css("--grid"), line: css("--line"),
-             card: css("--card"), warn: css("--warn"), ma: { 10: css("--ma10"), 20: css("--ma20"), 60: css("--ma60"), 120: css("--ma120") } };
+             card: css("--card"), warn: css("--warn"), ma: { 5: css("--ma5"), 10: css("--ma10"), 20: css("--ma20"), 60: css("--ma60"), 120: css("--ma120") } };
   }
 
   function draw(){
     if (!G) return;
     var C = colors();
-    if (G.k) drawChart(kcv, G.k, G.k.ma, C, { dec: 2 });
-    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, avg: G.qty ? G.avg : null, dec: PDEC });
+    if (G.k) drawChart(kcv, G.k, G.k.ma, C, { dec: 2, mas: IDX_MAS });
+    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, avg: G.qty ? G.avg : null, dec: PDEC, mas: MAS });
     renderInfo(hover >= 0 ? hover : G.cur);
   }
 
   // S = {o,h,l,c,(v)} · opt: vol(거래량) · trades(매매 표시) · avg(평단 선) · dec(소수 자릿수)
   function drawChart(canvas, S, ma, C, opt){
+    var L_MAS = opt.mas || MAS;                          // 이 차트에 그릴 이동평균
     var ctx = canvas.getContext("2d");
     var dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
     if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
@@ -897,7 +899,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     for (i = a; i <= b; i++) {
       hi = Math.max(hi, S.h[i]); lo = Math.min(lo, S.l[i]);
       if (opt.vol) vmax = Math.max(vmax, S.v[i]);
-      for (k = 0; k < MAS.length; k++) { var m = ma[MAS[k]][i]; if (m !== null) { hi = Math.max(hi, m); lo = Math.min(lo, m); } }
+      for (k = 0; k < L_MAS.length; k++) { var m = ma[L_MAS[k]][i]; if (m !== null) { hi = Math.max(hi, m); lo = Math.min(lo, m); } }
     }
     if (opt.avg) { hi = Math.max(hi, opt.avg); lo = Math.min(lo, opt.avg); }
     var fe = opt.trades && G.focus !== null && G.evals ? G.evals.entries.filter(function(e){ return e.idx === G.focus; })[0] : null;
@@ -949,9 +951,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     }
 
     // 이동평균
-    for (k = 0; k < MAS.length; k++) {
-      var arr = ma[MAS[k]], started = false;
-      ctx.strokeStyle = C.ma[MAS[k]]; ctx.lineWidth = MAS[k] === 10 ? 1.1 : 1.3; ctx.beginPath();
+    for (k = 0; k < L_MAS.length; k++) {
+      var arr = ma[L_MAS[k]], started = false;
+      ctx.strokeStyle = C.ma[L_MAS[k]]; ctx.lineWidth = L_MAS[k] <= 10 ? 1.1 : 1.3; ctx.beginPath();
       for (i = a; i <= b; i++) {
         if (arr[i] === null) continue;
         if (!started) { ctx.moveTo(X(i), Y(arr[i])); started = true; } else ctx.lineTo(X(i), Y(arr[i]));

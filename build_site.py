@@ -29,7 +29,7 @@ MARKETS = {
                currency="원", cash0=10_000_000, buy_fee=0.00015, sell_fee=0.00015, tax=0.0015,
                schedule="자동 업데이트 평일 21:07", source="네이버 금융 일봉"),
     "us": dict(stocks="stocks_us", site="us", tz="America/New_York", title="미국 증시 섹터 차트",
-               index="SPX", index_name="S&P 500", index_label="S&P 500",
+               index="IXIC", index_name="나스닥", index_label="NASDAQ",      # 차트 게임 기준 지수 = 나스닥 종합
                index_yahoo={"SPX": "^GSPC", "IXIC": "^IXIC", "DJI": "^DJI"},
                price_dec=2, cap_unit="$B", cap_div=1e9, amt_unit="$M", amt_div=1e6,
                currency="$", cash0=100_000, buy_fee=0.001, sell_fee=0.001, tax=0.0,
@@ -595,7 +595,7 @@ def write_game_data(data, sections, build_id):
     차트 게임용 데이터: site/game/{번호}.json (종목마다 하나) + site/game/pool.json (개수)
       · 지수·ETF는 제외, 일봉이 GAME_MIN개 미만인 종목도 제외
       · 파일 이름은 매번 섞은 번호라 종목을 알 수 없고, 종목명·날짜는 게임이 끝날 때 공개용으로만 인코딩해 둠
-      · 같은 날짜의 기준 지수(한국 코스피 · 미국 S&P 500) 일봉(×100 정수)을 종목 봉마다 맞춰 함께 넣음 (ko·kh·kl·kc)
+      · 같은 날짜의 기준 지수(한국 코스피 · 미국 나스닥 종합) 일봉(×100 정수)을 종목 봉마다 맞춰 함께 넣음 (ko·kh·kl·kc)
       · 가격은 정수로 저장: 한국은 원 그대로, 미국은 센트(×100) — pool.json 의 scale 로 되돌림
     """
     import base64, random
