@@ -153,6 +153,17 @@ h3{font-size:13.5px;margin:0 0 8px}
 .hlist div:last-child{border-bottom:0}
 .hlist .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .note{font-size:11.5px;color:var(--muted);margin:0}
+/* 출제 조건 */
+.cond-card summary{cursor:pointer;display:flex;align-items:center;gap:10px;font-size:13.5px;list-style:none}
+.cond-card summary::-webkit-details-marker{display:none}
+.cond-card summary::after{content:"▾";margin-left:auto;color:var(--muted);transition:transform .15s}
+.cond-card details[open] summary::after{transform:rotate(180deg)}
+.csum{font-size:12px;color:var(--muted)}
+.csum.on{color:var(--accent-fg);background:var(--accent);border-radius:9px;padding:1px 8px;font-weight:600}
+.cg{font-size:11.5px;color:var(--muted);font-weight:600;margin:12px 0 4px}
+.cr{display:flex;gap:7px;align-items:flex-start;font-size:13px;padding:3px 0;cursor:pointer;line-height:1.4}
+.cr input{margin:2px 0 0;flex:none;accent-color:var(--accent)}
+.condact{display:flex;align-items:center;gap:12px;margin-top:12px}
 .lnk{font-size:11.5px;color:var(--muted);cursor:pointer;text-decoration:underline;background:none;border:0;padding:0}
 
 @media (max-width:1000px){
@@ -228,6 +239,18 @@ h3{font-size:13.5px;margin:0 0 8px}
         <b id="turn">0 / 100</b>
         <button class="reset" id="reset" type="button" title="지금 판을 끝내고 새 종목·새 시점으로 시작 (N)">다음 종목 ›</button>
       </div>
+    </div>
+
+    <div class="card pad cond-card">
+      <details id="condbox">
+        <summary><b>출제 조건</b><span class="csum" id="condsum">조건 없음 · 전체 랜덤</span></summary>
+        <div id="condlist"></div>
+        <div class="condact">
+          <button class="reset" id="condapply" type="button">이 조건으로 새 게임</button>
+          <button class="lnk" id="condclear" type="button">모두 해제</button>
+        </div>
+        <p class="note" style="margin-top:8px">고른 조건을 모두 만족하는 종목·시점만 출제합니다. 판정 기준은 게임이 시작되는 날(처음 화면의 마지막 봉)입니다.</p>
+      </details>
     </div>
 
     <div class="card pad acts-card">
@@ -314,44 +337,113 @@ h3{font-size:13.5px;margin:0 0 8px}
     } catch (e) { return null; }
   }
 
-  function newGame(tries){
-    tries = tries || 0;
-    if (busy) return;
-    busy = true;
-    $("loading").style.display = ""; $("loading").textContent = "종목을 고르는 중…";
-    $("over").classList.remove("on"); $("res").classList.remove("wide"); $("evback").classList.remove("on");
-    var go = function(){
-      if (!pool || !pool.n) { busy = false; $("loading").textContent = "게임 데이터가 아직 없습니다. 다음 업데이트 후 다시 열어 주세요."; return; }
-      var idx;
-      do { idx = Math.floor(Math.random() * pool.n); } while (pool.n > 1 && idx === lastIdx);
-      getJSON("game/" + idx + ".json?b=" + pool.build, function(d){
-        busy = false;
-        var need = WARM + VIEW + TURNS;
-        if (!d || !d.c || d.c.length < need) {
-          if (tries < 5) return newGame(tries + 1);
-          $("loading").textContent = "데이터를 불러오지 못했습니다. 새로고침해 주세요."; return;
-        }
-        lastIdx = idx;
-        start(d);
-      });
-    };
-    if (pool) go();
-    else getJSON("game/pool.json?t=" + Date.now(), function(p){ pool = p; go(); });
+  // ---------- 출제 조건 (게임이 시작되는 날 = 처음 화면의 마지막 봉 기준) ----------
+  //  x = 같이 고를 수 없는 짝 (하나를 켜면 다른 하나는 꺼짐)
+  function hiN(a, i, n){ var m = -Infinity; for (var j = Math.max(0, i - n + 1); j <= i; j++) m = Math.max(m, a[j]); return m; }
+  function loN(a, i, n){ var m = Infinity; for (var j = Math.max(0, i - n + 1); j <= i; j++) m = Math.min(m, a[j]); return m; }
+  var CONDS = [
+    { id: "ma20", g: "종목", t: "종가가 20일선 위", f: function(P, i){ return P.d.c[i] > P.ma[20][i]; } },
+    { id: "bull", g: "종목", t: "20·60·120일선 정배열", x: "bear",
+      f: function(P, i){ return P.ma[20][i] > P.ma[60][i] && P.ma[60][i] > P.ma[120][i]; } },
+    { id: "bear", g: "종목", t: "20·60·120일선 역배열 (하락 추세)", x: "bull",
+      f: function(P, i){ return P.ma[20][i] < P.ma[60][i] && P.ma[60][i] < P.ma[120][i]; } },
+    { id: "high52", g: "종목", t: "52주 신고가 근처 (1년 고점 대비 −5% 이내)",
+      f: function(P, i){ return P.d.c[i] >= hiN(P.d.h, i, 250) * 0.95; } },
+    { id: "pull", g: "종목", t: "상승 중 눌림목 (20일 고점 대비 −10% 이상, 60일선 위)",
+      f: function(P, i){ return P.d.c[i] <= hiN(P.d.h, i, 20) * 0.9 && P.d.c[i] > P.ma[60][i]; } },
+    { id: "vol", g: "종목", t: "거래량 급증 (20일 평균의 2배 이상)",
+      f: function(P, i){ var s = 0; for (var j = i - 20; j < i; j++) s += P.d.v[j]; return s > 0 && P.d.v[i] >= s / 20 * 2; } },
+    { id: "squeeze", g: "종목", t: "변동성 수축 (최근 20일 고저폭 12% 이하)",
+      f: function(P, i){ return (hiN(P.d.h, i, 20) - loN(P.d.l, i, 20)) / P.d.c[i] <= 0.12; } },
+    { id: "kbull", g: "시장 (KOSPI)", t: "코스피 60·120일선 정배열 (상승장)", x: "kbear",
+      f: function(P, i){ return !!P.k && P.k.ma[60][i] > P.k.ma[120][i]; } },
+    { id: "kbear", g: "시장 (KOSPI)", t: "코스피 60·120일선 역배열 (하락장)", x: "kbull",
+      f: function(P, i){ return !!P.k && P.k.ma[60][i] < P.k.ma[120][i]; } }
+  ];
+  var COND_KEY = "krsc_game_conds";
+  var condOn = (store(function(){ return JSON.parse(localStorage.getItem(COND_KEY) || "[]"); }) || []);
+  function activeConds(){ return CONDS.filter(function(c){ return condOn.indexOf(c.id) >= 0; }); }
+  function renderConds(){
+    var h = "", g = "";
+    CONDS.forEach(function(c){
+      if (c.g !== g) { g = c.g; h += '<div class="cg">' + esc(g) + "</div>"; }
+      h += '<label class="cr"><input type="checkbox" data-c="' + c.id + '"' + (condOn.indexOf(c.id) >= 0 ? " checked" : "") + "> " + esc(c.t) + "</label>";
+    });
+    $("condlist").innerHTML = h;
+    var a = activeConds();
+    $("condsum").textContent = a.length ? "조건 " + a.length + "개 적용" : "조건 없음 · 전체 랜덤";
+    $("condsum").classList.toggle("on", a.length > 0);
+  }
+  function setCond(id, on){
+    condOn = condOn.filter(function(x){ return x !== id; });
+    if (on) {
+      condOn.push(id);
+      var c = CONDS.filter(function(x){ return x.id === id; })[0];
+      if (c.x) condOn = condOn.filter(function(x){ return x !== c.x; });
+    }
+    store(function(){ localStorage.setItem(COND_KEY, JSON.stringify(condOn)); });
+    renderConds();
   }
 
-  function start(d){
-    var n = d.c.length, lo = WARM + VIEW - 1, hi = n - 1 - TURNS;
-    var s = lo + Math.floor(Math.random() * (hi - lo + 1));
-    var k = null;
+  function prep(d){                                      // 종목 + 같은 날짜 코스피 + 이동평균
+    var n = d.c.length, k = null;
     if (d.kc && d.kc.length === n) {                     // 같은 날짜로 맞춘 코스피 (×100 정수로 저장됨)
       var dv = function(a){ return a.map(function(x){ return x / 100; }); };
       k = { o: dv(d.ko), h: dv(d.kh), l: dv(d.kl), c: dv(d.kc) };
       k.ma = mas(k.c);
     }
-    G = { d: d, n: n, ma: mas(d.c), k: k, s: s, cur: s, turn: 0, cash: CASH0, qty: 0, avg: 0, cost: 0,
+    return { d: d, n: n, ma: mas(d.c), k: k };
+  }
+  function startPoints(P, conds){                        // 조건을 모두 만족하는 시작일 후보
+    var lo = WARM + VIEW - 1, hi = P.n - 1 - TURNS, out = [];
+    for (var i = lo; i <= hi; i++) {
+      var ok = true;
+      for (var c = 0; c < conds.length && ok; c++) ok = conds[c].f(P, i);
+      if (ok) out.push(i);
+    }
+    return out;
+  }
+
+  function newGame(){
+    if (busy) return;
+    busy = true;
+    $("loading").style.display = ""; $("loading").textContent = "종목을 고르는 중…";
+    $("over").classList.remove("on"); $("res").classList.remove("wide"); $("evback").classList.remove("on");
+    var conds = activeConds();
+    var go = function(){
+      if (!pool || !pool.n) { busy = false; $("loading").textContent = "게임 데이터가 아직 없습니다. 다음 업데이트 후 다시 열어 주세요."; return; }
+      var order = [], i;                                 // 종목 순서를 섞어 겹치지 않게 차례로 확인
+      for (i = 0; i < pool.n; i++) if (pool.n === 1 || i !== lastIdx) order.push(i);
+      for (i = order.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = order[i]; order[i] = order[j]; order[j] = t; }
+      var limit = Math.min(order.length, conds.length ? 80 : 6), tries = 0;
+      var next = function(){
+        if (tries >= limit) {
+          busy = false;
+          $("loading").textContent = conds.length ? "조건에 맞는 차트를 찾지 못했어요. '출제 조건'에서 조건을 줄여 보세요."
+                                                 : "데이터를 불러오지 못했습니다. 새로고침해 주세요.";
+          return;
+        }
+        var idx = order[tries++];
+        if (conds.length) $("loading").textContent = "조건에 맞는 차트 찾는 중… (" + tries + "번째 종목)";
+        getJSON("game/" + idx + ".json?b=" + pool.build, function(d){
+          if (!d || !d.c || d.c.length < WARM + VIEW + TURNS) return next();
+          var P = prep(d), pts = startPoints(P, conds);
+          if (!pts.length) return next();
+          busy = false; lastIdx = idx;
+          start(P, pts[Math.floor(Math.random() * pts.length)]);
+        });
+      };
+      next();
+    };
+    if (pool) go();
+    else getJSON("game/pool.json?t=" + Date.now(), function(p){ pool = p; go(); });
+  }
+
+  function start(P, s){
+    G = { d: P.d, n: P.n, ma: P.ma, k: P.k, s: s, cur: s, turn: 0, cash: CASH0, qty: 0, avg: 0, cost: 0,
           trades: [], done: false, reveal: null, evals: null, focus: null };
     hover = -1;
-    $("kpane").style.display = k ? "" : "none";
+    $("kpane").style.display = P.k ? "" : "none";
     $("loading").style.display = "none";
     msg("");
     render();
@@ -931,6 +1023,11 @@ h3{font-size:13.5px;margin:0 0 8px}
     if (mq.addEventListener) mq.addEventListener("change", draw);
   }
 
+  $("condlist").addEventListener("change", function(e){ var id = e.target.getAttribute("data-c"); if (id) setCond(id, e.target.checked); });
+  $("condapply").addEventListener("click", function(){ newGame(); });
+  $("condclear").addEventListener("click", function(){ condOn = []; store(function(){ localStorage.setItem(COND_KEY, "[]"); }); renderConds(); });
+
+  renderConds();
   renderHist();
   newGame();
 })();
