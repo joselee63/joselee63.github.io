@@ -962,10 +962,10 @@ header .lnk,header .status{color:var(--hd-mu)}
 
     // 라운드 피겨: 화면 가격 범위 안의 RF 가격에 가로선
     if (opt.rf) {
-      ctx.save(); ctx.strokeStyle = css("--rf"); ctx.fillStyle = css("--rf"); ctx.lineWidth = 1; ctx.font = bold; ctx.textAlign = "left";
+      ctx.save(); ctx.strokeStyle = css("--rf"); ctx.fillStyle = css("--rf"); ctx.lineWidth = 2; ctx.font = bold; ctx.textAlign = "left";
       opt.rf.forEach(function(v){
         if (v <= lo || v >= hi) return;
-        var y = Math.round(Y(v)) + 0.5;
+        var y = Math.round(Y(v));                      // 2px 선은 정수 좌표에서 선명
         ctx.globalAlpha = .85; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(plotW, y); ctx.stroke();
         ctx.globalAlpha = 1; ctx.fillText("RF " + num(v, opt.dec), 6, y - 7);
       });
