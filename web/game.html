@@ -243,6 +243,11 @@ header .lnk,header .status{color:var(--hd-mu)}
 @media (hover:hover){ .mkt a:not(.on):hover{color:var(--hd-fg);background:rgba(255,255,255,.08)} }
 .mkt a.on{background:rgba(255,255,255,.94);color:#1d1d1f}
 .top .mkt{margin-left:auto}
+/* 오른쪽 탭 묶음: 유사 차트 · 차트 게임 (별도 페이지) */
+.tab.sim{margin-left:auto;text-decoration:none;box-shadow:inset 0 0 0 1px var(--line)}
+.tab.sim + .tab.game{margin-left:0}
+.tab.sim.on{box-shadow:none}
+@media (max-width:1000px){ .tab.sim{margin-left:0} }
 </style>
 </head>
 <body>
@@ -264,6 +269,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     <a class="tab" href="./#charts">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 2v12M12 3v11M8 1.5v13"/><rect x="2.8" y="5" width="2.4" height="5" rx=".5" fill="currentColor" stroke="none"/><rect x="6.8" y="3.5" width="2.4" height="5.5" rx=".5" fill="currentColor" stroke="none"/><rect x="10.8" y="6" width="2.4" height="5" rx=".5" fill="currentColor" stroke="none"/></svg>
       <span class="sl">섹터별 </span>차트</a>
+    <a class="tab sim" href="similar.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 11.5c1.6-3.2 3.2-3.2 4.8 0s3.2 3.2 4.8 0 2.4-3.2 3.4-1.6"/><path d="M1.5 7c1.6-3.2 3.2-3.2 4.8 0s3.2 3.2 4.8 0 2.4-3.2 3.4-1.6" stroke-dasharray="1.4 1.8"/></svg>
+      유사 차트</a>
     <a class="tab game on" href="game.html" aria-current="page">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4" width="13" height="8.5" rx="3"/><path d="M5 6.8v3M3.5 8.3h3"/><circle cx="10.6" cy="7.3" r=".6" fill="currentColor"/><circle cx="12" cy="9.3" r=".6" fill="currentColor"/></svg>
       차트 게임</a>

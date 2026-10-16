@@ -636,6 +636,51 @@ def write_game_data(data, sections, build_id):
 
 # --- 페이지 만들기: 시장 설정 · 국기 · 한국/미국 전환 ---
 #   (국기 이모지는 윈도우에서 'KR'·'US' 글자로 보여서 SVG로 직접 그림)
+SIM_OHLC_BARS = 500                   # 유사 차트: 기준 차트로 그릴 종목별 최근 일봉 수 (약 2년)
+
+
+def write_similar_data(data, sections, build_id):
+    """
+    유사 차트 찾기용 데이터 (site/similar/)
+      · index.json : 시장 달력(기준 지수의 거래일) + 모든 종목의 종가(달력에 맞춤, 상장 전은 null) — 브라우저에서 패턴 비교
+      · s/{코드}.json : 종목별 최근 SIM_OHLC_BARS 일봉 (기준 차트 그리기·구간 선택용)
+      · 가격은 정수로 저장: 한국은 원, 미국은 센트(×100) — scale 로 되돌림
+    """
+    cal_src = data.get(MK["index"], {}).get("df")
+    if cal_src is None:
+        return 0
+    cal = cal_src.index[-GAME_BARS:]
+    scale = 10 ** PRICE_DEC
+    sdir = os.path.join(SITE_DIR, "similar", "s")
+    os.makedirs(sdir, exist_ok=True)
+    stocks, closes, seen = [], [], set()
+    etf_codes = {c for s, it in sections if s in ETF_SECTIONS for c, _, _ in it}
+    for s, it in sections:
+        for c, nm, _ in it:
+            if c in seen or c not in data:
+                continue
+            seen.add(c)
+            df = data[c]["df"]
+            col = df["Close"].reindex(cal)
+            first = col.first_valid_index()
+            if first is None:
+                continue
+            col = col.where(col.index < first, col.ffill())      # 거래 정지일은 직전 종가, 상장 전은 비움
+            closes.append([None if pd.isna(x) else int(round(x * scale)) for x in col.values])
+            stocks.append({"c": c, "n": nm, "s": s, "e": c in etf_codes, "i": c in INDEX_CODES})
+            t = df.iloc[-SIM_OHLC_BARS:]
+            rec = {"d": [int(x.strftime("%Y%m%d")) for x in t.index]}
+            for k, cc in (("o", "Open"), ("h", "High"), ("l", "Low"), ("c", "Close")):
+                rec[k] = [int(round(x * scale)) for x in t[cc].values]
+            rec["v"] = [int(round(x)) for x in t["Volume"].values]
+            with open(os.path.join(sdir, f"{c}.json"), "w", encoding="utf-8") as f:
+                json.dump(rec, f, separators=(",", ":"))
+    with open(os.path.join(SITE_DIR, "similar", "index.json"), "w", encoding="utf-8") as f:
+        json.dump({"build": build_id, "scale": scale, "dates": [int(x.strftime("%Y%m%d")) for x in cal],
+                   "stocks": stocks, "close": closes}, f, ensure_ascii=False, separators=(",", ":"))
+    return len(stocks)
+
+
 def _trigram(cx, cy, rot, pattern):
     """태극기 괘: pattern = 바깥→안 순서로 1(긴 막대)/0(끊어진 막대)"""
     bars = []
@@ -838,7 +883,7 @@ def main():
     print("[3/3] 페이지 생성")
     with open(os.path.join(SITE_DIR, "data", "summary.js"), "w", encoding="utf-8") as f:
         f.write("window.__krsc_summary && window.__krsc_summary(" + js + ");\n")
-    for page in ("index.html", "game.html"):
+    for page in ("index.html", "game.html", "similar.html"):
         with open(os.path.join(WEB_DIR, page), encoding="utf-8") as f:
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:
@@ -849,6 +894,7 @@ def main():
     open(os.path.join(SITE_DIR, ".nojekyll"), "w").close()
     if GAME_BARS:
         print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'])}개")
+        print(f"      유사 차트 종목 {write_similar_data(data, sections, meta['build_id'])}개")
 
     size_mb = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(SITE_DIR) for f in fs) / 1e6
     print(f"      {os.path.relpath(SITE_DIR, ROOT)}/ {size_mb:.1f}MB · 업데이트 {meta['updated_at']} · 기준일 {meta['ref_date']} "
