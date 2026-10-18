@@ -1,0 +1,66 @@
+name: investor-data
+
+# 종목별 · 매매주체별 · 일자별 거래대금 (KRX) → 저장소 data 브랜치에 쌓기 (사이트 빌드와 별개)
+on:
+  schedule:
+    - cron: "7 20 * * 1-5"          # 평일 20:07 (장 마감 후 투자자 데이터 확정 뒤)
+      timezone: "Asia/Seoul"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "시험 실행: 앞쪽 N종목만 (비우면 전체)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write                    # data 브랜치에 올리기
+
+concurrency:
+  group: investor-data
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180             # 처음 5년치 구축은 약 1시간
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 패키지 설치
+        run: pip install pandas pykrx
+
+      - name: data 브랜치 가져오기 (없으면 새로 만듦)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$URL" data >/dev/null; then
+            git clone -q --depth 1 -b data "$URL" datadir
+          else
+            mkdir datadir && cd datadir && git init -q -b data && git remote add origin "$URL"
+            printf '# 데이터 브랜치\n\n- investor/YYYY/YYYY-MM.csv — 종목별 매매주체별 일자별 거래대금 (원)\n' > README.md
+          fi
+
+      - name: 투자자별 거래대금 수집
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+          INVESTOR_LIMIT: ${{ github.event.inputs.limit }}
+        run: python tools/investor_data.py datadir
+
+      - name: data 브랜치에 저장 (수집이 중간에 실패해도 받은 만큼은 저장)
+        if: always()
+        run: |
+          cd datadir
+          [ -d investor ] || { echo "저장할 데이터 없음"; exit 0; }
+          git add -A
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "investor $(TZ=Asia/Seoul date +%Y-%m-%d) (${{ github.event_name }})"
+          git push -q origin data
