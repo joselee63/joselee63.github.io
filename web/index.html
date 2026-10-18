@@ -257,6 +257,17 @@ header .lnk,header .status{color:var(--hd-mu)}
 .tab.sim + .tab.game{margin-left:0}
 .tab.sim.on{box-shadow:none}
 @media (max-width:1000px){ .tab.sim{margin-left:0} }
+/* 오른쪽 탭 묶음 맨 앞: 종목 검색 */
+.tab.scr{margin-left:auto;text-decoration:none;box-shadow:inset 0 0 0 1px var(--line)}
+.tab.scr + .tab.sim{margin-left:0}
+.tab.scr.on{box-shadow:none}
+@media (max-width:1000px){ .tab.scr{margin-left:0} }
+/* 휴대폰: 탭이 많아 한 줄에 안 들어가면 옆으로 밀어서 보기 */
+@media (max-width:1000px){
+  .tabs .in{overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .tabs .in::-webkit-scrollbar{display:none}
+  .tab{flex:none;padding:8px 12px}
+}
 </style>
 </head>
 <body>
@@ -283,6 +294,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     <button class="tab" type="button" data-t="charts">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 2v12M12 3v11M8 1.5v13"/><rect x="2.8" y="5" width="2.4" height="5" rx=".5" fill="currentColor" stroke="none"/><rect x="6.8" y="3.5" width="2.4" height="5.5" rx=".5" fill="currentColor" stroke="none"/><rect x="10.8" y="6" width="2.4" height="5" rx=".5" fill="currentColor" stroke="none"/></svg>
       <span class="sl">섹터별 </span>차트 <span class="n" id="n-charts"></span></button>
+    <a class="tab scr" href="screener.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="4.6"/><path d="M10.5 10.5l3.6 3.6"/></svg>
+      종목 검색</a>
     <a class="tab sim" href="similar.html">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 11.5c1.6-3.2 3.2-3.2 4.8 0s3.2 3.2 4.8 0 2.4-3.2 3.4-1.6"/><path d="M1.5 7c1.6-3.2 3.2-3.2 4.8 0s3.2 3.2 4.8 0 2.4-3.2 3.4-1.6" stroke-dasharray="1.4 1.8"/></svg>
       유사 차트</a>

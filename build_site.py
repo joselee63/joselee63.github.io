@@ -33,6 +33,7 @@ MARKETS = {
                    150000, 200000, 300000, 500000, 750000, 1000000, 1500000, 2000000, 3000000, 4000000, 5000000]),
     "us": dict(stocks="stocks_us", site="us", tz="America/New_York", title="미국 증시 섹터 차트",
                index="IXIC", index_name="나스닥", index_label="NASDAQ",      # 차트 게임 기준 지수 = 나스닥 종합
+               rs_index="SPX",                                                # 와인스타인 RS 기준 = S&P 500
                index_yahoo={"SPX": "^GSPC", "IXIC": "^IXIC", "DJI": "^DJI"},
                price_dec=2, cap_unit="$B", cap_div=1e9, amt_unit="$M", amt_div=1e6,
                currency="$", cash0=100_000, buy_fee=0.001, sell_fee=0.001, tax=0.0,
@@ -725,6 +726,7 @@ def render_page(src, page):
                               "currency", "cash0", "buy_fee", "sell_fee", "tax", "schedule", "source")}
     cfg["market"] = MARKET
     cfg["rf"] = MK.get("rf", [])
+    cfg["rs_index"] = MK.get("rs_index", MK["index"])          # 종목 검색 · 와인스타인 RS 기준 지수
     links = []
     for m, label in (("kr", "한국"), ("us", "미국")):
         here = MARKETS[MARKET]["site"]                       # 지금 페이지 위치에서 상대 경로
@@ -897,7 +899,7 @@ def main():
     print("[3/3] 페이지 생성")
     with open(os.path.join(SITE_DIR, "data", "summary.js"), "w", encoding="utf-8") as f:
         f.write("window.__krsc_summary && window.__krsc_summary(" + js + ");\n")
-    for page in ("index.html", "game.html", "similar.html"):
+    for page in ("index.html", "game.html", "similar.html", "screener.html"):
         with open(os.path.join(WEB_DIR, page), encoding="utf-8") as f:
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:
