@@ -640,14 +640,15 @@ def write_game_data(data, sections, build_id):
 SIM_OHLC_BARS = 500                   # 유사 차트: 기준 차트로 그릴 종목별 최근 일봉 수 (약 2년)
 
 
-SUPPLY_WINDOW = 5                     # 수급오실레이터: 외국인+기관 N일 순매수 합 ÷ 시가총액
+SUPPLY_WINDOW = 5                     # 수급오실레이터 기본: 외국인+기관 N일 순매수 합 ÷ 시가총액 (페이지에서 5·10일 선택)
 
 
 def write_supply_data(data, sections, listing, build_id):
     """
     수급 오실레이터용 데이터 (한국만, site/supply/index.json)
       · 원본: data 브랜치의 매매주체별 거래대금 CSV (INVESTOR_DIR, 워크플로가 받아 둠)
-      · 종목별 날짜마다: 종가 c, 외국인(+기타외국인) 5일 순매수 f, 기관계 5일 순매수 i (억원)
+      · 종목별 날짜마다: 종가 c, 외국인(+기타외국인) 일별 순매수 f, 기관계 일별 순매수 i (억원)
+        → 페이지에서 5·10일 합계, 수급 점수(10일 오실레이터의 120일 스토캐스틱), '수급 바닥 반등' 신호 계산
       · 시가총액 = 현재 상장주식수 × 그날 종가 (과거 증자·소각은 반영 못 함 — 근사)
       · 오실레이터 = (f + i) × 1억 ÷ 시가총액 — 페이지에서 계산 (외국인·기관을 따로 볼 수 있게)
     """
@@ -671,16 +672,16 @@ def write_supply_data(data, sections, listing, build_id):
         if pd.isna(shares) or shares <= 0:
             continue
         g = g.set_index("날짜").sort_index().reindex(cal)
-        f5 = (g["외국인_순매수"] + g["기타외국인_순매수"]).rolling(SUPPLY_WINDOW).sum() / 1e8
-        i5 = g["기관계_순매수"].rolling(SUPPLY_WINDOW).sum() / 1e8
+        f5 = (g["외국인_순매수"] + g["기타외국인_순매수"]) / 1e8      # 일별 (이름은 예전 그대로)
+        i5 = g["기관계_순매수"] / 1e8
         cl = data[code]["df"]["Close"].reindex(cal)
         q = lambda ser, d=0: [None if pd.isna(v) else (int(round(v)) if d == 0 else round(float(v), d)) for v in ser.values]
-        rows["c"].append(q(cl)); rows["f"].append(q(f5, 1)); rows["i"].append(q(i5, 1))
+        rows["c"].append(q(cl)); rows["f"].append(q(f5, 2)); rows["i"].append(q(i5, 2))
         nm, sec = names.get(code, (code, ""))
         stocks.append({"c": code, "n": nm, "s": sec, "sh": int(shares)})
     os.makedirs(os.path.join(SITE_DIR, "supply"), exist_ok=True)
     with open(os.path.join(SITE_DIR, "supply", "index.json"), "w", encoding="utf-8") as f:
-        json.dump({"build": build_id, "window": SUPPLY_WINDOW, "dates": [int(x.strftime("%Y%m%d")) for x in cal],
+        json.dump({"build": build_id, "window": SUPPLY_WINDOW, "daily": True, "dates": [int(x.strftime("%Y%m%d")) for x in cal],
                    "stocks": stocks, **rows}, f, ensure_ascii=False, separators=(",", ":"))
     return len(stocks)
 
