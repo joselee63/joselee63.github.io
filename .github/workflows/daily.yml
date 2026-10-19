@@ -2,11 +2,17 @@ name: daily-build
 
 on:
   schedule:
+    # 정기 실행은 '지금 배포된 페이지보다 새 데이터가 있는 시장'만 새로 만들어 배포 (없으면 건너뜀)
+    #  → GitHub 가 실행을 몇 시간 늦게 시작하거나 데이터 반영이 늦어도 다음 실행이 이어서 반영
     - cron: "7 21 * * 1-5"          # 한국: 평일 21:07 (정각은 지연이 잦아 7분으로)
+      timezone: "Asia/Seoul"
+    - cron: "37 23 * * 1-5"         # 한국 보조: 21:07 실행이 밀리거나 실패했을 때
       timezone: "Asia/Seoul"
     - cron: "7 7 * * 2-6"           # 미국: 화~토 07:07 = 미국 장 마감(뉴욕 16:00) 후
       timezone: "Asia/Seoul"
-  workflow_dispatch:                 # 수동 실행 (Actions 탭 버튼 · 웹페이지 '업데이트' 버튼) → 두 시장 모두 갱신
+    - cron: "37 11 * * 2-6"         # 미국 보조: Yahoo 반영이 늦을 때 (장 마감 몇 시간 뒤까지 전날 봉이 없기도 함)
+      timezone: "Asia/Seoul"
+  workflow_dispatch:                 # 수동 실행 (Actions 탭 버튼 · 웹페이지 '업데이트' 버튼) → 두 시장 모두 항상 새로 만듦
 
 permissions:
   contents: write                    # gh-pages 브랜치에 결과를 올리기 위해 필요
@@ -22,12 +28,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: 지금 배포된 페이지 가져오기 (빌드가 실패한 시장은 이걸로 유지)
+      - name: 지금 배포된 페이지 가져오기 (새로 만들지 않은 시장은 이걸로 유지)
         uses: actions/checkout@v7
         continue-on-error: true
         with:
           ref: gh-pages
           path: prev
+
+      - name: 배포된 기준일 읽기
+        id: prev
+        run: |
+          ref() { [ -f "$1" ] && grep -o '"ref_date": *"[0-9-]*"' "$1" | head -1 | grep -o '[0-9-]\{10\}' || true; }
+          echo "kr=$(ref prev/data/summary.js)" >> "$GITHUB_OUTPUT"
+          echo "us=$(ref prev/us/data/summary.js)" >> "$GITHUB_OUTPUT"
+          echo "배포된 기준일 — 한국 $(ref prev/data/summary.js) · 미국 $(ref prev/us/data/summary.js)"
 
       - uses: actions/setup-python@v7
         with:
@@ -37,45 +51,46 @@ jobs:
       - name: 패키지 설치
         run: pip install -r requirements.txt
 
-      # 정기 실행이면 그 시장만 '오늘이 거래일인지' 확인 (휴장일이면 배포하지 않음)
       - name: 한국 — 데이터 수집 · 차트 생성
         id: kr
         continue-on-error: true
         env:
           MARKET: kr
           TRIGGER: ${{ github.event_name }}
-          CHECK_TODAY: ${{ github.event_name == 'schedule' && github.event.schedule == '7 21 * * 1-5' && '1' || '0' }}
+          PREV_REF: ${{ steps.prev.outputs.kr }}
         run: python build_site.py
 
       - name: 미국 — 데이터 수집 · 차트 생성
         id: us
-        if: steps.kr.outputs.skip != 'true'
         continue-on-error: true
         env:
           MARKET: us
           TRIGGER: ${{ github.event_name }}
-          CHECK_TODAY: ${{ github.event_name == 'schedule' && github.event.schedule == '7 7 * * 2-6' && '1' || '0' }}
+          PREV_REF: ${{ steps.prev.outputs.us }}
         run: python build_site.py
 
-      - name: 실패한 시장은 이전 페이지로 유지
+      - name: 새로 만들지 않은 시장(새 데이터 없음 · 실패)은 이전 페이지로 유지
         id: merge
         run: |
-          if [ "${{ steps.kr.outputs.skip }}" = "true" ] || [ "${{ steps.us.outputs.skip }}" = "true" ]; then
-            echo "휴장일 — 기존 페이지 유지"; echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0
+          built() { [ "$1" = "success" ] && [ "$2" != "true" ]; }   # 결과 · 건너뜀 여부
+          KR_OK=0; US_OK=0
+          built "${{ steps.kr.outcome }}" "${{ steps.kr.outputs.skip }}" && KR_OK=1
+          built "${{ steps.us.outcome }}" "${{ steps.us.outputs.skip }}" && US_OK=1
+          if [ $KR_OK = 0 ] && [ $US_OK = 0 ]; then
+            if [ "${{ steps.kr.outcome }}" != "success" ] && [ "${{ steps.us.outcome }}" != "success" ]; then echo "두 시장 모두 빌드 실패"; exit 1; fi
+            echo "두 시장 모두 새 데이터 없음 — 기존 페이지 유지"; echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          KR="${{ steps.kr.outcome }}"; US="${{ steps.us.outcome }}"
-          if [ "$KR" != "success" ] && [ "$US" != "success" ]; then echo "두 시장 모두 빌드 실패"; exit 1; fi
           mkdir -p site
-          if [ "$KR" != "success" ]; then
-            [ -f prev/index.html ] || { echo "한국 빌드 실패, 이전 페이지도 없음"; exit 1; }
+          if [ $KR_OK = 0 ]; then
+            [ -f prev/index.html ] || { echo "한국 페이지를 만들지 못했고 이전 페이지도 없음"; exit 1; }
             find site -mindepth 1 -maxdepth 1 ! -name us -exec rm -rf {} +
             (cd prev && find . -mindepth 1 -maxdepth 1 ! -name us ! -name .git -exec cp -r {} ../site/ \;)
-            echo "::warning::한국 빌드 실패 → 이전 페이지 유지"
+            [ "${{ steps.kr.outcome }}" = "success" ] && echo "한국: 새 데이터 없음 → 이전 페이지 유지" || echo "::warning::한국 빌드 실패 → 이전 페이지 유지"
           fi
-          if [ "$US" != "success" ]; then
+          if [ $US_OK = 0 ]; then
             rm -rf site/us
             [ -d prev/us ] && cp -r prev/us site/us
-            echo "::warning::미국 빌드 실패 → 이전 페이지 유지"
+            [ "${{ steps.us.outcome }}" = "success" ] && echo "미국: 새 데이터 없음 → 이전 페이지 유지" || echo "::warning::미국 빌드 실패 → 이전 페이지 유지"
           fi
           echo "deploy=true" >> "$GITHUB_OUTPUT"
 

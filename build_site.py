@@ -792,11 +792,12 @@ def main():
 
     last_dates = pd.Series({c: d["df"].index[-1] for c, d in data.items()})
     ref_date = last_dates.mode().iloc[0]
-    today = dt.datetime.now(MKT_TZ).date()                # 그 시장의 오늘 (미국 장 마감 후 = 뉴욕 날짜)
-    check = os.environ.get("CHECK_TODAY")                 # 워크플로가 이 시장의 정기 실행일 때만 1
-    check = (check == "1") if check is not None else (trigger == "schedule")
-    if check and ref_date.date() != today:
-        print(f"[건너뜀] 오늘({today})은 거래일이 아닙니다 (최근 거래일 {ref_date.date()}). 기존 페이지 유지.")
+    # 정기 실행: '지금 배포된 페이지보다 새 거래일 데이터가 있을 때만' 만듦
+    #   (예전엔 '오늘 = 마지막 거래일' 로 판단 → GitHub 가 실행을 몇 시간 늦게 시작하거나 Yahoo 반영이 늦으면 휴장일로 잘못 건너뜀)
+    #   휴장일·데이터 미반영이면 새 데이터가 없으니 건너뛰고, 보조 예약 실행이 나중에 다시 확인
+    prev_ref = os.environ.get("PREV_REF", "").strip()       # 워크플로가 넣어 주는 '지금 배포된 기준일'
+    if trigger == "schedule" and prev_ref and ref_date.strftime("%Y-%m-%d") <= prev_ref:
+        print(f"[건너뜀] 새 데이터가 없습니다 (최근 거래일 {ref_date.date()} · 배포된 기준일 {prev_ref}). 기존 페이지 유지.")
         _gh_output(skip="true", ref_date=str(ref_date.date()))
         return
 
