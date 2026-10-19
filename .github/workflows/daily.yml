@@ -35,6 +35,13 @@ jobs:
           ref: gh-pages
           path: prev
 
+      - name: 매매주체별 거래대금 가져오기 (수급 오실레이터용, investor-data 워크플로가 쌓는 data 브랜치)
+        uses: actions/checkout@v7
+        continue-on-error: true
+        with:
+          ref: data
+          path: invdata
+
       - name: 배포된 기준일 읽기
         id: prev
         run: |
@@ -58,6 +65,7 @@ jobs:
           MARKET: kr
           TRIGGER: ${{ github.event_name }}
           PREV_REF: ${{ steps.prev.outputs.kr }}
+          INVESTOR_DIR: invdata/investor
         run: python build_site.py
 
       - name: 미국 — 데이터 수집 · 차트 생성

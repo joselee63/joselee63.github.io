@@ -640,6 +640,51 @@ def write_game_data(data, sections, build_id):
 SIM_OHLC_BARS = 500                   # 유사 차트: 기준 차트로 그릴 종목별 최근 일봉 수 (약 2년)
 
 
+SUPPLY_WINDOW = 5                     # 수급오실레이터: 외국인+기관 N일 순매수 합 ÷ 시가총액
+
+
+def write_supply_data(data, sections, listing, build_id):
+    """
+    수급 오실레이터용 데이터 (한국만, site/supply/index.json)
+      · 원본: data 브랜치의 매매주체별 거래대금 CSV (INVESTOR_DIR, 워크플로가 받아 둠)
+      · 종목별 날짜마다: 종가 c, 외국인(+기타외국인) 5일 순매수 f, 기관계 5일 순매수 i (억원)
+      · 시가총액 = 현재 상장주식수 × 그날 종가 (과거 증자·소각은 반영 못 함 — 근사)
+      · 오실레이터 = (f + i) × 1억 ÷ 시가총액 — 페이지에서 계산 (외국인·기관을 따로 볼 수 있게)
+    """
+    inv_dir = os.environ.get("INVESTOR_DIR", "")
+    if MARKET != "kr" or not inv_dir or not os.path.isdir(inv_dir):
+        return 0
+    import glob
+    files = sorted(glob.glob(os.path.join(inv_dir, "*", "*.csv")))
+    if not files:
+        return 0
+    use = ["날짜", "코드", "외국인_순매수", "기타외국인_순매수", "기관계_순매수"]
+    inv = pd.concat([pd.read_csv(f, usecols=use, dtype={"코드": str}, encoding="utf-8-sig") for f in files], ignore_index=True)
+    inv["날짜"] = pd.to_datetime(inv["날짜"])
+    cal = pd.DatetimeIndex(sorted(inv["날짜"].unique()))
+    names = {c: (nm, s) for s, it in sections for c, nm, _ in it}
+    stocks, rows = [], {"c": [], "f": [], "i": []}
+    for code, g in inv.groupby("코드"):
+        if code not in data or listing is None or code not in listing.index:
+            continue
+        shares = listing.loc[code, "Stocks"]
+        if pd.isna(shares) or shares <= 0:
+            continue
+        g = g.set_index("날짜").sort_index().reindex(cal)
+        f5 = (g["외국인_순매수"] + g["기타외국인_순매수"]).rolling(SUPPLY_WINDOW).sum() / 1e8
+        i5 = g["기관계_순매수"].rolling(SUPPLY_WINDOW).sum() / 1e8
+        cl = data[code]["df"]["Close"].reindex(cal)
+        q = lambda ser, d=0: [None if pd.isna(v) else (int(round(v)) if d == 0 else round(float(v), d)) for v in ser.values]
+        rows["c"].append(q(cl)); rows["f"].append(q(f5, 1)); rows["i"].append(q(i5, 1))
+        nm, sec = names.get(code, (code, ""))
+        stocks.append({"c": code, "n": nm, "s": sec, "sh": int(shares)})
+    os.makedirs(os.path.join(SITE_DIR, "supply"), exist_ok=True)
+    with open(os.path.join(SITE_DIR, "supply", "index.json"), "w", encoding="utf-8") as f:
+        json.dump({"build": build_id, "window": SUPPLY_WINDOW, "dates": [int(x.strftime("%Y%m%d")) for x in cal],
+                   "stocks": stocks, **rows}, f, ensure_ascii=False, separators=(",", ":"))
+    return len(stocks)
+
+
 def write_similar_data(data, sections, build_id):
     """
     유사 차트 찾기용 데이터 (site/similar/)
@@ -741,6 +786,8 @@ def render_page(src, page):
               .replace("<!--SWITCH-->", '<nav class="mkt" aria-label="시장 선택">' + "".join(links) + "</nav>"))
     for a, b in MK.get("replace", {}).items():
         out = out.replace(a, b)
+    if MARKET != "kr":                                    # 수급 오실레이터는 한국 매매주체 데이터만 있음
+        out = re.sub(r'\s*<a class="tab sup[^"]*"[^>]*>[\s\S]*?</a>', "", out)
     return out
 
 
@@ -900,7 +947,7 @@ def main():
     print("[3/3] 페이지 생성")
     with open(os.path.join(SITE_DIR, "data", "summary.js"), "w", encoding="utf-8") as f:
         f.write("window.__krsc_summary && window.__krsc_summary(" + js + ");\n")
-    for page in ("index.html", "game.html", "similar.html", "screener.html"):
+    for page in ("index.html", "game.html", "similar.html", "screener.html") + (("supply.html",) if MARKET == "kr" else ()):
         with open(os.path.join(WEB_DIR, page), encoding="utf-8") as f:
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:
@@ -912,6 +959,8 @@ def main():
     if GAME_BARS:
         print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'])}개")
         print(f"      유사 차트 종목 {write_similar_data(data, sections, meta['build_id'])}개")
+    if MARKET == "kr":
+        print(f"      수급 오실레이터 종목 {write_supply_data(data, sections, listing, meta['build_id'])}개")
 
     size_mb = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(SITE_DIR) for f in fs) / 1e6
     print(f"      {os.path.relpath(SITE_DIR, ROOT)}/ {size_mb:.1f}MB · 업데이트 {meta['updated_at']} · 기준일 {meta['ref_date']} "
