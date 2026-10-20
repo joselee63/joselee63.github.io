@@ -397,6 +397,16 @@ header .lnk,header .status{color:var(--hd-mu)}
 .qnote{font-size:12px;color:var(--muted);line-height:1.65;margin:10px 0 0}
 .qstat{font-size:13px;color:var(--muted);margin-left:auto}
 @media (max-width:1000px){ .qmetrics{grid-template-columns:repeat(2,minmax(0,1fr))} .q2{grid-template-columns:minmax(0,1fr)} #qc{height:min(380px,52vh)} .qverdict{flex-direction:column} }
+/* 10분위 분석 */
+.dhead{font-size:13.5px;margin:4px 0 10px}
+.dbars{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;align-items:end;border:1px solid var(--line);border-radius:12px;padding:10px 10px 6px}
+.dbar{text-align:center;font-variant-numeric:tabular-nums}
+.dbar .dv{font-size:12px;font-weight:700;margin-bottom:4px}
+.dbar .dcol{position:relative;height:170px;border-bottom:0}
+.dbar .dcol::after{content:"";position:absolute;left:-3px;right:-3px;top:50%;border-top:1px dashed var(--line)}
+.dbar .dcol i{position:absolute;left:12%;right:12%;border-radius:4px;opacity:.85}
+.dbar .dq{font-size:11.5px;color:var(--muted);margin-top:4px}
+@media (max-width:600px){ .dbars{gap:2px;padding:8px 4px} .dbar .dv{font-size:10px} }
 </style>
 </head>
 <body>
@@ -446,11 +456,12 @@ header .lnk,header .status{color:var(--hd-mu)}
         <span class="lbl">전략</span>
         <div class="seg" id="qstrat">
           <button type="button" class="on" data-s="dual">듀얼 모멘텀</button>
+          <button type="button" data-s="nh">52주 신고가</button>
           <button type="button" disabled title="준비 중">밸류 (준비 중)</button>
           <button type="button" disabled title="준비 중">저변동성 (준비 중)</button>
         </div>
       </div>
-      <div class="krow">
+      <div class="krow" id="row-mode">
         <span class="lbl">상대 모멘텀 방식</span>
         <div class="seg" id="qmode">
           <button type="button" class="on" data-m="mom">기본 — 모멘텀 상위</button>
@@ -476,6 +487,15 @@ header .lnk,header .status{color:var(--hd-mu)}
         </div>
       </div>
 
+      <div class="qbox" id="box-nh" hidden>
+        <h3>52주 신고가 — 52주 최고가(종가 기준) 근처에 있는 종목 중에서 정렬 기준 상위부터 매수</h3>
+        <div class="qgrid">
+          <div class="qf"><span class="lbl">후보 조건</span><div class="line"><select id="nhcond"><option value="near">현재가가 52주 최고가의</option><option value="since">최근 N일 안에 52주 신고가 갱신</option></select>
+            <input type="number" id="nhv" value="5" min="0" max="60" style="width:56px"><span id="nhunit">% 이내</span></div></div>
+          <div class="qf" style="grid-column:1/-1"><span class="lbl">정렬 기준 — 후보가 많을 때 상위 몇 개를 고를지 (★ 10분위 분석으로 검증된 추천)</span>
+            <div class="line"><select id="nhsort" style="max-width:100%"></select></div><span class="kdesc" id="nhsortdesc"></span></div>
+        </div>
+      </div>
       <div class="qgrid">
         <div class="qf"><span class="lbl">보유 종목 수</span><div class="line"><input type="number" id="qtop" min="1" max="50" value="10"><span>개 · 동일 비중</span></div></div>
         <div class="qf"><span class="lbl">리밸런싱 주기</span><div class="line"><select id="qreb">
@@ -519,6 +539,23 @@ header .lnk,header .status{color:var(--hd-mu)}
         <div><h3>연도별 수익률</h3><div class="qscroll"><table class="qtbl" id="qyear"></table></div></div>
         <div><h3>리밸런싱 내역 <span class="c" id="qlogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3><div class="qscroll"><table class="qtbl" id="qlog"></table></div></div>
       </div>
+    </div>
+  </section>
+
+  <section class="card" id="qdecsec" style="display:none">
+    <div class="khead"><h2>10분위 분석 — 정렬 기준 검증</h2>
+      <p class="sub">기간마다 전체 종목을 기준값 순으로 10개 묶음(D1 낮음 ~ D10 높음)으로 나누고 다음 기간 수익률(전체 평균 대비)을 평균 · 좋은 기준이면 D1 → D10 으로 갈수록 올라갑니다 · 기간은 위 백테스트 기간</p></div>
+    <div class="kbody">
+      <div class="krow">
+        <span class="lbl">정렬 기준</span><select id="dfac" style="max-width:100%"></select>
+        <span class="lbl">보유 기간</span><select id="dhold"><option value="5">1주</option><option value="10">2주</option><option value="21" selected>1개월</option><option value="63">3개월</option></select>
+        <button class="pill" id="dall" type="button">모든 기준 비교</button>
+        <button class="kgo" id="dgo" type="button">분석</button>
+      </div>
+      <div id="dout"></div>
+      <div id="dallout"></div>
+      <p class="qnote">· 상-하: D10 − D1 평균 수익률 차이 · t값: 그 차이가 우연이 아닐 정도(2 이상이면 의미 있음) · 단조성: 분위 순서와 수익률 순서의 일치도(+1 = 완벽히 계단식) · 승률: D10이 D1보다 높았던 기간 비율<br>
+      · 후보 안 상위10−하위10: 52주 고가 5% 이내 후보들만 놓고 이 기준으로 상위 10개와 하위 10개의 수익률 차이 — 신고가 전략에서 실제로 쓰이는 상황</p>
     </div>
   </section>
 
@@ -581,9 +618,118 @@ header .lnk,header .status{color:var(--hd-mu)}
   });
   ["qlook", "qmid", "qmidpct", "qshort", "qtop", "qreb", "qabs", "qabslook", "qabsmin", "qmkt", "qbench", "qcost", "gma", "gman", "gstop", "gstopv", "gtrail", "gtrailv", "gdd", "gddv", "gvol", "gvolv"].forEach(function(id){ $(id).addEventListener("change", desc); });
 
+  // ---------- 52주 신고가 · 정렬 기준 ----------
+  var STRAT = "dual";
+  var FAC = [
+    ["lowgain", "★ 52주 저가 대비 상승률", "1년 최저가에서 얼마나 올라왔나 — 한국·미국 모두 가장 강하고 일관된 기준"],
+    ["compB", "★ 복합 B: 저가 대비 + 12개월 + 위험조정 모멘텀", "세 기준의 순위 평균 — 분위 수익률이 가장 고르게 계단식으로 올라감 (한국 단조성 0.98~0.99)"],
+    ["r252", "★ 12개월 수익률", "1년 수익률 — 신고가 후보 안에서 한국·미국 모두 상위 10개가 꾸준히 강함"],
+    ["compA", "★ 복합 A: 저가 대비 + 12개월 + 6개월", "세 기준의 순위 평균 — 신고가 후보 안 상위/하위 차이가 가장 큼 (한국 3개월 보유)"],
+    ["r126", "6개월 수익률", "6개월 수익률 — 대체로 유효하나 12개월보다 약함"],
+    ["radj", "위험조정 모멘텀 (6개월 수익률 ÷ 변동성)", "덜 출렁이며 오른 종목 — 한국 전체 분위는 유효, 후보 안에서는 약함"],
+    ["r21", "최근 1개월 수익률", "단기 강세 — 한국 후보 안에서는 강하나 미국 전체에선 들쭉날쭉"],
+    ["fresh", "신선도 (신고가를 최근에 낸 순)", "마지막 52주 신고가 이후 경과일이 짧은 순 — 약함"],
+    ["freq", "신고가 빈도 (최근 63일 중 신고가 일수)", "신고가를 자주 낸 순 — 약함"],
+    ["near", "52주 고가 근접도 (현재가 ÷ 52주 고가)", "고가에 가까운 순 — 후보가 이미 고가 근처라 후보 안에서는 거의 효과 없음"],
+    ["trend", "추세 품질 (126일 회귀 R²)", "곧게 오른 순 — 효과 거의 없음"],
+    ["lowvol", "저변동성 (60일)", "역방향 — 분석 기간엔 변동성 낮은 종목일수록 수익이 낮았음"],
+    ["calm", "덜 과열 (50일선 이격 작은 순)", "역방향 — 이격이 큰(강한) 종목이 오히려 더 올랐음"],
+    ["tight", "횡보 압축 (20일 변동폭 작은 순)", "역방향 — 변동폭이 작은 종목일수록 수익이 낮았음"]
+  ];
+  var FACN = {}; FAC.forEach(function(f){ FACN[f[0]] = f; });
+  var facOpts = FAC.map(function(f){ return '<option value="' + f[0] + '">' + f[1] + "</option>"; }).join("");
+  $("nhsort").innerHTML = facOpts; $("dfac").innerHTML = facOpts;
+  function sortDesc(){ $("nhsortdesc").textContent = FACN[$("nhsort").value][2]; }
+  sortDesc();
+  $("nhsort").addEventListener("change", function(){ sortDesc(); $("dfac").value = this.value; desc(); });
+  $("nhcond").addEventListener("change", function(){
+    var since = this.value === "since"; $("nhunit").textContent = since ? "일 이내" : "% 이내"; $("nhv").value = since ? 20 : 5; desc();
+  });
+  $("nhv").addEventListener("change", desc);
+  $("qstrat").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if (!b || b.disabled) return;
+    STRAT = b.getAttribute("data-s");
+    [].forEach.call(this.children, function(x){ x.classList.toggle("on", x === b); });
+    var nh = STRAT === "nh";
+    $("row-mode").style.display = nh ? "none" : "";
+    $("box-mom").hidden = nh || MODE !== "mom"; $("box-pull").hidden = nh || MODE !== "pull"; $("box-nh").hidden = !nh;
+    if (nh) $("dfac").value = $("nhsort").value;
+    desc();
+  });
+
+  var HI = [], LO = [], NHF = [], LS = [], LQ = [], LN = [], CS = [], CN = [];
+  function prepFactors(){                                // 52주 최고·최저(종가) · 신고가 표시 · 수익률 누적합 (한 번만 계산)
+    var T = D.length;
+    for (var s = 0; s < P.length; s++) {
+      var p = P[s], hi = new Float64Array(T), lo = new Float64Array(T), f = new Uint8Array(T);
+      var ls = new Float64Array(T + 1), lq = new Float64Array(T + 1), ln = new Float64Array(T + 1), cs = new Float64Array(T + 1), cn = new Float64Array(T + 1);
+      hi.fill(NaN); lo.fill(NaN);
+      var first = 0; while (first < T && !(p[first] > 0)) first++;
+      var qh = [], qhh = 0, ql = [], qlh = 0;
+      for (var t = 0; t < T; t++) {
+        var v = p[t], ok = v > 0, r = ok && t > 0 && p[t - 1] > 0 ? Math.log(v / p[t - 1]) : null;
+        ls[t + 1] = ls[t] + (r === null ? 0 : r); lq[t + 1] = lq[t] + (r === null ? 0 : r * r); ln[t + 1] = ln[t] + (r === null ? 0 : 1);
+        cs[t + 1] = cs[t] + (ok ? v : 0); cn[t + 1] = cn[t] + (ok ? 1 : 0);
+        if (!ok) continue;
+        while (qh.length > qhh && p[qh[qh.length - 1]] <= v) qh.pop(); qh.push(t);
+        while (ql.length > qlh && p[ql[ql.length - 1]] >= v) ql.pop(); ql.push(t);
+        while (qh[qhh] <= t - YEAR) qhh++;
+        while (ql[qlh] <= t - YEAR) qlh++;
+        if (t - YEAR + 1 >= first) { hi[t] = p[qh[qhh]]; lo[t] = p[ql[qlh]]; if (v >= hi[t]) f[t] = 1; }
+      }
+      HI.push(hi); LO.push(lo); NHF.push(f); LS.push(ls); LQ.push(lq); LN.push(ln); CS.push(cs); CN.push(cn);
+    }
+  }
+  function sdv(s, t, w){                                 // t일까지 w일 일간 로그수익률 표준편차
+    if (t - w + 1 < 0) return null;
+    var n = LN[s][t + 1] - LN[s][t + 1 - w]; if (n < w * 0.9) return null;
+    var m = (LS[s][t + 1] - LS[s][t + 1 - w]) / n, q = (LQ[s][t + 1] - LQ[s][t + 1 - w]) / n;
+    return Math.sqrt(Math.max(0, q - m * m) * n / Math.max(1, n - 1));
+  }
+  function fval(k, s, t){
+    var p = P[s][t]; if (!(p > 0)) return null;
+    var hi = HI[s][t], r, v, j;
+    switch (k) {
+      case "lowgain": return LO[s][t] > 0 ? p / LO[s][t] - 1 : null;
+      case "r252": return ret(s, t, 252);
+      case "r126": return ret(s, t, 126);
+      case "r21": return ret(s, t, 21);
+      case "radj": r = ret(s, t, 126); v = sdv(s, t, 126); return r !== null && v ? r / (v * Math.sqrt(126)) : null;
+      case "near": return hi > 0 ? p / hi : null;
+      case "freq": if (!(hi > 0)) return null; v = 0; for (j = Math.max(0, t - 62); j <= t; j++) v += NHF[s][j]; return v;
+      case "fresh": if (!(hi > 0)) return null; for (j = 0; j < YEAR && t - j >= 0; j++) if (NHF[s][t - j]) return -j; return -YEAR;
+      case "lowvol": v = sdv(s, t, 60); return v ? -v : null;
+      case "calm": if (t < 49 || CN[s][t + 1] - CN[s][t - 49] < 50) return null; return -(p / ((CS[s][t + 1] - CS[s][t - 49]) / 50) - 1);
+      case "tight": if (t < 19) return null; var mx = -Infinity, mn = Infinity;
+        for (j = t - 19; j <= t; j++) { var x = P[s][j]; if (!(x > 0)) return null; if (x > mx) mx = x; if (x < mn) mn = x; } return -(mx / mn - 1);
+      case "trend": if (t < 125) return null; var sx = 0, sy = 0, sxx = 0, sxy = 0, syy = 0;
+        for (j = 0; j < 126; j++) { var y = P[s][t - 125 + j]; if (!(y > 0)) return null; y = Math.log(y); sx += j; sy += y; sxx += j * j; sxy += j * y; syy += y * y; }
+        var cov = sxy - sx * sy / 126, vx = sxx - sx * sx / 126, vy = syy - sy * sy / 126;
+        return vy > 0 ? (cov * cov / (vx * vy)) * (cov > 0 ? 1 : -1) : null;
+    }
+    return null;
+  }
+  var COMP = { compA: ["lowgain", "r252", "r126"], compB: ["lowgain", "r252", "radj"] };
+  function scoreSet(k, set, t){                          // [{s, v}] — 복합 기준은 묶음 안 순위(0~1) 평균
+    var out = [];
+    if (!COMP[k]) { set.forEach(function(s){ var v = fval(k, s, t); if (v !== null && isFinite(v)) out.push({ s: s, v: v }); }); return out; }
+    var parts = COMP[k];
+    set.forEach(function(s){ var vs = parts.map(function(q){ return fval(q, s, t); }); if (vs.every(function(v){ return v !== null && isFinite(v); })) out.push({ s: s, vs: vs, v: 0 }); });
+    var n = out.length;
+    parts.forEach(function(q, i){ out.slice().sort(function(a, b){ return a.vs[i] - b.vs[i]; }).forEach(function(x, r){ x.v += (n > 1 ? r / (n - 1) : 1) / parts.length; }); });
+    return out;
+  }
+  function nhCand(c, s, t){
+    var hi = HI[s][t], p = P[s][t]; if (!(hi > 0) || !(p > 0)) return false;
+    if (c.nhCond === "near") return p >= hi * (1 - c.nhV / 100);
+    for (var j = 0; j <= c.nhV && t - j >= 0; j++) if (NHF[s][t - j]) return true;
+    return false;
+  }
+
   function cfg(){
     var w = [].map.call(document.querySelectorAll(".qwi"), function(x){ return Math.max(0, +x.value || 0); });
-    return { mode: MODE, rank: $("qrank").value, w: w, look: +$("qlook").value, mid: +$("qmid").value, midPct: Math.max(1, Math.min(100, +$("qmidpct").value || 20)),
+    return { strat: STRAT, nhCond: $("nhcond").value, nhV: Math.max(0, +$("nhv").value || 0), nhSort: $("nhsort").value,
+             mode: MODE, rank: $("qrank").value, w: w, look: +$("qlook").value, mid: +$("qmid").value, midPct: Math.max(1, Math.min(100, +$("qmidpct").value || 20)),
              short: +$("qshort").value, top: Math.max(1, Math.min(50, Math.round(+$("qtop").value || 10))), reb: +$("qreb").value,
              abs: $("qabs").checked, absLook: +$("qabslook").value, absMin: (+$("qabsmin").value || 0) / 100, mkt: $("qmkt").checked,
              ma: $("gma").checked ? +$("gman").value : 0, stop: $("gstop").checked ? (+$("gstopv").value || 10) / 100 : 0,
@@ -595,7 +741,9 @@ header .lnk,header .status{color:var(--hd-mu)}
   function ruleText(c){
     var rb = $("qreb").options[$("qreb").selectedIndex].text;
     var s = (c.abs ? "지난 " + perName(c.absLook) + " 수익률 " + (c.absMin * 100) + "% 이하 종목은 제외하고, " : "") +
-      (c.mode === "mom" ? (c.rank === "single" ? perName(c.look) + " 수익률" : "가중 모멘텀(" + wText(c) + ")") + " 상위 " + c.top + "개"
+      (c.strat === "nh" ? (c.nhCond === "near" ? "52주 최고가의 " + c.nhV + "% 이내" : "최근 " + c.nhV + "일 안에 52주 신고가를 낸") + " 종목 중 " +
+                          FACN[c.nhSort][1].replace("★ ", "") + " 상위 " + c.top + "개" :
+       c.mode === "mom" ? (c.rank === "single" ? perName(c.look) + " 수익률" : "가중 모멘텀(" + wText(c) + ")") + " 상위 " + c.top + "개"
                         : perName(c.mid) + " 수익률 상위 " + c.midPct + "% 안에서 " + perName(c.short) + " 수익률이 가장 낮은 " + c.top + "개") +
       "를 동일 비중으로 " + rb + "마다 교체";
     if (c.mkt) s += " · 벤치마크가 12개월 마이너스면 전량 현금";
@@ -624,6 +772,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("qfrom").min = iso(D[0]); $("qto").min = iso(D[0]); $("qfrom").max = $("qto").max = iso(D[D.length - 1]);
     $("qfrom").value = iso(minFrom); $("qto").value = iso(D[D.length - 1]);
     var nStock = ST.filter(function(s){ return !s.e; }).length;
+    prepFactors();
     $("qdesc").textContent = "";
     desc();
     $("qdesc").textContent += " (데이터 " + ymd(D[0]) + " ~ " + ymd(D[D.length - 1]) + " · 개별 종목 " + nStock + "개)";
@@ -637,6 +786,15 @@ header .lnk,header .status{color:var(--hd-mu)}
     var bi = CODE[c.bench];
     if (c.mkt && bi !== undefined) { var br = ret(bi, t, YEAR); if (br !== null && br <= 0) return { list: [], cash: true }; }
     var cand = [];
+    if (c.strat === "nh") {
+      var set = U.filter(function(s){
+        if (!nhCand(c, s, t)) return false;
+        if (!c.abs) return true;
+        var a = ret(s, t, c.absLook); return a !== null && a > c.absMin;
+      });
+      var sc = scoreSet(c.nhSort, set, t).sort(function(x, y){ return y.v - x.v; });
+      return { list: sc.slice(0, c.top), pool: sc.length };
+    }
     for (var k = 0; k < U.length; k++) {
       var s = U[k]; if (!(P[s][t] > 0)) continue;
       var a = c.abs ? ret(s, t, c.absLook) : null;
@@ -681,7 +839,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   }
 
   function backtest(c){
-    var U = universe(c), warm = Math.max(c.abs ? c.absLook : 0, c.mode === "mom" ? momLook(c) : c.mid, c.mkt ? YEAR : 0, c.ma || 0, c.vol ? 61 : 0);
+    var U = universe(c), warm = Math.max(c.abs ? c.absLook : 0, c.strat === "nh" ? YEAR : c.mode === "mom" ? momLook(c) : c.mid, c.mkt ? YEAR : 0, c.ma || 0, c.vol ? 61 : 0);
     var t0 = 0; while (t0 < D.length - 1 && (D[t0] < c.from || t0 < warm)) t0++;
     var t1 = D.length - 1; while (t1 > t0 && D[t1] > c.to) t1--;
     if (t1 - t0 < 10) return null;
@@ -814,6 +972,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     yearTable(Y, bname);
     logTable(R);
     picks(c);
+    $("qdecsec").style.display = "";
+    if (c.strat === "nh") $("dfac").value = c.nhSort;
+    showDecile();
     draw();
   }
 
@@ -860,6 +1021,19 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("qpsub").textContent = ruleText(c) + (pk.cash ? "" : " · 조건 통과 " + pk.pool + "개 중 상위 " + pk.list.length + "개");
     if (pk.cash) { $("qpick").innerHTML = '<tbody><tr><td class="l" style="padding:20px">벤치마크 12개월 수익률이 0 이하라 이 전략은 지금 전량 현금입니다.</td></tr></tbody>'; $("qpnote").textContent = ""; return; }
     if (!pk.list.length) { $("qpick").innerHTML = '<tbody><tr><td class="l" style="padding:20px">조건을 통과한 종목이 없습니다.</td></tr></tbody>'; $("qpnote").textContent = ""; return; }
+    if (c.strat === "nh") {
+      $("qpick").innerHTML = '<thead><tr><th>순위</th><th class="l">종목</th><th class="l">섹터</th><th>현재가</th><th>정렬 점수</th><th>52주 고가 대비</th><th>52주 저가 대비</th><th>12개월</th><th>1개월</th><th>비중</th></tr></thead><tbody>' +
+        pk.list.map(function(x, i){
+          var s = x.s, sv = COMP[c.nhSort] ? Math.round(x.v * 100) : c.nhSort === "freq" ? x.v + "일" : c.nhSort === "fresh" ? -x.v + "일 전" :
+                 /^(lowgain|r252|r126|r21)$/.test(c.nhSort) ? pc(x.v) : c.nhSort === "near" ? pc(x.v - 1) : x.v.toFixed(2);
+          return "<tr><td>" + (i + 1) + '</td><td class="l"><b>' + esc(ST[s].n) + '</b><span class="c">' + esc(ST[s].c) + '</span></td><td class="l">' + esc(ST[s].s || "") + "</td><td>" + px(P[s][t]) +
+            "</td><td><b>" + sv + "</b></td><td>" + pc(P[s][t] / HI[s][t] - 1) + "</td><td>" + cpc(P[s][t] / LO[s][t] - 1) + "</td><td>" + cpc(ret(s, t, 252)) + "</td><td>" + cpc(ret(s, t, 21)) +
+            "</td><td>" + (100 / c.top).toFixed(1) + "%</td></tr>";
+        }).join("") + "</tbody>";
+      $("qpnote").textContent = "오늘 리밸런싱한다면 위 종목을 각 " + (100 / c.top).toFixed(1) + "%씩 담습니다" + (pk.list.length < c.top ? " (후보가 모자라 나머지 " + Math.round((1 - pk.list.length / c.top) * 100) + "%는 현금)" : "") +
+        ". 52주 고가·저가는 종가 기준입니다. 과거 성과가 미래 수익을 보장하지 않으며, 투자 판단의 참고용입니다.";
+      return;
+    }
     var wcols = c.mode === "mom" && c.rank !== "single" ? WP.filter(function(p, i){ return c.w[i] > 0; }) : [];
     var head = wcols.length ? "<th>가중 점수</th>" + wcols.map(function(p){ return "<th>" + perName(p) + "</th>"; }).join("") :
                c.mode === "mom" ? "<th>" + perName(c.look) + " 수익률</th>" : "<th>" + perName(c.mid) + " (중기)</th><th>" + perName(c.short) + " (단기)</th>";
@@ -875,6 +1049,77 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("qpnote").textContent = "오늘 리밸런싱한다면 위 종목을 각 " + (100 / c.top).toFixed(1) + "%씩 담습니다" + (pk.list.length < c.top ? " (나머지 " + Math.round((1 - pk.list.length / c.top) * 100) + "%는 현금)" : "") +
       ". 과거 성과가 미래 수익을 보장하지 않으며, 투자 판단의 참고용입니다.";
   }
+
+  // ---------- 10분위 분석 ----------
+  function decile(k, H, c){
+    var U = universe(c), t0 = 0, t1 = D.length - 1;
+    while (t0 < t1 && (D[t0] < c.from || t0 < YEAR + 62)) t0++;
+    while (t1 > t0 && D[t1] > c.to) t1--;
+    var rows = [], cand = [];
+    for (var t = t0; t + H <= t1; t += H) {
+      var set = U.filter(function(s){ return P[s][t] > 0 && P[s][t + H] > 0 && HI[s][t] > 0; });
+      var sc = scoreSet(k, set, t); if (sc.length < 50) continue;
+      sc.forEach(function(x, i){ x.f = P[x.s][t + H] / P[x.s][t] - 1; x.i = i; });
+      var avg = sc.reduce(function(a, x){ return a + x.f; }, 0) / sc.length;
+      sc.sort(function(a, b){ return a.v - b.v || a.i - b.i; });
+      var sum = new Array(10).fill(0), cnt = new Array(10).fill(0);
+      sc.forEach(function(x, i){ var q = Math.floor(i * 10 / sc.length); sum[q] += x.f; cnt[q]++; });
+      rows.push(sum.map(function(v, q){ return v / cnt[q] - avg; }));
+      var cs = sc.filter(function(x){ return P[x.s][t] >= HI[x.s][t] * 0.95; });   // 52주 고가 5% 이내 후보 안
+      if (cs.length >= 20) {
+        var cm = cs.reduce(function(a, x){ return a + x.f; }, 0) / cs.length;
+        var top = cs.slice(-10), bot = cs.slice(0, 10), mm = function(a){ return a.reduce(function(z, x){ return z + x.f; }, 0) / a.length; };
+        cand.push([mm(top) - cm, mm(bot) - cm]);
+      }
+    }
+    if (rows.length < 3) return null;
+    var mean = [], q, n = rows.length;
+    for (q = 0; q < 10; q++) mean.push(rows.reduce(function(a, r){ return a + r[q]; }, 0) / n);
+    var sp = rows.map(function(r){ return r[9] - r[0]; }), tt = tstat(sp);
+    var rk = mean.map(function(v, i){ return { v: v, i: i }; }).sort(function(a, b){ return a.v - b.v; }), rr = new Array(10);
+    rk.forEach(function(x, r){ rr[x.i] = r; });
+    var rho = 1 - 6 * rr.reduce(function(a, r, i){ return a + (r - i) * (r - i); }, 0) / (10 * 99);
+    var cd = cand.map(function(x){ return x[0] - x[1]; });
+    return { k: k, n: n, mean: mean, sp: sp.reduce(function(a, b){ return a + b; }, 0) / n, t: tt, rho: rho, win: sp.filter(function(x){ return x > 0; }).length / n,
+             cand: cand.length >= 3 ? { top: avgOf(cand.map(function(x){ return x[0]; })), bot: avgOf(cand.map(function(x){ return x[1]; })), d: avgOf(cd), t: tstat(cd), n: cand.length } : null };
+  }
+  function avgOf(a){ return a.reduce(function(x, y){ return x + y; }, 0) / a.length; }
+  function tstat(a){ var m = avgOf(a), sd = Math.sqrt(a.reduce(function(x, y){ return x + (y - m) * (y - m); }, 0) / Math.max(1, a.length - 1)); return sd ? m / (sd / Math.sqrt(a.length)) : 0; }
+  function judge(r){ return r.t >= 2 && r.rho >= 0.7 ? ["g", "유효 — 계단식 상승"] : r.t >= 1.5 && r.rho >= 0.5 ? ["n", "약하게 유효"] : r.t <= -1.5 || (r.rho <= -0.7 && r.t <= -1) ? ["b", "역방향"] : ["b", "효과 불분명"]; }
+
+  function showDecile(){
+    var c = cfg(), k = $("dfac").value, H = +$("dhold").value, r = decile(k, H, c);
+    if (!r) { $("dout").innerHTML = '<p class="kempty">기간이 짧아 분석할 수 없습니다.</p>'; return; }
+    var mx = Math.max.apply(null, r.mean.map(Math.abs)) || 0.01, j = judge(r);
+    var bars = r.mean.map(function(v, q){
+      var h = Math.abs(v) / mx * 80;
+      return '<div class="dbar"><div class="dv" style="color:' + col(v) + '">' + pc(v) + '</div><div class="dcol"><i style="height:' + h + 'px;' + (v >= 0 ? "bottom:50%" : "top:50%") + ";background:" + (v >= 0 ? "var(--up)" : "var(--dn)") + '"></i></div><div class="dq">D' + (q + 1) + "</div></div>";
+    }).join("");
+    var chip = function(l, v){ return '<div class="qm"><span>' + l + "</span><b>" + v + "</b></div>"; };
+    $("dout").innerHTML = '<div class="dhead"><span class="chip ' + j[0] + '">' + j[1] + "</span> <b>" + esc(FACN[k][1].replace("★ ", "")) + "</b> · " + perName(H) + " 보유 · " + r.n + "개 시점</div>" +
+      '<div class="dbars">' + bars + "</div>" +
+      '<div class="qmetrics" style="margin-top:14px">' + chip("상-하 (D10−D1)", cpc(r.sp)) + chip("t값", r.t.toFixed(2)) + chip("단조성", (r.rho > 0 ? "+" : "") + r.rho.toFixed(2)) +
+        chip("승률 (D10>D1)", Math.round(r.win * 100) + "%") +
+        chip("후보 안 상위10−하위10", r.cand ? cpc(r.cand.d) + ' <small style="display:inline">t ' + r.cand.t.toFixed(1) + "</small>" : "-") + "</div>" +
+      '<p class="kdesc">' + esc(FACN[k][2]) + "</p>";
+  }
+  function showAll(){
+    var c = cfg(), H = +$("dhold").value;
+    $("dallout").innerHTML = '<p class="kdesc">계산 중…</p>';
+    setTimeout(function(){
+      var rs = FAC.map(function(f){ return decile(f[0], H, c); }).filter(Boolean).sort(function(a, b){ return b.t - a.t; });
+      $("dallout").innerHTML = "<h3 style=\"margin:18px 0 8px;font-size:14px\">모든 정렬 기준 비교 — " + perName(H) + " 보유 (t값 높은 순)</h3>" +
+        '<div class="qscroll" style="max-height:none"><table class="qtbl"><thead><tr><th class="l">정렬 기준</th><th>D1</th><th>D5</th><th>D10</th><th>상-하</th><th>t값</th><th>단조성</th><th>승률</th><th>후보 안 상위10−하위10</th><th class="l">판정</th></tr></thead><tbody>' +
+        rs.map(function(r){ var j = judge(r);
+          return '<tr><td class="l">' + esc(FACN[r.k][1]) + "</td><td>" + cpc(r.mean[0]) + "</td><td>" + cpc(r.mean[4]) + "</td><td>" + cpc(r.mean[9]) + "</td><td><b>" + cpc(r.sp) + "</b></td><td>" + r.t.toFixed(2) +
+            "</td><td>" + (r.rho > 0 ? "+" : "") + r.rho.toFixed(2) + "</td><td>" + Math.round(r.win * 100) + "%</td><td>" + (r.cand ? cpc(r.cand.d) + ' <span class="c">t ' + r.cand.t.toFixed(1) + "</span>" : "-") +
+            '</td><td class="l"><span class="chip ' + j[0] + '">' + j[1] + "</span></td></tr>"; }).join("") + "</tbody></table></div>";
+    }, 30);
+  }
+  $("dgo").addEventListener("click", showDecile);
+  $("dall").addEventListener("click", showAll);
+  $("dfac").addEventListener("change", showDecile);
+  $("dhold").addEventListener("change", showDecile);
 
   // ---------- 차트: 누적 수익률(위) · 낙폭(아래) ----------
   var LOG = false;
