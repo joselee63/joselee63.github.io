@@ -116,6 +116,16 @@ canvas{display:block;width:100%;touch-action:none;cursor:crosshair}
 .evback.on{display:block}
 @media (max-width:600px){ .ev .stats{grid-template-columns:repeat(2,1fr)} .res{padding:18px 14px} }
 
+/* ---------- AI 분석 ---------- */
+.ai{margin-top:16px;border-top:1px solid var(--line);padding-top:14px;text-align:left;font-size:13.5px;line-height:1.65}
+.ai h4{font-size:14px;margin:16px 0 6px} .ai h4:first-child{margin-top:0}
+.ai p{margin:6px 0} .ai ul{margin:4px 0;padding-left:20px}
+.ai .row{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;align-items:center}
+.ai .sb{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:980px;padding:6px 14px}
+.ai .sb.pri{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.ai .note{font-size:11.5px;color:var(--muted);margin-top:8px}
+.ai textarea{width:100%;height:180px;margin-top:6px;font:12px/1.45 ui-monospace,Consolas,monospace;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--fg);resize:vertical;box-sizing:border-box}
+
 /* ---------- 오른쪽 패널 ---------- */
 .acct .row1{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:8px}
 .lbl{font-size:12px;color:var(--muted)}
@@ -638,10 +648,12 @@ header .lnk,header .status{color:var(--hd-mu)}
       (kr === null ? "" : '<div><b style="color:' + col(kr) + '">' + sgn(kr * 100, 2) + '%</b><span>' + esc(MKT.index_name + (rv.bench ? " (" + rv.bench + ")" : "")) + '</span></div>') + '</div>' +
       '<div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">매수 ' + nb + '회 · 최종 자산 ' + money(G.cash) + '</div>' +
       '<div class="btns"><button class="act ghost" id="evbtn" type="button">매매 평가</button>' +
-      '<button class="act buy" id="again" type="button">다음 종목 <small>N</small></button></div><div id="evbox"></div>';
+      '<button class="act ghost" id="aibtn" type="button">AI 분석</button>' +
+      '<button class="act buy" id="again" type="button">다음 종목 <small>N</small></button></div><div id="evbox"></div><div id="aibox"></div>';
     $("over").classList.add("on");
     $("again").addEventListener("click", function(){ newGame(); });
     $("evbtn").addEventListener("click", toggleEval);
+    $("aibtn").addEventListener("click", toggleAI);
     renderHist();
   }
 
@@ -831,7 +843,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         if (b) showOnChart(+b.getAttribute("data-f"));
       });
     } else box.style.display = box.style.display === "none" ? "" : "none";
-    $("res").classList.toggle("wide", box.style.display !== "none");
+    wideRes();
     $("evbtn").textContent = box.style.display === "none" ? "매매 평가" : "평가 접기";
   }
   function showOnChart(idx){                             // 평가 창을 잠시 내리고 그 매수의 저항·지지선을 차트에 표시
@@ -842,6 +854,95 @@ header .lnk,header .status{color:var(--hd-mu)}
   $("evback").addEventListener("click", function(){
     G.focus = null; $("evback").classList.remove("on"); $("over").classList.add("on"); draw();
   });
+
+  // ---------- AI 분석 (구독 중인 Claude·ChatGPT 에 붙여넣을 복기 요청 글을 만들어 복사) ----------
+  var AI_SITES = [["claude", "Claude에서 분석", "https://claude.ai/new"], ["chatgpt", "ChatGPT에서 분석", "https://chatgpt.com/"]];
+  function shown(id){ var b = $(id); return !!(b && b.innerHTML && b.style.display !== "none"); }
+  function wideRes(){ $("res").classList.toggle("wide", shown("evbox") || shown("aibox")); }
+
+  function toggleAI(){
+    var box = $("aibox");
+    if (shown("aibox")) box.style.display = "none";
+    else { box.style.display = ""; if (!box.innerHTML) aiPanel(); }
+    wideRes();
+    $("aibtn").textContent = shown("aibox") ? "AI 접기" : "AI 분석";
+  }
+  function aiPanel(){
+    var box = $("aibox"), text = aiSystem() + "\n\n---\n\n" + aiPrompt();
+    box.innerHTML = '<div class="ai"><h4>AI 분석 — 구독 중인 AI에서 복기 받기</h4>' +
+      "<p>버튼을 누르면 이번 판의 차트·매매 기록을 담은 요청 글이 <b>복사</b>되고 AI 새 대화 창이 열립니다. 입력칸에 <b>붙여넣기(Ctrl+V)</b> 후 보내세요.</p>" +
+      '<div class="row">' + AI_SITES.map(function(s){ return '<button class="sb pri" type="button" data-site="' + s[0] + '">' + s[1] + " ↗</button>"; }).join("") +
+        '<button class="sb" type="button" id="aicopy">복사만 하기</button><span id="aimsg" class="note" style="margin:0"></span></div>' +
+      '<details><summary class="note" style="cursor:pointer">보낼 내용 보기 (' + comma(text.length) + "자)</summary>" +
+        '<textarea id="aitext" readonly spellcheck="false"></textarea></details>' +
+      '<div class="note">추가 비용 없이 구독(Claude Pro · ChatGPT Plus 등)으로 분석합니다. 답변은 AI 창에 나오며 틀릴 수 있습니다.</div></div>';
+    $("aitext").value = text;
+    box.querySelector(".row").addEventListener("click", function(e){
+      var b = e.target.closest && e.target.closest("button");
+      if (!b) return;
+      var site = AI_SITES.filter(function(s){ return s[0] === b.getAttribute("data-site"); })[0];
+      if (site) window.open(site[2], "_blank", "noopener");          // 팝업 차단을 피하려고 클릭 즉시 열기
+      aiCopy(text, site ? site[1].replace("에서 분석", "") + " 창에 붙여넣기(Ctrl+V) 하세요" : "");
+    });
+  }
+  function aiCopy(text, hint){
+    var done = function(ok){ $("aimsg").textContent = ok ? "✓ 복사됨" + (hint ? " — " + hint : "") : "복사 실패 — 아래 '보낼 내용 보기'에서 직접 복사해 주세요"; };
+    var fallback = function(){
+      var ta = $("aitext"); ta.parentNode.open = true; ta.focus(); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      done(ok);
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(function(){ done(true); }, fallback);
+    else fallback();
+  }
+
+  function aiSystem(){
+    return "당신은 스윙 트레이딩 코치입니다. 저는 종목명과 날짜를 모른 채 일봉 차트만 보고 하루씩 넘기며 매매하는 '차트 게임'을 마쳤습니다. " +
+      "매수·매도는 그날 종가에 체결되고, 한 턴은 하루입니다. 종목 차트 위에는 같은 기간의 비교 지수 차트가 함께 보였습니다. 아래 데이터로 제 매매를 복기해 주세요.\n" +
+      "원칙:\n- 매매 당시까지 보였던 차트만으로 판단이 합리적이었는지 평가하세요. 결과를 알고 나서 하는 평가(사후 확신)는 피하고, 필요하면 '결과적으로는'이라고 구분하세요.\n" +
+      "- 추세(이동평균 배열·기울기), 지지·저항, 거래량, 비교 지수 흐름, 손익비, 손절·익절 대응을 근거로 구체적인 날짜·가격을 들어 설명하세요.\n" +
+      "- 함께 주는 규칙 기반 자동 평가는 참고만 하고, 동의하지 않으면 이유를 말하세요.\n" +
+      "- 매매가 없었다면 관망이 적절했는지, 놓친 자리가 있었는지 평가하세요.\n" +
+      "- 한국어로, 친근하지만 솔직하게. 전체 1,500자 안팎.\n" +
+      "형식:\n## 총평 (2~3문장)\n## 매매별 복기 (각 매수·매도마다 한 항목)\n## 잘한 점\n## 고칠 점\n## 다음 판 체크리스트 (3개)";
+  }
+  function aiPrompt(){
+    var d = G.d, ma = G.ma, k = G.k, rv = G.reveal || {}, dd = rv.d || [];
+    var f = function(v){ return v === null || v === undefined ? "" : (+v).toFixed(PDEC); };
+    var fk = function(v){ return v === null || v === undefined ? "" : (+v).toFixed(2); };
+    var day = function(i){ return dd[i] ? ymd(dd[i]) : "D" + (i - G.s); };
+    var from = Math.max(0, G.s - 59), L = [];
+    L.push("# 종목 (게임이 끝나 공개됨)\n" + (rv.name || "?") + " (" + (rv.code || "") + ") · " + (rv.sector || "") + " · " +
+           (MKT.market === "kr" ? "한국 시장 · 가격 단위 원" : "미국 시장 · 가격 단위 USD"));
+    L.push("비교 지수: " + (rv.bench || MKT.index_name));
+    L.push("\n# 일봉 데이터\n게임 시작 전 60일 + 게임 " + TURNS + "턴. '턴' 열이 0인 봉이 첫 판단 때 보이던 마지막 봉이고, n이면 n번째 턴에 새로 나온 봉입니다.");
+    L.push("날짜,턴,시가,고가,저가,종가,거래량,MA5,MA20,MA60,MA120,지수종가,지수MA20,지수MA60");
+    for (var i = from; i <= G.cur; i++) {
+      L.push([day(i), i >= G.s ? i - G.s : "", f(d.o[i]), f(d.h[i]), f(d.l[i]), f(d.c[i]), d.v ? d.v[i] : "",
+              f(ma[5][i]), f(ma[20][i]), f(ma[60][i]), f(ma[120][i]),
+              k ? fk(k.c[i]) : "", k ? fk(k.ma[20][i]) : "", k ? fk(k.ma[60][i]) : ""].join(","));
+    }
+    L.push("\n# 매매 기록 (그날 종가 체결)");
+    if (!G.trades.length) L.push("매매 없음");
+    G.trades.forEach(function(t){
+      L.push((t.side === "B" ? "매수" : "매도") + " · " + day(t.i) + " (턴 " + (t.i - G.s) + ") · " + f(t.p) + " × " + t.q + "주" +
+             (t.side === "S" ? " · 이 매도분 수익률 " + sgn(t.r * 100, 2) + "%" + (t.auto ? " (게임 종료로 자동 청산)" : "") : ""));
+    });
+    var ret = G.cash / CASH0 - 1, bh = d.c[G.cur] / d.c[G.s] - 1, kr = k ? k.c[G.cur] / k.c[G.s] - 1 : null;
+    L.push("\n# 결과\n내 수익률 " + sgn(ret * 100, 2) + "% · 종목 그냥 보유 " + sgn(bh * 100, 2) + "%" + (kr === null ? "" : " · 비교 지수 " + sgn(kr * 100, 2) + "%") +
+           " · 시작 자산 " + money(CASH0) + " · 수수료·세금 반영");
+    var E = G.evals || evaluate();
+    L.push("\n# 규칙 기반 자동 평가 (참고용)\n등급 " + E.grade + (E.score !== null ? " · 점수 " + Math.round(E.score) : "") + " · " + E.summary);
+    E.entries.forEach(function(e, n){
+      L.push("매수 " + (n + 1) + " (" + day(e.t.i) + "): 점수 " + e.score + " · 지지 " + f(e.L.sup.v) + "(" + e.L.sup.l + ")" +
+             (e.L.res ? " · 저항 " + f(e.L.res.v) + "(" + e.L.res.l + ")" : " · 위 저항 없음") + " · " + e.flags.map(function(x){ return x.m; }).join(" / "));
+    });
+    E.trips.forEach(function(x, n){
+      L.push("매매 " + (n + 1) + ": " + sgn(x.ret * 100, 2) + "% · " + x.days + "일 보유 · 보유 중 최고 " + sgn(x.mfe * 100, 1) + "% 최저 " + sgn(x.mae * 100, 1) + "%" +
+             (x.flags.length ? " · " + x.flags.map(function(y){ return y.m; }).join(" / ") : ""));
+    });
+    return L.join("\n");
+  }
 
   // ---------- 오른쪽 패널 ----------
   function render(){ draw(); renderPanel(); }
