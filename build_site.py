@@ -23,7 +23,8 @@ from matplotlib.lines import Line2D
 MARKET = os.environ.get("MARKET", "kr").lower()
 MARKETS = {
     "kr": dict(stocks="stocks", site="", tz="Asia/Seoul", title="한국 증시 섹터 차트",
-               index="KOSPI", index_name="코스피", index_label="KOSPI",
+               index="KOSPI", index_name="비교 지수", index_label="비교 지수",   # 차트 게임: 종목별 코스피/코스닥 (이름은 숨김)
+               bench_names={"KOSPI": "코스피", "KOSDAQ": "코스닥"},
                index_yahoo={"KOSPI": "^KS11", "KOSDAQ": "^KQ11", "KPI200": "^KS200"},
                price_dec=0, cap_unit="억", cap_div=1e8, amt_unit="억", amt_div=1e8,
                currency="원", cash0=10_000_000, buy_fee=0.00015, sell_fee=0.00015, tax=0.0015,
@@ -32,7 +33,8 @@ MARKETS = {
                rf=[500, 1000, 1500, 2000, 3000, 5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000, 100000,
                    150000, 200000, 300000, 500000, 750000, 1000000, 1500000, 2000000, 3000000, 4000000, 5000000]),
     "us": dict(stocks="stocks_us", site="us", tz="America/New_York", title="미국 증시 섹터 차트",
-               index="IXIC", index_name="나스닥", index_label="NASDAQ",      # 차트 게임 기준 지수 = 나스닥 종합
+               index="SPX", index_name="비교 지수", index_label="비교 지수",     # 차트 게임: 나스닥 상장 = 나스닥 종합, 그 외 = S&P 500
+               bench_names={"IXIC": "나스닥 종합", "SPX": "S&P 500"},
                rs_index="SPX",                                                # 와인스타인 RS 기준 = S&P 500
                index_yahoo={"SPX": "^GSPC", "IXIC": "^IXIC", "DJI": "^DJI"},
                price_dec=2, cap_unit="$B", cap_div=1e9, amt_unit="$M", amt_div=1e6,
@@ -246,15 +248,23 @@ def fetch_us_all(codes):
     return data, failed
 
 
+US_NASDAQ = {"NMS", "NGM", "NCM", "NAS", "NIM"}   # Yahoo 거래소 코드 중 나스닥
+
+
 def fetch_caps_us(codes):
-    """미국 시가총액(달러) — Yahoo fast_info. 실패한 종목은 비워 둠"""
+    """미국 시가총액(달러)·상장 거래소 — Yahoo fast_info. 실패한 종목은 비워 둠 → {코드: (시총, 거래소)}"""
     import yfinance as yf
     def one(c):
         try:
-            v = yf.Ticker(c).fast_info["market_cap"]
-            return c, float(v) if v else None
+            fi = yf.Ticker(c).fast_info
+            v = fi["market_cap"]
+            try:
+                ex_ = fi["exchange"]
+            except Exception:
+                ex_ = None
+            return c, (float(v) if v else None, ex_)
         except Exception:
-            return c, None
+            return c, (None, None)
     with ThreadPoolExecutor(max_workers=6) as ex:
         return dict(ex.map(one, codes))
 
@@ -289,7 +299,7 @@ def fetch_listing(ref_date):
             df = pd.read_csv(io.StringIO(r.content.decode("utf-8-sig")), dtype={"Code": str})
             df = df.dropna(subset=["Code"]).set_index("Code")
             df = df[~df.index.duplicated(keep="first")]
-            return df[["Stocks", "Amount", "Close"]], day
+            return df[[c for c in ("Stocks", "Amount", "Close", "Market") if c in df.columns]], day
         except Exception:
             continue
     return None, None
@@ -594,17 +604,29 @@ def _records(df):
     return out
 
 
-def write_game_data(data, sections, build_id):
+def bench_of(code, listing=None, exch=None):
+    """차트 게임 비교 지수 코드 — 상장 시장(한국) · 거래소(미국)에 맞춤, 모르면 기본 지수"""
+    if MARKET == "kr" and listing is not None and "Market" in listing.columns and code in listing.index:
+        m = str(listing.loc[code, "Market"])
+        return "KOSDAQ" if m.startswith("KOSDAQ") else "KOSPI"
+    if MARKET == "us" and exch:
+        return "IXIC" if exch.get(code) in US_NASDAQ else "SPX"
+    return MK["index"]
+
+
+def write_game_data(data, sections, build_id, listing=None, exch=None):
     """
     차트 게임용 데이터: site/game/{번호}.json (종목마다 하나) + site/game/pool.json (개수)
       · 지수·ETF는 제외, 일봉이 GAME_MIN개 미만인 종목도 제외
       · 파일 이름은 매번 섞은 번호라 종목을 알 수 없고, 종목명·날짜는 게임이 끝날 때 공개용으로만 인코딩해 둠
-      · 같은 날짜의 기준 지수(한국 코스피 · 미국 나스닥 종합) 일봉(×100 정수)을 종목 봉마다 맞춰 함께 넣음 (ko·kh·kl·kc)
+      · 같은 날짜의 비교 지수 일봉(×100 정수)을 종목 봉마다 맞춰 함께 넣음 (ko·kh·kl·kc)
+        한국: 코스피 상장 = 코스피 · 코스닥 상장 = 코스닥 / 미국: 나스닥 상장 = 나스닥 종합 · 그 외 = S&P 500
+        (화면에는 '비교 지수' 로만 표시, 어떤 지수였는지는 게임이 끝날 때 공개용으로만 인코딩)
       · 가격은 정수로 저장: 한국은 원 그대로, 미국은 센트(×100) — pool.json 의 scale 로 되돌림
     """
     import base64, random
-    kospi = data.get(MK["index"], {}).get("df")
     scale = 10 ** PRICE_DEC
+    benches = {}
     pool = []
     for s, it in sections:
         if s in ETF_SECTIONS:
@@ -618,7 +640,11 @@ def write_game_data(data, sections, build_id):
     os.makedirs(gdir, exist_ok=True)
     for i, (c, nm, s) in enumerate(pool):
         df = data[c]["df"].iloc[-GAME_BARS:]
-        reveal = {"name": nm, "code": c, "sector": s, "d": [int(x.strftime("%Y%m%d")) for x in df.index]}
+        bcode = bench_of(c, listing, exch)
+        kospi = data.get(bcode, data.get(MK["index"], {})).get("df")
+        benches[bcode] = benches.get(bcode, 0) + 1
+        reveal = {"name": nm, "code": c, "sector": s, "d": [int(x.strftime("%Y%m%d")) for x in df.index],
+                  "bench": MK.get("bench_names", {}).get(bcode, bcode)}
         rec = {k: [int(round(x * scale)) for x in df[col].values]
                for k, col in [("o", "Open"), ("h", "High"), ("l", "Low"), ("c", "Close")]}
         rec["v"] = [int(round(x)) for x in df["Volume"].values]
@@ -632,6 +658,7 @@ def write_game_data(data, sections, build_id):
             json.dump(rec, f, separators=(",", ":"))
     with open(os.path.join(gdir, "pool.json"), "w", encoding="utf-8") as f:
         json.dump({"n": len(pool), "build": build_id, "scale": scale}, f)
+    print(f"      차트 게임 비교 지수: " + " · ".join(f"{MK.get('bench_names', {}).get(k, k)} {v}개" for k, v in benches.items()))
     return len(pool)
 
 
@@ -895,15 +922,17 @@ def main():
 
     # 한국: 시가총액(억) = 상장주식수 × 종가, 거래대금은 같은 날 KRX 목록이면 실제 거래대금으로 교체
     # 미국: 시가총액($B) = Yahoo fast_info (ETF·지수 제외)
-    listing, listing_day, same_day, caps = None, None, False, {}
+    listing, listing_day, same_day, caps, exch = None, None, False, {}, {}
     if MARKET == "kr":
         listing, listing_day = fetch_listing(ref_date)
         same_day = listing_day == ref_date.strftime("%Y-%m-%d")
         print(f"      KRX 상장 목록: {listing_day or '받지 못함'}" + (" (거래대금 실제값 사용)" if same_day else ""))
     else:
         etf_codes = {c for s, it in sections if s in ETF_SECTIONS for c, _, _ in it}
-        caps = fetch_caps_us([c for c in stats if c not in etf_codes and c not in INDEX_CODES])
-        print(f"      시가총액: {sum(1 for v in caps.values() if v)}/{len(caps)}개")
+        capx = fetch_caps_us([c for c in stats if c not in etf_codes and c not in INDEX_CODES])
+        caps = {c: v[0] for c, v in capx.items()}
+        exch = {c: v[1] for c, v in capx.items()}
+        print(f"      시가총액: {sum(1 for v in caps.values() if v)}/{len(caps)}개 · 나스닥 상장 {sum(1 for v in exch.values() if v in US_NASDAQ)}개")
     rows = []
     for s, it in sections:
         for c, nm, desc in it:
@@ -958,7 +987,7 @@ def main():
             shutil.copy(os.path.join(WEB_DIR, extra), os.path.join(SITE_DIR, extra))
     open(os.path.join(SITE_DIR, ".nojekyll"), "w").close()
     if GAME_BARS:
-        print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'])}개")
+        print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'], listing, exch)}개")
         print(f"      유사 차트 종목 {write_similar_data(data, sections, meta['build_id'])}개")
     if MARKET == "kr":
         print(f"      수급 오실레이터 종목 {write_supply_data(data, sections, listing, meta['build_id'])}개")

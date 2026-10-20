@@ -384,7 +384,7 @@ header .lnk,header .status{color:var(--hd-mu)}
 (function(){
   "use strict";
   var TURNS = 100, VIEW = 120, WARM = 119, RPAD = 6;   // 턴 수 · 화면에 보이는 봉 수 · MA120 준비 봉 · 오른쪽 여백 칸
-  var MKT = window.MKT || { market: "kr", index_name: "코스피", index_label: "KOSPI", price_dec: 0, currency: "원",   // 시장 설정 (빌드 때 넣음)
+  var MKT = window.MKT || { market: "kr", index_name: "비교 지수", index_label: "비교 지수", price_dec: 0, currency: "원",   // 시장 설정 (빌드 때 넣음)
                             cash0: 10000000, buy_fee: 0.00015, sell_fee: 0.00015, tax: 0.0015 };
   var CASH0 = MKT.cash0, BUY_FEE = MKT.buy_fee, SELL_FEE = MKT.sell_fee, TAX = MKT.tax, PDEC = MKT.price_dec;
   var KEY_SUFFIX = MKT.market === "kr" ? "" : "_" + MKT.market;           // 누적 기록·조건은 시장별로 따로 저장
@@ -635,7 +635,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       '<div class="pd">' + esc(rv.sector || "") + (rec.from ? " · " + ymd(rec.from) + " ~ " + ymd(rec.to) : "") + '</div>' +
       '<div class="cmp"><div><b style="color:' + col(ret) + '">' + sgn(ret * 100, 2) + '%</b><span>내 수익률</span></div>' +
       '<div><b style="color:' + col(bh) + '">' + sgn(bh * 100, 2) + '%</b><span>종목 등락</span></div>' +
-      (kr === null ? "" : '<div><b style="color:' + col(kr) + '">' + sgn(kr * 100, 2) + '%</b><span>' + esc(MKT.index_name) + '</span></div>') + '</div>' +
+      (kr === null ? "" : '<div><b style="color:' + col(kr) + '">' + sgn(kr * 100, 2) + '%</b><span>' + esc(MKT.index_name + (rv.bench ? " (" + rv.bench + ")" : "")) + '</span></div>') + '</div>' +
       '<div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">매수 ' + nb + '회 · 최종 자산 ' + money(G.cash) + '</div>' +
       '<div class="btns"><button class="act ghost" id="evbtn" type="button">매매 평가</button>' +
       '<button class="act buy" id="again" type="button">다음 종목 <small>N</small></button></div><div id="evbox"></div>';
