@@ -383,7 +383,7 @@ header .lnk,header .status{color:var(--hd-mu)}
 .qchart .qi i{display:inline-block;width:16px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
 .qchart .qi .r{margin-left:auto;color:var(--muted)}
 #qc{display:block;width:100%;height:min(460px,56vh);touch-action:none;cursor:crosshair}
-.q2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:16px;align-items:start}
+.q2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.8fr);gap:16px;align-items:start}
 .q2 h3,.qpick h3{margin:0 0 8px;font-size:14px;font-weight:700}
 .qtbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;font-variant-numeric:tabular-nums}
 .qtbl th,.qtbl td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--line);background:var(--card);white-space:nowrap}
@@ -407,6 +407,28 @@ header .lnk,header .status{color:var(--hd-mu)}
 .dbar .dcol i{position:absolute;left:12%;right:12%;border-radius:4px;opacity:.85}
 .dbar .dq{font-size:11.5px;color:var(--muted);margin-top:4px}
 @media (max-width:600px){ .dbars{gap:2px;padding:8px 4px} .dbar .dv{font-size:10px} }
+/* 연도 선택 · 월별 수익률 */
+.qyear tbody tr{cursor:pointer}
+@media (hover:hover){ .qyear tbody tr:hover td{background:var(--hover)} }
+.qyear tbody tr.sel td{background:var(--hover);box-shadow:inset 0 0 0 9999px rgba(0,113,227,.07)}
+.qyear tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--dn),inset 0 0 0 9999px rgba(0,113,227,.07);font-weight:700}
+.mchart{border:1px solid var(--line);border-radius:12px;padding:10px 10px 6px}
+.mlegend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:0 0 6px 2px}
+.mlegend i{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+.mgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px}
+.mcol{text-align:center;font-variant-numeric:tabular-nums;min-width:0}
+.mcol .mv{font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden}
+.mcol .mbv{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden}
+.mcol .mq{font-size:11.5px;color:var(--muted);margin-top:2px}
+.mbars{position:relative;height:200px;margin:4px 0}
+.mbars::after{content:"";position:absolute;left:-2px;right:-2px;top:50%;border-top:1px dashed var(--line)}
+.mbars i{position:absolute;width:38%;border-radius:3px}
+.mbars i.ms{left:10%;background:var(--dn)}
+.mbars i.mb{right:10%;background:var(--muted);opacity:.55}
+.mbars i.none{display:none}
+.mcol.empty .mq{opacity:.45}
+.qlogh{margin:18px 0 8px;font-size:14px;font-weight:700}
+@media (max-width:600px){ .mcol .mv,.mcol .mbv{font-size:9px} .mbars{height:150px} .mgrid{gap:1px} }
 </style>
 </head>
 <body>
@@ -536,9 +558,11 @@ header .lnk,header .status{color:var(--hd-mu)}
         <canvas id="qc" aria-label="전략과 벤치마크 누적 수익률 · 낙폭 차트"></canvas>
       </div>
       <div class="q2">
-        <div><h3>연도별 수익률</h3><div class="qscroll"><table class="qtbl" id="qyear"></table></div></div>
-        <div><h3>리밸런싱 내역 <span class="c" id="qlogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3><div class="qscroll"><table class="qtbl" id="qlog"></table></div></div>
+        <div><h3>연도별 수익률 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">연도를 누르면 월별 수익률</span></h3><div class="qscroll"><table class="qtbl qyear" id="qyear"></table></div></div>
+        <div><h3 id="qmtitle">월별 수익률</h3><div class="mchart" id="qmonth"></div></div>
       </div>
+      <h3 class="qlogh">리밸런싱 내역 <span class="c" id="qlogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
+      <div class="qscroll"><table class="qtbl" id="qlog"></table></div>
     </div>
   </section>
 
@@ -969,7 +993,10 @@ header .lnk,header .status{color:var(--hd-mu)}
       m("보호 장치 발동", (R.ev.ma + R.ev.stop + R.ev.trail + R.ev.dd) + "회",
         [c.ma ? "시장 " + R.ev.ma : "", c.stop ? "손절 " + R.ev.stop : "", c.trail ? "트레일링 " + R.ev.trail : "", c.dd ? "계좌 " + R.ev.dd : ""].filter(Boolean).join(" · ") || "사용 안 함");
     verdict(S, B, Y, M, R, bname);
+    R.M = M; R.bname = bname;
     yearTable(Y, bname);
+    var keep = Y.filter(function(y){ return y.k === SELY; })[0];
+    monthChart(keep ? SELY : Y[Y.length - 1].k);
     logTable(R);
     picks(c);
     $("qdecsec").style.display = "";
@@ -996,9 +1023,31 @@ header .lnk,header .status{color:var(--hd-mu)}
       items.map(function(x){ return '<li class="' + x[0] + '">' + esc(x[1]) + "</li>"; }).join("") + "</ul>";
   }
 
+  var SELY = null;
+  $("qyear").addEventListener("click", function(e){ var tr = e.target.closest("tr[data-y]"); if (tr) monthChart(+tr.getAttribute("data-y")); });
+  function monthChart(y){                                // 선택한 연도의 월별 수익률 (전략 · 벤치마크 막대)
+    var R = LAST; if (!R || !R.M) return;
+    SELY = y;
+    [].forEach.call($("qyear").querySelectorAll("tr[data-y]"), function(tr){ tr.classList.toggle("sel", +tr.getAttribute("data-y") === y); });
+    var ms = R.M.filter(function(m){ return Math.floor(m.k / 100) === y; }), by = {};
+    ms.forEach(function(m){ by[m.k % 100] = m; });
+    var mx = 0.01; ms.forEach(function(m){ mx = Math.max(mx, Math.abs(m.s), Math.abs(m.b)); });
+    var bar = function(v, cls){ if (v === undefined) return '<i class="' + cls + ' none"></i>';
+      var h = Math.abs(v) / mx * 46; return '<i class="' + cls + '" style="height:' + h.toFixed(1) + "%;" + (v >= 0 ? "bottom:50%" : "top:50%") + '" title="' + pc(v) + '"></i>'; };
+    var win = ms.filter(function(m){ return m.s > m.b; }).length;
+    var tot = ms.reduce(function(a, m){ return a * (1 + m.s); }, 1) - 1, btot = ms.reduce(function(a, m){ return a * (1 + m.b); }, 1) - 1;
+    $("qmtitle").innerHTML = y + "년 월별 수익률 " + '<span class="c" style="font-weight:500;color:var(--muted);font-size:12px">전략 ' + pc(tot) + " · " + esc(R.bname) + " " + pc(btot) + " · 지수보다 나은 달 " + win + " / " + ms.length + "</span>";
+    var html = '<div class="mlegend"><span><i style="background:var(--dn)"></i>전략</span><span><i style="background:var(--muted)"></i>' + esc(R.bname) + "</span></div>" + '<div class="mgrid">';
+    for (var m = 1; m <= 12; m++) {
+      var d = by[m];
+      html += '<div class="mcol' + (d ? "" : " empty") + '"><div class="mv" style="color:' + (d ? col(d.s) : "var(--muted)") + '">' + (d ? pc(d.s) : "") + "</div>" +
+        '<div class="mbars">' + bar(d ? d.s : undefined, "ms") + bar(d ? d.b : undefined, "mb") + '</div><div class="mbv">' + (d ? pc(d.b) : "") + '</div><div class="mq">' + m + "월</div></div>";
+    }
+    $("qmonth").innerHTML = html + "</div>";
+  }
   function yearTable(Y, bname){
     $("qyear").innerHTML = '<thead><tr><th class="l">연도</th><th>전략</th><th>' + esc(bname) + "</th><th>차이</th></tr></thead><tbody>" +
-      Y.map(function(y, i){ return '<tr><td class="l">' + y.k + (i === 0 || i === Y.length - 1 ? '<span class="c">일부</span>' : "") + "</td><td>" + cpc(y.s) + "</td><td>" + cpc(y.b) + "</td><td>" + cpc(y.s - y.b) + "</td></tr>"; }).join("") + "</tbody>";
+      Y.map(function(y, i){ return '<tr data-y="' + y.k + '"><td class="l">' + y.k + (i === 0 || i === Y.length - 1 ? '<span class="c">일부</span>' : "") + "</td><td>" + cpc(y.s) + "</td><td>" + cpc(y.b) + "</td><td>" + cpc(y.s - y.b) + "</td></tr>"; }).join("") + "</tbody>";
   }
   function logTable(R){
     $("qlogn").textContent = R.logs.length + "회 · 최근 순";
