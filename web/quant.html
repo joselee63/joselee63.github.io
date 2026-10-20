@@ -521,7 +521,9 @@ header .lnk,header .status{color:var(--hd-mu)}
       <div class="qgrid">
         <div class="qf"><span class="lbl">보유 종목 수</span><div class="line"><input type="number" id="qtop" min="1" max="50" value="10"><span>개 · 동일 비중</span></div></div>
         <div class="qf"><span class="lbl">리밸런싱 주기</span><div class="line"><select id="qreb">
-          <option value="5">1주</option><option value="10">2주</option><option value="21" selected>1개월</option><option value="63">3개월</option><option value="126">6개월</option></select></div></div>
+          <option value="5">1주</option><option value="10">2주</option><option value="21" selected>1개월</option><option value="63">3개월</option><option value="126">6개월</option></select>
+          <select id="qsplit" title="자금을 여러 묶음으로 나눠 리밸런싱 날짜를 엇갈리게 — 날짜 운의 영향을 줄임">
+            <option value="1">한 번에</option><option value="2">2묶음 분할</option><option value="3">3묶음 분할</option><option value="4" selected>4묶음 분할</option><option value="5">5묶음 분할</option></select></div></div>
         <div class="qf"><span class="lbl">절대 모멘텀 (종목)</span><div class="line"><label><input type="checkbox" id="qabs" checked></label><select id="qabslook">
           <option value="126">6개월</option><option value="252" selected>12개월</option></select><span>수익률</span><input type="number" id="qabsmin" step="1" value="0" style="width:56px"><span>% 이하 제외</span></div></div>
         <div class="qf"><span class="lbl">벤치마크</span><div class="line"><select id="qbench"></select></div></div>
@@ -640,7 +642,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("box-mom").hidden = MODE !== "mom"; $("box-pull").hidden = MODE !== "pull";
     desc();
   });
-  ["qlook", "qmid", "qmidpct", "qshort", "qtop", "qreb", "qabs", "qabslook", "qabsmin", "qmkt", "qbench", "qcost", "gma", "gman", "gstop", "gstopv", "gtrail", "gtrailv", "gdd", "gddv", "gvol", "gvolv"].forEach(function(id){ $(id).addEventListener("change", desc); });
+  ["qlook", "qmid", "qmidpct", "qshort", "qtop", "qreb", "qabs", "qabslook", "qabsmin", "qmkt", "qbench", "qcost", "qsplit", "gma", "gman", "gstop", "gstopv", "gtrail", "gtrailv", "gdd", "gddv", "gvol", "gvolv"].forEach(function(id){ $(id).addEventListener("change", desc); });
 
   // ---------- 52주 신고가 · 정렬 기준 ----------
   var STRAT = "dual";
@@ -759,6 +761,7 @@ header .lnk,header .status{color:var(--hd-mu)}
              ma: $("gma").checked ? +$("gman").value : 0, stop: $("gstop").checked ? (+$("gstopv").value || 10) / 100 : 0,
              trail: $("gtrail").checked ? (+$("gtrailv").value || 15) / 100 : 0, dd: $("gdd").checked ? (+$("gddv").value || 20) / 100 : 0,
              vol: $("gvol").checked ? (+$("gvolv").value || 25) / 100 : 0,
+             split: +$("qsplit").value,
              bench: $("qbench").value, cost: Math.max(0, +$("qcost").value || 0) / 100, etf: $("qetf").checked,
              from: fromIso($("qfrom").value), to: fromIso($("qto").value) };
   }
@@ -769,7 +772,7 @@ header .lnk,header .status{color:var(--hd-mu)}
                           FACN[c.nhSort][1].replace("★ ", "") + " 상위 " + c.top + "개" :
        c.mode === "mom" ? (c.rank === "single" ? perName(c.look) + " 수익률" : "가중 모멘텀(" + wText(c) + ")") + " 상위 " + c.top + "개"
                         : perName(c.mid) + " 수익률 상위 " + c.midPct + "% 안에서 " + perName(c.short) + " 수익률이 가장 낮은 " + c.top + "개") +
-      "를 동일 비중으로 " + rb + "마다 교체";
+      "를 동일 비중으로 " + rb + "마다 교체" + (c.split > 1 ? " (자금 " + c.split + "묶음으로 나눠 교체일 분산)" : "");
     if (c.mkt) s += " · 벤치마크가 12개월 마이너스면 전량 현금";
     var g = [];
     if (c.ma) g.push("지수 " + c.ma + "일선 필터");
@@ -862,7 +865,8 @@ header .lnk,header .status{color:var(--hd-mu)}
     return Math.sqrt(r.reduce(function(a, b){ return a + (b - mean) * (b - mean); }, 0) / Math.max(1, r.length - 1)) * Math.sqrt(YEAR);
   }
 
-  function backtest(c){
+  function backtest(c, phase){
+    phase = phase || 0;
     var U = universe(c), warm = Math.max(c.abs ? c.absLook : 0, c.strat === "nh" ? YEAR : c.mode === "mom" ? momLook(c) : c.mid, c.mkt ? YEAR : 0, c.ma || 0, c.vol ? 61 : 0);
     var t0 = 0; while (t0 < D.length - 1 && (D[t0] < c.from || t0 < warm)) t0++;
     var t1 = D.length - 1; while (t1 > t0 && D[t1] > c.to) t1--;
@@ -904,7 +908,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       eq.push(V); bq.push(bi !== undefined ? P[bi][t] / P[bi][t0] : NaN); inv.push(V > 0 ? 1 - cash / V : 0);
       if (t >= t1) continue;
       // ---- 오늘 종가로 내일 할 일 정하기 (우선순위: 전량 현금 > 교체 > 개별 매도) ----
-      var held = Object.keys(q).length > 0, sched = (t - t0) % c.reb === 0, now = mktOk(t, mktOn ? 1 : 1.02);   // 재진입은 이동평균 +2% 위에서 (들락날락 방지)
+      var held = Object.keys(q).length > 0, sched = t === t0 || (t - t0 - phase > 0 && (t - t0 - phase) % c.reb === 0), now = mktOk(t, mktOn ? 1 : 1.02);   // 재진입은 이동평균 +2% 위에서 (들락날락 방지)
       if (c.dd && !cb && held && V / peak - 1 <= -c.dd) {
         cb = true; ev.dd++; pend = { kind: "all", at: t + 1, why: "계좌 손절", txt: "계좌 손절 (고점 대비 " + pc(V / peak - 1) + ") → 전량 현금" }; mktOn = now; continue;
       }
@@ -941,6 +945,31 @@ header .lnk,header .status{color:var(--hd-mu)}
     return { c: c, t0: t0, t1: t1, eq: eq, bq: bq, inv: inv, invAvg: invAvg, logs: logs, ev: ev, cost: costSum, turn: nReb ? turnSum / nReb : 0 };
   }
 
+  function runSplit(c){                                  // 자금을 K묶음으로 나눠 교체일을 reb/K 일씩 엇갈리게 → 묶음 평균
+    var K = Math.max(1, Math.min(c.split || 1, c.reb));
+    if (K === 1) return backtest(c, 0);
+    var rs = [];
+    for (var k = 0; k < K; k++) { var r = backtest(c, Math.round(k * c.reb / K)); if (!r) return null; r.logs.forEach(function(L){ L.tr = k + 1; }); rs.push(r); }
+    var n = rs[0].eq.length, eq = [], inv = [];
+    for (var i = 0; i < n; i++) {
+      var e = 0, iv = 0;
+      rs.forEach(function(r){ e += r.eq[i]; iv += r.inv[i] * r.eq[i]; });
+      eq.push(e / K); inv.push(e ? iv / e : 0);
+    }
+    var ev = { ma: 0, stop: 0, trail: 0, dd: 0 }, logs = [];
+    rs.forEach(function(r){ for (var x in ev) ev[x] += r.ev[x]; logs = logs.concat(r.logs); });
+    logs.sort(function(a, b){ return a.at - b.at || a.tr - b.tr; });
+    return { c: c, t0: rs[0].t0, t1: rs[0].t1, eq: eq, bq: rs[0].bq, inv: inv, invAvg: avgOf(inv), logs: logs, ev: ev, K: K,
+             cost: avgOf(rs.map(function(r){ return r.cost; })), turn: avgOf(rs.map(function(r){ return r.turn; })) };
+  }
+  function timingLuck(c){                                // 같은 기간 · 교체일만 하루씩 바꿔 본 결과 범위 (한 번에 교체 기준)
+    var steps = Math.min(c.reb, 21), out = [];
+    for (var k = 0; k < steps; k++) { var r = backtest(c, Math.round(k * c.reb / steps)); if (r) out.push(r); }
+    var tot = out.map(function(r){ return r.eq[r.eq.length - 1] - 1; }).sort(function(a, b){ return a - b; });
+    var mdd = out.map(function(r){ return stats(r.eq, r.t0).mdd; }).sort(function(a, b){ return a - b; });
+    return { n: tot.length, min: tot[0], max: tot[tot.length - 1], med: tot[Math.floor(tot.length / 2)], all: tot, mddW: mdd[0], mddB: mdd[mdd.length - 1] };
+  }
+
   // ---------- 성과 지표 ----------
   function stats(s, t0){
     var n = s.length, dr = [], peak = s[0], mdd = 0, pk = 0, pki = 0, tr = 0, tri = 0;
@@ -967,7 +996,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     var c = cfg();
     if (!D.length) return;
     if (c.from >= c.to) { $("qdesc").textContent = "백테스트 시작일이 종료일보다 앞이어야 합니다."; return; }
-    var R = backtest(c);
+    var R = runSplit(c);
     if (!R) { $("qdesc").textContent = "기간이 너무 짧습니다. (모멘텀 계산에 필요한 과거 데이터를 빼면 남는 기간이 거의 없음)"; return; }
     LAST = R; HOV = -1;
     var S = stats(R.eq, R.t0), B = stats(R.bq, R.t0);
@@ -987,11 +1016,12 @@ header .lnk,header .status{color:var(--hd-mu)}
       m("샤프 지수", S.sharpe === null ? "-" : S.sharpe.toFixed(2), bname + " " + (B.sharpe === null ? "-" : B.sharpe.toFixed(2))) +
       m("변동성 (연)", pc(S.vol).replace("+", ""), bname + " " + pc(B.vol).replace("+", "")) +
       m("월간 승률 (vs 지수)", Math.round(mw / M.length * 100) + "%", mw + " / " + M.length + "개월") +
-      m("리밸런싱", R.logs.length + "회", "평균 회전율 " + Math.round(R.turn * 50) + "%") +
+      m("리밸런싱", R.logs.length + "회" + (R.K ? ' <small style="display:inline">(' + R.K + "묶음 합계)</small>" : ""), "평균 회전율 " + Math.round(R.turn * 50) + "%") +
       m("매매 비용 합계", pc(-R.cost), "편도 " + (c.cost * 100).toFixed(2) + "% 기준") +
       m("평균 투자 비중", Math.round(R.invAvg * 100) + "%", "나머지는 현금") +
       m("보호 장치 발동", (R.ev.ma + R.ev.stop + R.ev.trail + R.ev.dd) + "회",
         [c.ma ? "시장 " + R.ev.ma : "", c.stop ? "손절 " + R.ev.stop : "", c.trail ? "트레일링 " + R.ev.trail : "", c.dd ? "계좌 " + R.ev.dd : ""].filter(Boolean).join(" · ") || "사용 안 함");
+    R.luck = c.reb > 1 ? timingLuck(c) : null;
     verdict(S, B, Y, M, R, bname);
     R.M = M; R.bname = bname;
     yearTable(Y, bname);
@@ -1015,6 +1045,11 @@ header .lnk,header .status{color:var(--hd-mu)}
     var ddOk = S.mdd > B.mdd;
     items.push([ddOk ? "g" : (S.mdd > B.mdd * 1.5 ? "n" : "b"), "최대 낙폭 " + pc(S.mdd) + " (" + ymd(S.mddFrom) + " → " + ymd(S.mddTo) + ") — 지수 " + pc(B.mdd) + (ddOk ? "보다 얕음" : "보다 깊음")]); score += ddOk ? 1 : 0;
     items.push([yw * 2 >= full.length ? "g" : "b", "연도별 승률 " + yw + " / " + full.length + "년 지수 초과 · 월간 승률 " + Math.round(M.filter(function(x){ return x.s > x.b; }).length / M.length * 100) + "%"]); score += yw * 2 >= full.length ? 1 : -1;
+    if (R.luck) {
+      var L = R.luck, wide = (1 + L.max) / (1 + L.min) > 1.5;
+      items.push([wide ? "n" : "g", "교체일 운: 같은 기간에 교체 날짜만 하루씩 바꾸면 누적 수익률 " + pc(L.min, 0) + " ~ " + pc(L.max, 0) + " (중앙값 " + pc(L.med, 0) + ", " + L.n + "가지) · MDD " + pc(L.mddB, 0) + " ~ " + pc(L.mddW, 0) +
+        (wide ? (R.K ? " — 날짜 운의 영향이 커서 " + R.K + "묶음 분할로 평균화한 결과를 표시 중" : " — 날짜 운의 영향이 큼. 리밸런싱 주기 옆에서 '4묶음 분할'을 권장") : " — 날짜 운의 영향이 작음")]);
+    }
     if (R.cost > 0.15) items.push(["n", "매매 비용이 누적 " + pc(-R.cost) + "로 큼 — 리밸런싱 주기를 늘리거나 종목 수를 조정해 보세요"]);
     if (S.yrs < 3 || R.logs.length < 24) items.push(["n", "검증 기간 " + S.yrs.toFixed(1) + "년 · 리밸런싱 " + R.logs.length + "회 — 표본이 적어 우연일 가능성을 배제하기 어려움"]);
     items.push(["n", "대상 종목이 지금 섹터 차트에 있는 종목(최근 주목받는 테마·살아남은 종목 위주)이라, 과거 시점엔 몰랐을 종목이 미리 들어가 있어 성과가 실제보다 크게 부풀려질 수 있음 (선택·생존 편향) — 절대 수익률보다 설정끼리의 상대 비교로 보세요"]);
@@ -1059,7 +1094,7 @@ header .lnk,header .status{color:var(--hd-mu)}
           (L.n < R.c.top ? '<span class="c">+ 현금 ' + Math.round((1 - L.n / R.c.top) * 100) + "%</span>" : "");
         if (L.why) hold = '<span class="c">' + esc(L.why) + "</span> " + hold;
         if (L.ev) hold += '<div class="c" style="margin:2px 0 0">' + L.ev.map(esc).join(" · ") + "</div>";
-        return '<tr><td class="l">' + ymd(D[L.at]) + (L.open ? '<span class="c">보유 중</span>' : "") + "</td><td>" + cpc(L.r) + "</td><td>" + cpc(L.br) + '</td><td class="l wrap">' + hold + "</td></tr>";
+        return '<tr><td class="l">' + ymd(D[L.at]) + (L.tr ? '<span class="c">묶음 ' + L.tr + "</span>" : "") + (L.open ? '<span class="c">보유 중</span>' : "") + "</td><td>" + cpc(L.r) + "</td><td>" + cpc(L.br) + '</td><td class="l wrap">' + hold + "</td></tr>";
       }).join("") + "</tbody>";
   }
 
