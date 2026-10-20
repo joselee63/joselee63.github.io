@@ -437,7 +437,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       }
       CB.push(cb); CU.push(cu); CD.push(cdn); PR.push(pr);
     }
-    $("stocklist").innerHTML = d.stocks.map(function(s){ return '<option value="' + esc(s.n + " (" + s.c + ")") + '">'; }).join("");
+    $("stocklist").innerHTML = d.stocks.slice().sort(function(x, y){ return x.n.localeCompare(y.n, "ko"); }).map(function(s){   // 종목명 오름차순
+      return '<option value="' + esc(s.n + " (" + s.c + ")") + '">'; }).join("");
     var first = d.stocks.findIndex(function(s){ return !s.e && !s.i; });
     var want = (location.hash.match(/^#(.+)$/) || [])[1];
     var k0 = want ? d.stocks.findIndex(function(s){ return s.c === decodeURIComponent(want); }) : -1;

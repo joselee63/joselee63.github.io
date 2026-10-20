@@ -549,7 +549,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       CL.push(c); DF.push(f); DI.push(iv); MA.push(ma);
     }
     for (k = 0; k < d.stocks.length; k++) { SC.push(score(k)); SIG.push(signals(k)); }
-    $("ulist").innerHTML = d.stocks.map(function(s){ return '<option value="' + esc(s.n + " (" + s.c + ")") + '">'; }).join("");
+    $("ulist").innerHTML = d.stocks.slice().sort(function(x, y){ return x.n.localeCompare(y.n, "ko"); }).map(function(s){   // 종목명 오름차순
+      return '<option value="' + esc(s.n + " (" + s.c + ")") + '">'; }).join("");
     $("udate").min = iso(d.dates[0]); $("udate").max = iso(d.dates[N - 1]); $("udate").value = iso(d.dates[N - 1]);
     var want = (location.hash.match(/^#(.+)$/) || [])[1], k0 = want ? d.stocks.findIndex(function(s){ return s.c === want; }) : -1;
     if (k0 < 0) k0 = Math.max(0, d.stocks.findIndex(function(s){ return s.c === "005930"; }));
