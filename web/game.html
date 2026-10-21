@@ -66,6 +66,10 @@ canvas{display:block;width:100%;touch-action:none;cursor:crosshair}
 .tbtn{font:inherit;font-size:11.5px;font-weight:700;letter-spacing:-.2px;cursor:pointer;width:34px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--muted);transition:background .15s,color .15s}
 @media (hover:hover){ .tbtn:not(.on):hover{background:var(--soft);color:var(--fg)} }
 .tbtn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.tbtn svg{width:16px;height:16px;display:block;margin:auto}
+.tsep{height:1px;background:var(--line);margin:2px 4px}
+.tbtn[hidden],.tsep[hidden]{display:none}
+#cv.drawing{cursor:crosshair}
 #cv{height:var(--ch)}
 #kcv{height:calc(var(--ch) * 2 / 3)}
 .over{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:5;
@@ -349,7 +353,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     </div>
     <div class="pane">
       <div class="info" id="info"></div>
-      <div class="prow"><div class="tools" id="tools" role="toolbar" aria-label="차트 지표"><button class="tbtn" type="button" data-ind="ma" title="이동평균선 (5·10·20·60·120일)">MA</button><button class="tbtn" type="button" data-ind="rf" title="라운드 피겨 — 심리적 가격대">RF</button></div><canvas id="cv" aria-label="종목 일봉 차트"></canvas></div>
+      <div class="prow"><div class="tools" id="tools" role="toolbar" aria-label="차트 지표"><button class="tbtn" type="button" data-ind="ma" title="이동평균선 (5·10·20·60·120일)">MA</button><button class="tbtn" type="button" data-ind="rf" title="라운드 피겨 — 심리적 가격대">RF</button><div class="tsep" id="tsep"></div><button class="tbtn" type="button" data-draw="line" title="직선 — 두 점을 잇고 상승·하락률 표시 (끌거나 두 번 클릭 · Esc 취소)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 13L13 3"/><circle cx="3" cy="13" r="1.4" fill="currentColor"/><circle cx="13" cy="3" r="1.4" fill="currentColor"/></svg></button><button class="tbtn" type="button" data-draw="div3" title="3등분 선 — 두 가격 사이를 3등분">⅓</button><button class="tbtn" type="button" data-draw="div4" title="4등분 선 — 두 가격 사이를 4등분">¼</button><button class="tbtn" type="button" data-draw="undo" title="마지막 그림 지우기">↶</button><button class="tbtn" type="button" data-draw="clear" title="그림 모두 지우기">✕</button></div><canvas id="cv" aria-label="종목 일봉 차트"></canvas></div>
       <div class="gbub" id="gbub" hidden aria-live="polite"></div>
     </div>
     <div class="loading" id="loading">종목을 고르는 중…</div>
@@ -647,7 +651,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   function start(P, s){
     G = { d: P.d, n: P.n, ma: P.ma, k: P.k, s: s, cur: s, turn: 0, cash: CASH0, qty: 0, avg: 0, cost: 0,
           trades: [], done: false, reveal: null, evals: null, focus: null,
-          pos0: -1, sigSeen: false, lastWarn: null, rules: { buys: 0, chase: 0, avgdown: 0, down: 0, ignore: 0, risk: 0 }, stopPct: RULE.stopBase };
+          drawings: [], pos0: -1, sigSeen: false, lastWarn: null, rules: { buys: 0, chase: 0, avgdown: 0, down: 0, ignore: 0, risk: 0 }, stopPct: RULE.stopBase };
     hover = -1;
     $("kpane").style.display = P.k ? "" : "none";
     $("loading").style.display = "none";
@@ -1252,7 +1256,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     renderGuide();
     var C = colors();
     if (G.k) drawChart(kcv, G.k, G.k.ma, C, { dec: 2, mas: IDX_MAS });
-    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, avg: G.qty ? G.avg : null, guide: GUIDE && !G.done ? guideLines() : null, dec: PDEC, mas: RF.length && !IND.ma ? [] : MAS, rf: RF.length && IND.rf ? RF : null });
+    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, drawings: true, avg: G.qty ? G.avg : null, guide: GUIDE && !G.done ? guideLines() : null, dec: PDEC, mas: RF.length && !IND.ma ? [] : MAS, rf: RF.length && IND.rf ? RF : null });
     renderInfo(hover >= 0 ? hover : G.cur);
     placeGuide();
   }
@@ -1452,6 +1456,46 @@ header .lnk,header .status{color:var(--hd-mu)}
     }
     axisLabel(last, lc, "#fff");
 
+    // 사용자가 그린 직선 · 등분선
+    if (opt.drawings && G.drawings) {
+      var list = G.drawings.slice();
+      if (DRAW.tool && DRAW.start && DRAW.tmp) list.push({ t: DRAW.tool, a: DRAW.start, b: DRAW.tmp, tmp: true });
+      ctx.save();
+      ctx.beginPath(); ctx.rect(0, 0, plotW, top + pH); ctx.clip();
+      list.forEach(function(dw){
+        var x1 = X(dw.a.i), y1 = Y(dw.a.p), x2 = X(dw.b.i), y2 = Y(dw.b.p), chg = dw.b.p / dw.a.p - 1;
+        var col = chg > 0 ? C.up : chg < 0 ? C.dn : C.fg;
+        ctx.globalAlpha = dw.tmp ? 0.75 : 1;
+        if (dw.t === "line") {
+          ctx.strokeStyle = C.fg; ctx.lineWidth = 1.6; ctx.setLineDash([]);
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+          ctx.fillStyle = C.fg; [[x1, y1], [x2, y2]].forEach(function(q){ ctx.beginPath(); ctx.arc(q[0], q[1], 2.8, 0, 7); ctx.fill(); });
+          var lbl = (chg >= 0 ? "+" : "") + (chg * 100).toFixed(2) + "%  " + (dw.b.i - dw.a.i) + "봉";
+          ctx.font = bold; var tw = ctx.measureText(lbl).width + 10;
+          var lx = Math.min(Math.max(x2 + 6, 2), plotW - tw - 2), ly = y2 + (y2 < y1 ? -14 : 14);
+          ctx.globalAlpha = 0.92; ctx.fillStyle = C.card; ctx.fillRect(lx, ly - 9, tw, 18);
+          ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(lx + 0.5, ly - 8.5, tw - 1, 17);
+          ctx.fillStyle = col; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(lbl, lx + 5, ly);
+        } else {
+          var n = dw.t === "div3" ? 3 : 4, xs = Math.min(x1, x2), lo2 = Math.min(dw.a.p, dw.b.p), hi2 = Math.max(dw.a.p, dw.b.p);
+          for (var k = 0; k < n; k++) {                  // 칸마다 옅게 번갈아 칠함
+            var ya = Y(lo2 + (hi2 - lo2) * k / n), yb = Y(lo2 + (hi2 - lo2) * (k + 1) / n);
+            ctx.globalAlpha = (dw.tmp ? 0.05 : 0.07) * (k % 2 ? 1 : 1.7); ctx.fillStyle = C.fg; ctx.fillRect(xs, yb, plotW - xs, ya - yb);
+          }
+          ctx.globalAlpha = dw.tmp ? 0.75 : 1;
+          for (var k2 = 0; k2 <= n; k2++) {
+            var pv = lo2 + (hi2 - lo2) * k2 / n, yy = Math.round(Y(pv)) + 0.5, edge = k2 === 0 || k2 === n;
+            ctx.strokeStyle = C.fg; ctx.lineWidth = edge ? 1.4 : 1; ctx.setLineDash(edge ? [] : [5, 4]);
+            ctx.beginPath(); ctx.moveTo(xs, yy); ctx.lineTo(plotW, yy); ctx.stroke();
+            var frac = Math.round(k2 / n * 1000) / 10;
+            var t2 = frac + "%  " + px(pv) + (k2 === n ? "  (" + ((hi2 / lo2 - 1) * 100).toFixed(1) + "%)" : "");
+            ctx.setLineDash([]); ctx.font = k2 === n ? bold : font; ctx.fillStyle = C.fg; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+            ctx.fillText(t2, xs + 4, yy - 2);
+          }
+        }
+      });
+      ctx.restore();
+    }
     // 십자선 (가로선·가격 라벨은 마우스가 올라간 차트에만)
     if (hover >= a && hover <= b) {
       var hx = Math.round(X(hover)) + 0.5;
@@ -1487,6 +1531,58 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (G.k) $("kinfo").innerHTML = infoLine(G.k, G.k.ma, i, 2, esc(MKT.index_label), false);
   }
 
+  // ---------- 차트 그리기 도구 (직선 · 3등분 · 4등분) ----------
+  //   좌표는 (봉 번호, 가격)으로 저장 → 턴이 넘어가 차트가 밀려도 같은 자리에 남음. 판이 바뀌면 지워짐.
+  var DRAW = { tool: null, start: null, tmp: null, downX: 0, downY: 0 };
+  function drawPoint(e){                                 // 마우스 위치 → (봉 번호, 가격). 캔들 시·고·저·종가 근처(9px)면 붙임
+    var L = LAY.cv, r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    var i = L.a + Math.floor(Math.max(0, Math.min(x, L.plotW - 1)) / L.sw);
+    var Yp = function(p){ return L.top + (L.hi - p) / (L.hi - L.lo) * L.pH; };
+    var p = L.hi - (y - L.top) / L.pH * (L.hi - L.lo);
+    if (i >= 0 && i <= G.cur) {
+      var best = 9;
+      [G.d.o[i], G.d.h[i], G.d.l[i], G.d.c[i]].forEach(function(v){ var d = Math.abs(Yp(v) - y); if (d < best) { best = d; p = v; } });
+    }
+    return { i: i, p: p, x: x, y: y };
+  }
+  function setTool(t){
+    DRAW.tool = DRAW.tool === t ? null : t; DRAW.start = null; DRAW.tmp = null;
+    [].forEach.call(document.querySelectorAll("#tools [data-draw]"), function(b){ b.classList.toggle("on", b.getAttribute("data-draw") === DRAW.tool); });
+    cv.classList.toggle("drawing", !!DRAW.tool);
+    draw();
+  }
+  function finishDraw(pt){
+    if (!DRAW.start || (pt.i === DRAW.start.i && Math.abs(pt.p - DRAW.start.p) < 1e-9)) return;
+    G.drawings.push({ t: DRAW.tool, a: { i: DRAW.start.i, p: DRAW.start.p }, b: { i: pt.i, p: pt.p } });
+    setTool(DRAW.tool);                                  // 한 번 그리면 도구 해제
+  }
+  cv.addEventListener("pointerdown", function(e){
+    if (!G || !DRAW.tool || !LAY.cv) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    var pt = drawPoint(e);
+    if (DRAW.start) { finishDraw(pt); return; }          // 두 번째 클릭으로 끝내기
+    DRAW.start = pt; DRAW.tmp = pt; DRAW.downX = pt.x; DRAW.downY = pt.y;
+    try { cv.setPointerCapture(e.pointerId); } catch (er) {}
+    draw();
+  }, true);
+  cv.addEventListener("pointermove", function(e){
+    if (!G || !DRAW.tool || !DRAW.start) return;
+    DRAW.tmp = drawPoint(e); draw();
+  }, true);
+  cv.addEventListener("pointerup", function(e){
+    if (!G || !DRAW.tool || !DRAW.start) return;
+    var pt = drawPoint(e);
+    if (Math.abs(pt.x - DRAW.downX) + Math.abs(pt.y - DRAW.downY) > 6) finishDraw(pt);   // 끌어서 그리기
+  }, true);
+  $("tools").addEventListener("click", function(e){
+    var b = e.target.closest && e.target.closest("[data-draw]");
+    if (!b || !G) return;
+    var t = b.getAttribute("data-draw");
+    if (t === "undo") { G.drawings.pop(); draw(); return; }
+    if (t === "clear") { G.drawings = []; setTool(null); return; }
+    setTool(t);
+  });
+
   function pointer(e){
     var L = LAY[this.id];
     if (!G || !L) return;
@@ -1520,6 +1616,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     var tg = e.target.tagName; if (tg === "INPUT" || tg === "TEXTAREA") return;
     var k = e.code;
+    if (k === "Escape" && DRAW.tool) { setTool(null); e.preventDefault(); return; }
     if (k === "Escape" && G && G.done && $("over").classList.contains("on")) { closeRes(); return; }
     if (k === "KeyB") act("B");
     else if (k === "KeyH" || k === "Space") act("H");
@@ -1545,7 +1642,9 @@ header .lnk,header .status{color:var(--hd-mu)}
   var pct1 = function(x){ return +(x * 100).toFixed(4) + "%"; };
   $("feenote").textContent = "수수료 " + pct1(BUY_FEE) + (TAX ? " · 매도 시 세금 " + pct1(TAX) : "") + " · 시작 자금 " +
     (MKT.currency === "원" && CASH0 % 10000 === 0 ? comma(CASH0 / 10000) + "만원" : money(CASH0));
-  // 차트 지표 툴바 (RF 가격이 설정된 시장만)
+  // 차트 툴바: 그리기 도구는 모든 시장 · MA/RF 지표는 RF 가격이 설정된 시장만
+  $("chartcard").classList.add("has-tools");
+  if (!RF.length) [].forEach.call(document.querySelectorAll('#tools [data-ind], #tsep'), function(x){ x.hidden = true; });
   if (RF.length) {
     var saved = store(function(){ return JSON.parse(localStorage.getItem(IND_KEY) || "null"); });
     if (saved) { IND.ma = saved.ma !== false; IND.rf = !!saved.rf; }
