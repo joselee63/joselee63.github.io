@@ -1,10 +1,11 @@
 """KIND 공시 상세검색(로그인·API 키 불필요) — 이벤트 공시 목록 (분 단위 공시 시각, 상장폐지 종목 포함).
 python tools/alpha/kind_disclosures.py <시작연도> <끝연도>
-  → data-alpha/kind/<키워드>.csv  (time, kind_code, name, market, title, rcp)
+  → data-alpha/kind/<키워드>.csv (환경변수 KIND_OUT 로 변경 — alpha-reports.yml 은 data 브랜치 alpha/kind)  (time, kind_code, name, market, title, rcp)
 kind_code 는 KIND 회사코드 5자리 = 종목코드 앞 5자리.
 요청 사이 2.5초 (서버가 빠른 연속 요청에 '잠시 후 다시' 응답).
 """
 import datetime as dt
+import os
 import html
 import re
 import sys
@@ -14,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-OUT = Path(__file__).resolve().parents[2] / "data-alpha" / "kind"
+OUT = Path(os.environ.get("KIND_OUT", Path(__file__).resolve().parents[2] / "data-alpha" / "kind"))
 OUT.mkdir(parents=True, exist_ok=True)
 URL = "https://kind.krx.co.kr/disclosure/details.do"
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130 Safari/537.36",

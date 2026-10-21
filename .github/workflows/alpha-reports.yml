@@ -1,6 +1,7 @@
 name: alpha-reports
 
 # 한경 컨센서스 기업 리포트 목록(목표가·투자의견) → data 브랜치 alpha/reports/hk_YYYY.csv
+# + KIND 이벤트 공시(자사주 신탁·유증·CB 등) → alpha/kind/<유형>.csv
 # 단일 프로세스·요청 간격 1.2초 (병렬 금지: 빠른 요청은 IP 차단됨). 이미 받은 주는 건너뜀.
 on:
   workflow_dispatch:
@@ -9,6 +10,10 @@ on:
         description: "시작일 YYYY-MM-DD"
         required: false
         default: "2013-07-01"
+      kind_from:
+        description: "KIND 공시 수집 시작 연도 (비우면 작년)"
+        required: false
+        default: ""
   schedule:
     - cron: "17 21 * * 1-5"          # 평일 21:17 — 최근 주 갱신
       timezone: "Asia/Seoul"
@@ -44,12 +49,23 @@ jobs:
           START="${{ github.event.inputs.start }}"
           [ -n "$START" ] || START=$(TZ=Asia/Seoul date -d '-21 days' +%Y-%m-%d)
           python tools/alpha/hk_reports.py "$START" "$(TZ=Asia/Seoul date +%Y-%m-%d)"
+      - name: KIND 공시 수집 (자사주·유증·CB·무상증자 등)
+        if: always()
+        env:
+          KIND_OUT: datadir/alpha/kind
+        run: |
+          Y0="${{ github.event.inputs.kind_from }}"
+          [ -n "$Y0" ] || Y0=$(( $(TZ=Asia/Seoul date +%Y) - 1 ))
+          python tools/alpha/kind_disclosures.py "$Y0" "$(TZ=Asia/Seoul date +%Y)"
+
       - name: 결과 백업 (저장 실패 대비)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: reports
-          path: datadir/alpha/reports/
+          path: |
+            datadir/alpha/reports/
+            datadir/alpha/kind/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -57,8 +73,8 @@ jobs:
         if: always()
         run: |
           cd datadir
-          [ -d alpha/reports ] || exit 0
-          git add -A alpha/reports
+          [ -d alpha ] || exit 0
+          git add -A alpha/reports alpha/kind 2>/dev/null || git add -A alpha
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
