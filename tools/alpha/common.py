@@ -461,3 +461,34 @@ def perf_line(s, u, label="", hm=1):
           f"t={nw_t(ex.to_numpy(), 1):.2f} 승월 {(ex>0).mean()*100:.0f}% 최악월 {s.min()*100:+.1f}% "
           f"앞/뒤 {ex.iloc[:h].mean()*100:+.2f}/{ex.iloc[h:].mean()*100:+.2f} 플러스연도 {(yr>0).sum()}/{len(yr)}")
     print("     연도별 초과(합): " + " ".join(f"{y%100}:{v*100:+.0f}" for y, v in yr.items()))
+
+
+def periodic_portfolio(P, score, mask, n=20, K=20, cost=COST_KR, label="", minval=None, verbose=True, offset=0):
+    """K거래일마다 리밸런싱: t일 종가까지 정보로 score 상위 n(minval 이상) → t+1 시가 동일비중 매수, 다음 리밸런싱일+1 시가 매도.
+    교체분에만 왕복 비용. 반환: 기간 수익 Series(비용 후), 유니버스(mask) 동일가중."""
+    lastc = pd.DataFrame(P.c).ffill().to_numpy()
+    o = np.where(np.isfinite(P.o), P.o, lastc)
+    reb = np.arange(250 + offset, P.T - 1, K)
+    rets, unis, idx, nn, held = [], [], [], [], set()
+    for a, b in zip(reb[:-1], reb[1:]):
+        ent, ext = a + 1, b + 1
+        ok = mask[a] & np.isfinite(score[a])
+        if minval is not None:
+            ok &= score[a] >= minval
+        cand = np.nonzero(ok)[0]
+        allc = np.nonzero(mask[a])[0]
+        ru = o[ext, allc] / o[ent, allc] - 1
+        if len(cand) == 0:
+            rets.append(0.0); held = set()
+        else:
+            pick = cand[np.argsort(-score[a, cand])[:n]]
+            r = o[ext, pick] / o[ent, pick] - 1
+            new = set(pick.tolist())
+            turn = len(new - held) / len(new) if held else 1.0
+            rets.append(np.nanmean(r) - cost * turn)
+            held = new
+        unis.append(np.nanmean(ru)); idx.append(P.dates[ent]); nn.append(len(cand))
+    s = pd.Series(rets, index=idx); u = pd.Series(unis, index=idx)
+    if verbose:
+        perf_line(s, u, label, hm=K / 21)
+    return s, u

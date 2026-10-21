@@ -28,7 +28,7 @@ def load_flows(P):
         if col not in fl.columns:
             continue
         a = P.align(fl, col).astype(np.float32)
-        a[have & np.isnan(a)] = 0.0             # 그날 데이터는 있는데 종목이 없으면 순매수 0
+        a[have[:, None] & np.isnan(a)] = 0.0             # 그날 데이터는 있는데 종목이 없으면 순매수 0
         out[k] = a
     cap = load_alpha("cap")
     cap = cap[cap["ticker"].isin(set(P.tickers))]
