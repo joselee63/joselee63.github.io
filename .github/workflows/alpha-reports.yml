@@ -44,6 +44,15 @@ jobs:
           START="${{ github.event.inputs.start }}"
           [ -n "$START" ] || START=$(TZ=Asia/Seoul date -d '-21 days' +%Y-%m-%d)
           python tools/alpha/hk_reports.py "$START" "$(TZ=Asia/Seoul date +%Y-%m-%d)"
+      - name: 결과 백업 (저장 실패 대비)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: datadir/alpha/reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: data 브랜치에 저장 (중간 실패해도 받은 만큼)
         if: always()
         run: |
