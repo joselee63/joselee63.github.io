@@ -548,6 +548,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       f: function(P, i){ return P.ma[20][i] < P.ma[60][i] && P.ma[60][i] < P.ma[120][i]; } },
     { id: "high52", g: "종목", t: "52주 신고가 근처 (1년 고점 대비 −5% 이내)",
       f: function(P, i){ return P.d.c[i] >= hiN(P.d.h, i, 250) * 0.95; } },
+    { id: "cap1t", g: "종목", t: MKT.market === "kr" ? "시가총액 1조 원 이상 (그 시점 기준)" : "시가총액 100억 달러 이상 (그 시점 기준)",
+      f: function(P, i){ return P.d.sh > 0 && P.d.sh * P.d.c[i] >= (MKT.market === "kr" ? 1e12 : 1e10); } },
     { id: "brk252", g: "종목", t: "52주 신고가 돌파한 날 (종가가 직전 1년 최고 종가 위로 마감)",
       f: function(P, i){ return P.d.c[i] > hiN(P.d.c, i - 1, 251); } },
     { id: "brk60", g: "종목", t: "60일 신고가 돌파한 날 (종가가 직전 60일 최고 종가 위로 마감)",
@@ -594,7 +596,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     var n = d.c.length, k = null, sc = (pool && pool.scale) || 1;
     if (sc !== 1) {                                      // 미국: 센트(×100) 정수로 저장된 가격 되돌림
       var un = function(a){ return a.map(function(x){ return x / sc; }); };
-      d = { o: un(d.o), h: un(d.h), l: un(d.l), c: un(d.c), v: d.v, r: d.r, ko: d.ko, kh: d.kh, kl: d.kl, kc: d.kc };
+      d = { o: un(d.o), h: un(d.h), l: un(d.l), c: un(d.c), v: d.v, r: d.r, ko: d.ko, kh: d.kh, kl: d.kl, kc: d.kc, sh: d.sh };
     }
     if (d.kc && d.kc.length === n) {                     // 같은 날짜로 맞춘 코스피 (×100 정수로 저장됨)
       var dv = function(a){ return a.map(function(x){ return x / 100; }); };
@@ -1534,11 +1536,12 @@ header .lnk,header .status{color:var(--hd-mu)}
   // ---------- 차트 그리기 도구 (직선 · 3등분 · 4등분) ----------
   //   좌표는 (봉 번호, 가격)으로 저장 → 턴이 넘어가 차트가 밀려도 같은 자리에 남음. 판이 바뀌면 지워짐.
   var DRAW = { tool: null, start: null, tmp: null, downX: 0, downY: 0 };
-  function drawPoint(e){                                 // 마우스 위치 → (봉 번호, 가격). 캔들 시·고·저·종가 근처(9px)면 붙임
+  function drawPoint(e, raw){                            // 마우스 위치 → (봉 번호, 가격). 캔들 시·고·저·종가 근처(9px)면 붙임 (raw = 붙이지 않음)
     var L = LAY.cv, r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
     var i = L.a + Math.floor(Math.max(0, Math.min(x, L.plotW - 1)) / L.sw);
     var Yp = function(p){ return L.top + (L.hi - p) / (L.hi - L.lo) * L.pH; };
     var p = L.hi - (y - L.top) / L.pH * (L.hi - L.lo);
+    if (raw) return { i: L.a + x / L.sw - 0.5, p: p, x: x, y: y };
     if (i >= 0 && i <= G.cur) {
       var best = 9;
       [G.d.o[i], G.d.h[i], G.d.l[i], G.d.c[i]].forEach(function(v){ var d = Math.abs(Yp(v) - y); if (d < best) { best = d; p = v; } });
@@ -1556,6 +1559,41 @@ header .lnk,header .status{color:var(--hd-mu)}
     G.drawings.push({ t: DRAW.tool, a: { i: DRAW.start.i, p: DRAW.start.p }, b: { i: pt.i, p: pt.p } });
     setTool(DRAW.tool);                                  // 한 번 그리면 도구 해제
   }
+  function hitDrawing(x, y){                             // 화면 좌표에 걸린 그림 번호 (위에 그린 것 우선) · 없으면 -1
+    var L = LAY.cv; if (!L || !G || !G.drawings) return -1;
+    var X = function(i){ return (i - L.a + 0.5) * L.sw; }, Y = function(p){ return L.top + (L.hi - p) / (L.hi - L.lo) * L.pH; };
+    for (var k = G.drawings.length - 1; k >= 0; k--) {
+      var dw = G.drawings[k], x1 = X(dw.a.i), y1 = Y(dw.a.p), x2 = X(dw.b.i), y2 = Y(dw.b.p);
+      if (dw.t === "line") {
+        var dx = x2 - x1, dy = y2 - y1, len2 = dx * dx + dy * dy || 1;
+        var t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / len2));
+        if (Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)) <= 7) return k;
+      } else if (x >= Math.min(x1, x2) - 4 && x <= L.plotW && y >= Math.min(y1, y2) - 6 && y <= Math.max(y1, y2) + 6) return k;
+    }
+    return -1;
+  }
+  cv.addEventListener("pointerdown", function(e){       // 도구가 꺼져 있을 때: 그림을 잡아서 끌기
+    if (!G || DRAW.tool || !LAY.cv) return;
+    var r = cv.getBoundingClientRect(), k = hitDrawing(e.clientX - r.left, e.clientY - r.top);
+    if (k < 0) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    var dw = G.drawings[k];
+    DRAW.move = { k: k, from: drawPoint(e, true), a: { i: dw.a.i, p: dw.a.p }, b: { i: dw.b.i, p: dw.b.p } };
+    try { cv.setPointerCapture(e.pointerId); } catch (er) {}
+  }, true);
+  cv.addEventListener("pointermove", function(e){
+    if (!G || DRAW.tool) return;
+    if (DRAW.move) {                                     // 모양은 그대로, 봉·가격만큼 평행 이동
+      var m = DRAW.move, pt = drawPoint(e, true), di = Math.round(pt.i - m.from.i), dp = pt.p - m.from.p, dw = G.drawings[m.k];
+      if (!dw) { DRAW.move = null; return; }
+      dw.a = { i: m.a.i + di, p: m.a.p + dp }; dw.b = { i: m.b.i + di, p: m.b.p + dp };
+      e.stopImmediatePropagation(); draw(); return;
+    }
+    var r = cv.getBoundingClientRect();
+    cv.style.cursor = hitDrawing(e.clientX - r.left, e.clientY - r.top) >= 0 ? "move" : "";
+  }, true);
+  cv.addEventListener("pointerup", function(){ if (DRAW.move) { DRAW.move = null; draw(); } }, true);
+  cv.addEventListener("pointercancel", function(){ DRAW.move = null; }, true);
   cv.addEventListener("pointerdown", function(e){
     if (!G || !DRAW.tool || !LAY.cv) return;
     e.preventDefault(); e.stopImmediatePropagation();

@@ -615,7 +615,7 @@ def bench_of(code, listing=None, exch=None):
     return MK["index"]
 
 
-def write_game_data(data, sections, build_id, listing=None, exch=None):
+def write_game_data(data, sections, build_id, listing=None, exch=None, caps=None):
     """
     차트 게임용 데이터: site/game/{번호}.json (종목마다 하나) + site/game/pool.json (개수)
       · 지수·ETF는 제외, 일봉이 GAME_MIN개 미만인 종목도 제외
@@ -624,6 +624,7 @@ def write_game_data(data, sections, build_id, listing=None, exch=None):
         한국: 코스피 상장 = 코스피 · 코스닥 상장 = 코스닥 / 미국: 나스닥 상장 = 나스닥 종합 · 그 외 = S&P 500
         (화면에는 '비교 지수' 로만 표시, 어떤 지수였는지는 게임이 끝날 때 공개용으로만 인코딩)
       · 가격은 정수로 저장: 한국은 원 그대로, 미국은 센트(×100) — pool.json 의 scale 로 되돌림
+      · sh = 상장주식수(현재 기준) → 게임에서 '그 시점 시가총액 ≈ 주식수 × 수정종가'로 출제 조건에 사용
     """
     import base64, random
     scale = 10 ** PRICE_DEC
@@ -654,6 +655,13 @@ def write_game_data(data, sections, build_id, listing=None, exch=None):
             if k["Close"].notna().all():
                 for key, col in [("ko", "Open"), ("kh", "High"), ("kl", "Low"), ("kc", "Close")]:
                     rec[key] = [int(round(x * 100)) for x in k[col].values]
+        sh = None
+        if listing is not None and "Stocks" in listing.columns and c in listing.index:
+            sh = listing.loc[c, "Stocks"]
+        elif caps and caps.get(c):
+            sh = caps[c] / float(data[c]["df"]["Close"].iloc[-1])
+        if sh is not None and pd.notna(sh) and sh > 0:
+            rec["sh"] = int(round(float(sh)))
         rec["r"] = base64.b64encode(json.dumps(reveal, ensure_ascii=False).encode("utf-8")).decode("ascii")
         with open(os.path.join(gdir, f"{i}.json"), "w", encoding="utf-8") as f:
             json.dump(rec, f, separators=(",", ":"))
@@ -994,7 +1002,7 @@ def main():
             shutil.copy(os.path.join(WEB_DIR, extra), os.path.join(SITE_DIR, extra))
     open(os.path.join(SITE_DIR, ".nojekyll"), "w").close()
     if GAME_BARS:
-        print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'], listing, exch)}개")
+        print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'], listing, exch, caps)}개")
         print(f"      유사 차트 종목 {write_similar_data(data, sections, meta['build_id'], listing, exch)}개")
     if MARKET == "kr":
         print(f"      수급 오실레이터 종목 {write_supply_data(data, sections, listing, meta['build_id'])}개")
