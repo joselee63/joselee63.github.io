@@ -545,7 +545,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       $("kdesc").textContent = "52주 신고가 전략 — ① 추세: 종가 > " + NH.ma + "일 이동평균이고 " + NH.ma + "일선이 " + NH.maLook + "일 전보다 높음 " +
         "② 종가가 직전 " + (NH.hiN - 1) + "거래일 종가보다 높음 (52주 신고가). 직전 고점 후 " + NH.fresh + "일 이상 지나 나온 신고가는 '신선'. " +
         "거래량 배수 = 그날 거래량 ÷ 직전 20일 평균. 손절폭 = 9% × √(60일 일간 변동성 ÷ " + NH.volRef + "), " + NH.stopMin * 100 + "~" + NH.stopMax * 100 + "% · " +
-        "1R = 진입가 + 손절폭 (같은 수량 불타기) · 3R = 목표가 (1/3 매도) · 2%룰 비중 = 계좌 2% ÷ 손절폭. 진입가는 기준일 종가. " +
+        "1R = 진입가 + 손절폭 (같은 수량 불타기) · 3R = 목표가 (1/3 매도) · 2%룰 비중 = 계좌 2% ÷ 손절폭. 진입가는 신고가 당일 종가 (추세·변동성·시장 필터도 그날 기준, 1주·1달 후 수익률도 그날부터). " +
         (MKT.market === "kr" ? "5년 백테스트 최적: 추세 + 신고가 + 거래량 2배 (매매당 평균 +2.65%)." : "5년 백테스트 최적: 추세 + 40~60일 만의 신고가 (매매당 평균 +2.6~2.7%).") +
         " 비교 지수가 60일선 아래인 하락장에서는 손실이 컸으므로 시장 필터를 권합니다.";
       return;
@@ -577,7 +577,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       if (!withEtf && (s.e || s.i)) continue;
       if (isNaN(D[k].c[t])) continue;
       var r = KIND === "rsi" ? findDiv(k, t, DIR) : KIND === "rs" ? findRS(k, t) : findNH(k, t);
-      if (r) { r.k = k; r.ret = [5, 21].map(function(h){ var a = D[k].c[t], b = D[k].c[t + h]; return (b === undefined || isNaN(b)) ? null : b / a - 1; }); out.push(r); }
+      if (r) { r.k = k; var t0 = r.at === undefined ? t : r.at;
+        r.ret = [5, 21].map(function(h){ var a = D[k].c[t0], b = D[k].c[t0 + h]; return (b === undefined || isNaN(b)) ? null : b / a - 1; }); out.push(r); }
     }
     RES = out; LAST = { t: t, kind: KIND, dir: DIR, days: +$("knhdays").value };
     SORT = KIND === "rsi" ? { k: "str", d: -1 } : KIND === "rs" ? { k: "mrs", d: -1 } : MKT.market === "kr" ? { k: "vr", d: -1 } : { k: "gap", d: -1 };
@@ -664,15 +665,15 @@ header .lnk,header .status{color:var(--hd-mu)}
       if (c[j] > mx) { day = j; prev = mi; prevHi = mx; break; }
     }
     if (day < 0) return null;
-    var px = c[t], m = sma(c, t, NH.ma), mb = sma(c, t - NH.maLook, NH.ma);
+    var px = c[day], m = sma(c, day, NH.ma), mb = sma(c, day - NH.maLook, NH.ma);   // 진입 = 신고가 당일 종가 (조건도 그날 기준)
     if (!(px > m && m > mb)) return null;
     var gap = day - prev, vr = D[k].vr[day];
     if ($("knhfresh").checked && gap < NH.fresh) return null;
     if ($("knhvol").checked && !(vr >= NH.volX)) return null;
-    var bc = benchOf(k), mok = mktUp(bc, t);
+    var bc = benchOf(k), mok = mktUp(bc, day);
     if ($("knhmkt").checked && mok === false) return null;
-    var sd = dailyVol(c, t), sp = Math.max(NH.stopMin, Math.min(NH.stopMax, isNaN(sd) ? NH.stopBase : NH.stopBase * Math.sqrt(sd / NH.volRef)));
-    return { day: day, prev: prev, prevHi: prevHi, gap: gap, vr: vr, dma: px / m - 1, bench: bc, mok: mok, sd: sd, sp: sp,
+    var sd = dailyVol(c, day), sp = Math.max(NH.stopMin, Math.min(NH.stopMax, isNaN(sd) ? NH.stopBase : NH.stopBase * Math.sqrt(sd / NH.volRef)));
+    return { at: day, px: px, day: day, prev: prev, prevHi: prevHi, gap: gap, vr: vr, dma: px / m - 1, bench: bc, mok: mok, sd: sd, sp: sp,
              stop: px * (1 - sp), r1: px * (1 + sp), r3: px * (1 + NH.targetR * sp), w: Math.min(1, NH.risk / sp) };
   }
 
@@ -684,7 +685,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     ] : LAST.kind === "rs" ? [
       ["nm", "종목", "l"], ["sec", "섹션", "l"], ["px", "종가"], ["mrs", "RS"], ["cross", "0 돌파 주"], ["st", "2단계"], ["r5", "1주 후"], ["r21", "1달 후"]
     ] : [
-      ["nm", "종목", "l"], ["sec", "섹션", "l"], ["px", "종가"]
+      ["nm", "종목", "l"], ["sec", "섹션", "l"], ["px", "진입가"]
     ].concat(LAST.days > 1 ? [["day", "신고가일"]] : []).concat([
       ["gap", "직전 고점 후"], ["vr", "거래량"], ["dma", "60일선 대비"], ["mk", "지수 60일선", "l"],
       ["sp", "손절폭"], ["stop", "손절가"], ["r1", "1R 불타기"], ["r3", "3R 목표"], ["w", "2%룰 비중"], ["r5", "1주 후"], ["r21", "1달 후"]
@@ -693,7 +694,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   function val(r, key){
     var s = IDX.stocks[r.k];
     switch (key) {
-      case "nm": return s.n; case "sec": return s.s; case "px": return D[r.k].c[LAST.t];
+      case "nm": return s.n; case "sec": return s.s; case "px": return r.px !== undefined ? r.px : D[r.k].c[LAST.t];
       case "p2": return r.p2; case "pchg": return r.pchg; case "rr": return r.r2 - r.r1; case "str": return r.str; case "r0": return r.rsi;
       case "mrs": return r.mrs; case "cross": return r.cross; case "st": return r.stage2 ? 1 : 0;
       case "day": return r.day; case "gap": return r.gap; case "vr": return r.vr; case "dma": return r.dma;
@@ -782,7 +783,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       : "신고가 " + ymd(IDX.dates[r.day]) + " (직전 고점 " + ymd(IDX.dates[r.prev]) + " 이후 " + r.gap + "일" + (r.gap >= NH.fresh ? " · 신선" : "") + ")" +
         (isNaN(r.vr) ? "" : " · 거래량 " + num(r.vr, 1) + "배") + " · " + (BENCH_NM[r.bench] || r.bench) + (r.mok === null ? "" : r.mok ? " 60일선 위" : " 60일선 아래") +
         "<br>손절폭 " + num(r.sp * 100, 1) + "% → 손절가 " + num(r.stop, PDEC) + " · 1R " + num(r.r1, PDEC) + " · 3R " + num(r.r3, PDEC) +
-        " · 2%룰 비중 " + num(r.w * 100, 0) + "% · 기준일 이후 1주 " + pc(r.ret[0]) + " · 1달 " + pc(r.ret[1]);
+        " · 2%룰 비중 " + num(r.w * 100, 0) + "% · 신고가일 이후 1주 " + pc(r.ret[0]) + " · 1달 " + pc(r.ret[1]);
     var a = Math.max(0, t - VIEW_BEFORE), b = Math.min(n - 1, t + VIEW_AFTER), AX = 62, top = 8;
     var plotW = W - AX - 4, gap = 14, subH = Math.round((Hh - top - 18) * 0.28), pH = Hh - top - 18 - subH - gap, subTop = top + pH + gap;
     var sw = plotW / (b - a + 1), X = function(i){ return (i - a + 0.5) * sw; };
@@ -817,8 +818,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       ctx.moveTo(Math.max(0, X(r.prev)), Y(r.prevHi)); ctx.lineTo(X(r.day), Y(r.prevHi)); ctx.stroke(); ctx.setLineDash([]);
       if (r.prev >= a) { ctx.fillStyle = C.mu; ctx.beginPath(); ctx.arc(X(r.prev), Y(r.prevHi), 3.2, 0, Math.PI * 2); ctx.fill(); }
       ctx.fillStyle = C.warn; ctx.beginPath(); ctx.arc(X(r.day), Y(x.c[r.day]), 3.6, 0, Math.PI * 2); ctx.fill();
-      [[r.stop, C.dn, "손절 "], [x.c[t], C.mu, "진입 "], [r.r1, C.ok, "1R "], [r.r3, C.up, "3R "]].forEach(function(L){
-        var yy = Math.round(Y(L[0])) + .5, x0 = X(t);
+      [[r.stop, C.dn, "손절 "], [r.px, C.mu, "진입 "], [r.r1, C.ok, "1R "], [r.r3, C.up, "3R "]].forEach(function(L){
+        var yy = Math.round(Y(L[0])) + .5, x0 = X(r.day);
         ctx.strokeStyle = L[1]; ctx.lineWidth = 1.2; ctx.setLineDash([5, 3]); ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(plotW, yy); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
         ctx.fillStyle = L[1]; ctx.textAlign = "right"; ctx.fillText(L[2] + num(L[0], PDEC), plotW - 4, yy - 7);
       });
