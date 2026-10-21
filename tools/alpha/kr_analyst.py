@@ -24,6 +24,10 @@ RAT = {"strong buy": 2, "strongbuy": 2, "buy": 1, "매수": 1, "outperform": 1, 
 def load_reports():
     fs = sorted((ROOT / "data-alpha" / "reports").glob("hk_*.csv"))
     r = pd.concat((pd.read_csv(f, dtype=str) for f in fs), ignore_index=True)
+    # 2017-03부터 링크 텍스트가 '종목명(코드)제목' 형식 → 이름에서 코드 추출
+    code = r["name"].str.extract(r"\((\d{6})\)")[0]
+    r["ticker"] = r["ticker"].where(r["ticker"].str.fullmatch(r"\d{6}", na=False), code)
+    r["idx"] = pd.to_numeric(r["idx"], errors="coerce")
     r = r[r["ticker"].str.fullmatch(r"\d{6}", na=False)].drop_duplicates("idx")
     r["date"] = pd.to_datetime(r["date"])
     r["tp"] = pd.to_numeric(r["tp"], errors="coerce")

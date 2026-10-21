@@ -64,7 +64,7 @@ def parse(t):
         if not a:
             continue
         nm = html.unescape(a.group(2)).strip()
-        m = re.match(r"(.*)\((\w{6})\)\s*$", nm)
+        m = re.match(r"(.*?)\((\d{6})\)", nm)          # '종목명(코드)' 또는 '종목명(코드)제목'(2017-03~)
         summ = re.search(r"<li>(.*?)</li>", td[1], re.S)
         rows.append(dict(date=clean(td[0]), idx=int(a.group(1)), name=m.group(1) if m else nm,
                          ticker=m.group(2) if m else "", tp=clean(td[2]).replace(",", ""),
