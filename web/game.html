@@ -206,6 +206,7 @@ h3{font-size:13.5px;margin:0 0 8px}
 .cg{font-size:11.5px;color:var(--muted);font-weight:600;margin:12px 0 4px}
 .cr{display:flex;gap:7px;align-items:flex-start;font-size:13px;padding:3px 0;cursor:pointer;line-height:1.4}
 .cr input{margin:2px 0 0;flex:none;accent-color:var(--accent)}
+.cr .cinp{width:58px;margin:0 2px;font:inherit;font-size:13px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg)}
 .condact{display:flex;align-items:center;gap:12px;margin-top:12px}
 .lnk{font-size:11.5px;color:var(--muted);cursor:pointer;text-decoration:underline;background:none;border:0;padding:0}
 
@@ -548,6 +549,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       f: function(P, i){ return P.ma[20][i] < P.ma[60][i] && P.ma[60][i] < P.ma[120][i]; } },
     { id: "high52", g: "종목", t: "52주 신고가 근처 (1년 고점 대비 −5% 이내)",
       f: function(P, i){ return P.d.c[i] >= hiN(P.d.h, i, 250) * 0.95; } },
+    { id: "rs", g: "종목", t: "RS 등급", inp: { def: 80, min: 1, max: 99, suf: "이상 (1~99 · 3·6·9·12개월 가중 수익률을 게임 종목 전체와 비교한 백분위)" },
+      f: function(P, i){ return !!P.d.rs && P.d.rs[i] >= condVal("rs"); } },
     { id: "cap1t", g: "종목", t: MKT.market === "kr" ? "시가총액 1조 원 이상 (그 시점 기준)" : "시가총액 100억 달러 이상 (그 시점 기준)",
       f: function(P, i){ return P.d.sh > 0 && P.d.sh * P.d.c[i] >= (MKT.market === "kr" ? 1e12 : 1e10); } },
     { id: "brk252", g: "종목", t: "52주 신고가 돌파한 날 (종가가 직전 1년 최고 종가 위로 마감)",
@@ -570,15 +573,23 @@ header .lnk,header .status{color:var(--hd-mu)}
   var COND_KEY = "krsc_game_conds" + KEY_SUFFIX;
   var condOn = (store(function(){ return JSON.parse(localStorage.getItem(COND_KEY) || "[]"); }) || []);
   function activeConds(){ return CONDS.filter(function(c){ return condOn.indexOf(c.id) >= 0; }); }
+  var CONDV_KEY = COND_KEY + "_v";
+  var condV = store(function(){ return JSON.parse(localStorage.getItem(CONDV_KEY) || "{}"); }) || {};
+  function condVal(id){                                  // 입력값이 있는 조건의 현재 값 (범위 밖이면 기본값)
+    var c = CONDS.filter(function(x){ return x.id === id; })[0], v = +condV[id];
+    return isFinite(v) && v >= c.inp.min && v <= c.inp.max ? v : c.inp.def;
+  }
   function renderConds(){
     var h = "", g = "";
     CONDS.forEach(function(c){
       if (c.g !== g) { g = c.g; h += '<div class="cg">' + esc(g) + "</div>"; }
-      h += '<label class="cr"><input type="checkbox" data-c="' + c.id + '"' + (condOn.indexOf(c.id) >= 0 ? " checked" : "") + "> " + esc(c.t) + "</label>";
+      h += '<label class="cr"><input type="checkbox" data-c="' + c.id + '"' + (condOn.indexOf(c.id) >= 0 ? " checked" : "") + "> " +
+           (c.inp ? '<span>' + esc(c.t) + ' <input type="number" class="cinp" data-v="' + c.id + '" value="' + condVal(c.id) + '" min="' + c.inp.min + '" max="' + c.inp.max + '" step="1"> ' + esc(c.inp.suf) + "</span>"
+                  : esc(c.t)) + "</label>";
     });
     $("condlist").innerHTML = h;
     var a = activeConds();
-    $("condsum").textContent = a.length ? "조건 " + a.length + "개 적용" : "조건 없음 · 전체 랜덤";
+    $("condsum").textContent = a.length ? "조건 " + a.length + "개 적용" + (condOn.indexOf("rs") >= 0 ? " · RS " + condVal("rs") + "↑" : "") : "조건 없음 · 전체 랜덤";
     $("condsum").classList.toggle("on", a.length > 0);
   }
   function setCond(id, on){
@@ -596,7 +607,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     var n = d.c.length, k = null, sc = (pool && pool.scale) || 1;
     if (sc !== 1) {                                      // 미국: 센트(×100) 정수로 저장된 가격 되돌림
       var un = function(a){ return a.map(function(x){ return x / sc; }); };
-      d = { o: un(d.o), h: un(d.h), l: un(d.l), c: un(d.c), v: d.v, r: d.r, ko: d.ko, kh: d.kh, kl: d.kl, kc: d.kc, sh: d.sh };
+      d = { o: un(d.o), h: un(d.h), l: un(d.l), c: un(d.c), v: d.v, r: d.r, ko: d.ko, kh: d.kh, kl: d.kl, kc: d.kc, sh: d.sh, rs: d.rs };
     }
     if (d.kc && d.kc.length === n) {                     // 같은 날짜로 맞춘 코스피 (×100 정수로 저장됨)
       var dv = function(a){ return a.map(function(x){ return x / 100; }); };
@@ -1673,7 +1684,16 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (mq.addEventListener) mq.addEventListener("change", draw);
   }
 
-  $("condlist").addEventListener("change", function(e){ var id = e.target.getAttribute("data-c"); if (id) setCond(id, e.target.checked); });
+  $("condlist").addEventListener("change", function(e){
+    var vid = e.target.getAttribute("data-v");
+    if (vid) {                                           // 값 입력 → 저장하고 그 조건을 켬
+      var c = CONDS.filter(function(x){ return x.id === vid; })[0], v = Math.round(+e.target.value);
+      condV[vid] = Math.max(c.inp.min, Math.min(c.inp.max, isFinite(v) ? v : c.inp.def));
+      store(function(){ localStorage.setItem(CONDV_KEY, JSON.stringify(condV)); });
+      setCond(vid, true); return;
+    }
+    var id = e.target.getAttribute("data-c"); if (id) setCond(id, e.target.checked);
+  });
   $("condapply").addEventListener("click", function(){ newGame(); });
   $("condclear").addEventListener("click", function(){ condOn = []; store(function(){ localStorage.setItem(COND_KEY, "[]"); }); renderConds(); });
 

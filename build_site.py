@@ -638,6 +638,13 @@ def write_game_data(data, sections, build_id, listing=None, exch=None, caps=None
                 pool.append((c, nm, s))
     pool = list(dict.fromkeys(pool))
     random.shuffle(pool)
+    # RS 등급(1~99, IBD 방식): 그날 기준 가중 수익률(3개월 40% · 6·9·12개월 각 20%)을 게임 종목 전체와 비교한 백분위.
+    # 그 시점까지의 가격만 쓰므로 게임에서 '그 시점 RS'로 출제 조건에 사용 가능. 비교 종목이 30개 미만인 날은 0.
+    closes = pd.DataFrame({c: data[c]["df"]["Close"] for c, _, _ in pool})
+    sc_ = sum(w * (closes / closes.shift(n) - 1) for w, n in ((0.4, 63), (0.2, 126), (0.2, 189), (0.2, 252)))
+    cnt = sc_.notna().sum(axis=1)
+    rs_all = (sc_.rank(axis=1, pct=True) * 98 + 1).round()
+    rs_all = rs_all.where(cnt >= 30, axis=0)
     gdir = os.path.join(SITE_DIR, "game")
     os.makedirs(gdir, exist_ok=True)
     for i, (c, nm, s) in enumerate(pool):
@@ -650,6 +657,7 @@ def write_game_data(data, sections, build_id, listing=None, exch=None, caps=None
         rec = {k: [int(round(x * scale)) for x in df[col].values]
                for k, col in [("o", "Open"), ("h", "High"), ("l", "Low"), ("c", "Close")]}
         rec["v"] = [int(round(x)) for x in df["Volume"].values]
+        rec["rs"] = [0 if pd.isna(x) else int(x) for x in rs_all[c].reindex(df.index).values]
         if kospi is not None:
             k = kospi.reindex(df.index).ffill().bfill()          # 지수에 없는 날은 직전 값으로
             if k["Close"].notna().all():
