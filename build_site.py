@@ -77,7 +77,8 @@ UP_COLOR, DOWN_COLOR = "#E5383B", "#1D63D8"
 MA_COLORS = {5: "#9B5DE5", 20: "#F4A100", 60: "#2A9D8F", 120: "#7F8C8D",
              50: "#2A9D8F", 200: "#7F8C8D", 10: "#C77DFF"}
 SUPPORT_COLOR, RESIST_COLOR = "#00A6C8", "#E0479E"
-GAME_BARS    = 1250                   # 차트 게임용 과거 일봉 수 (약 5년, 코스피 포함). 0이면 게임 데이터 안 만듦
+GAME_BARS    = {"kr": 3000, "us": 4500}.get(MARKET, 1250)   # 차트 게임용 과거 일봉 수 (한국 약 12년 = 네이버 최대 · 미국 약 18년 = 금융위기 포함). 0이면 게임 데이터 안 만듦
+SIM_BARS     = 1250                   # 유사 차트·종목 검색·퀀트용 시장 달력 길이 (약 5년 — 브라우저가 한 번에 받는 파일이라 짧게 유지)
 GAME_MIN     = 360                    # 이보다 짧은 종목은 게임 풀에서 제외 (지표 준비 119 + 화면 120 + 100턴 + 여유)
 FETCH_BARS = max(DISPLAY_BARS + max(MA_LIST), 260, GAME_BARS) + 20
 
@@ -725,7 +726,7 @@ def write_similar_data(data, sections, build_id, listing=None, exch=None):
     cal_src = data.get(MK["index"], {}).get("df")
     if cal_src is None:
         return 0
-    cal = cal_src.index[-GAME_BARS:]
+    cal = cal_src.index[-SIM_BARS:]
     scale = 10 ** PRICE_DEC
     sdir = os.path.join(SITE_DIR, "similar", "s")
     os.makedirs(sdir, exist_ok=True)
