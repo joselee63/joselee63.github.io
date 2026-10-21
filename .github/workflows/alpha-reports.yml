@@ -1,0 +1,57 @@
+name: alpha-reports
+
+# 한경 컨센서스 기업 리포트 목록(목표가·투자의견) → data 브랜치 alpha/reports/hk_YYYY.csv
+# 단일 프로세스·요청 간격 1.2초 (병렬 금지: 빠른 요청은 IP 차단됨). 이미 받은 주는 건너뜀.
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "시작일 YYYY-MM-DD"
+        required: false
+        default: "2013-07-01"
+  schedule:
+    - cron: "17 21 * * 1-5"          # 평일 21:17 — 최근 주 갱신
+      timezone: "Asia/Seoul"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: alpha-reports
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install pandas requests
+      - name: data 브랜치 가져오기
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone -q --depth 1 -b data "$URL" datadir
+      - name: 리포트 수집
+        env:
+          HK_OUT: datadir/alpha/reports
+        run: |
+          START="${{ github.event.inputs.start }}"
+          [ -n "$START" ] || START=$(TZ=Asia/Seoul date -d '-21 days' +%Y-%m-%d)
+          python tools/alpha/hk_reports.py "$START" "$(TZ=Asia/Seoul date +%Y-%m-%d)"
+      - name: data 브랜치에 저장 (중간 실패해도 받은 만큼)
+        if: always()
+        run: |
+          cd datadir
+          [ -d alpha/reports ] || exit 0
+          git add -A alpha/reports
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "reports $(TZ=Asia/Seoul date +%Y-%m-%d) (${{ github.event_name }})"
+          for i in 1 2 3 4; do git push -q origin data && break; git pull -q --rebase origin data; done
