@@ -3,6 +3,11 @@ name: sector-data
 # KRX 업종분류 분기별 스냅샷 + 업종지수 일봉 (B3 섹터 신고가 백테스트용) → data 브랜치 sectors/
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "all|sectors|index|kind|probe"
+        required: false
+        default: "all"
   schedule:
     - cron: "37 20 2 1,4,7,10 *"   # 분기 둘째 날 20:37 (새 분기 스냅샷 반영, 전체 재수집)
       timezone: "Asia/Seoul"
@@ -45,7 +50,7 @@ jobs:
         env:
           KRX_ID: ${{ secrets.KRX_ID }}
           KRX_PW: ${{ secrets.KRX_PW }}
-        run: python tools/sector_data.py datadir all
+        run: python tools/sector_data.py datadir "${{ github.event.inputs.mode || 'all' }}"
 
       - name: data 브랜치에 저장 (중간 실패해도 받은 만큼 저장)
         if: always()

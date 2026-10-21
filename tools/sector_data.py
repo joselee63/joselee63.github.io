@@ -50,6 +50,32 @@ def quarter_firsts():
     return list(pd.date_range(SNAP_START, dt.date.today(), freq="QS"))
 
 
+# ------------------------------------------------------------ 엔드포인트 점검
+def probe():
+    """로그인 상태에서 어떤 KRX 엔드포인트가 살아있는지 확인 (Actions 디버그용)."""
+    from pykrx import stock
+    tests = [
+        ("index_ohlcv 1001 최근", lambda: stock.get_index_ohlcv_by_date("20251001", "20251021", "1001")),
+        ("index_ohlcv 1001 2016", lambda: stock.get_index_ohlcv_by_date("20160104", "20160108", "1001")),
+        ("sector_cls KOSPI 최근", lambda: stock.get_market_sector_classifications("20251017", "KOSPI")),
+        ("sector_cls KOSPI 2020", lambda: stock.get_market_sector_classifications("20200102", "KOSPI")),
+        ("sector_cls KOSDAQ 2016", lambda: stock.get_market_sector_classifications("20160104", "KOSDAQ")),
+        ("index_ticker_list KOSPI", lambda: stock.get_index_ticker_list(market="KOSPI")),
+        ("index_pdf 1005 현재", lambda: stock.get_index_portfolio_deposit_file("1005")),
+        ("index_pdf 1005 2018", lambda: stock.get_index_portfolio_deposit_file("1005", "20180102")),
+    ]
+    for name, fn in tests:
+        try:
+            r = fn()
+            if hasattr(r, "shape"):
+                print(f"[probe] {name}: shape={r.shape}", "" if r.empty else f"head={r.head(2).to_dict()}")
+            else:
+                print(f"[probe] {name}: len={len(r)} {r[:5]}")
+        except Exception as e:
+            print(f"[probe] {name}: EXC {repr(e)[:150]}")
+        time.sleep(SLEEP)
+
+
 # ------------------------------------------------------------ ① 업종분류 스냅샷
 def collect_sectors(out: Path):
     from pykrx import stock
@@ -180,6 +206,9 @@ def main():
 
     if mode == "verify":
         verify(out)
+        return
+    if mode == "probe":
+        probe()
         return
     if mode in ("kind", "all"):
         collect_kind(out)
