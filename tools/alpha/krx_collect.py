@@ -11,6 +11,8 @@ KRX 정보데이터시스템은 로그인 필요 → KRX_ID/KRX_PW 환경변수 
       cap     일자별 시가총액·상장주식수(전 종목) → alpha/cap/YYYY/YYYY-MM.csv.gz
       fund    주간(금요일·직전 거래일) PER/PBR/EPS/BPS/DIV/DPS → alpha/fund/YYYY.csv.gz
       short   일자별 공매도 거래량(전 종목) + 잔고(T+2 공시) → alpha/short/YYYY/YYYY-MM.csv.gz
+      idx     KOSPI200(1028)·KOSDAQ150(2203) 구성종목: 6·12월은 매 거래일, 그 외 달은 첫 거래일
+              → alpha/idx/YYYY.csv.gz (date, index, ticker)
     완료된 달(이번 달 이전, 파일 있음)은 --have 폴더에 있으면 건너뜀 → 재실행 시 이어받기.
 """
 import datetime as dt
@@ -177,6 +179,30 @@ def run_fund(out: Path, have, y0, y1):
             print(f"  fund {y}: {len(rows)}/{len(ds)}주", flush=True)
 
 
+def run_idx(out: Path, have, y0, y1):
+    from pykrx import stock
+    days = trading_days(y0, y1)
+    for y in range(y0, y1 + 1):
+        rel = f"alpha/idx/{y}.csv.gz"
+        if have is not None and y < dt.date.today().year and (have / rel).exists():
+            continue
+        ds = [d for d in days if d[:4] == str(y)]
+        pick = []
+        for ym, g in month_groups(ds).items():
+            pick += g if ym[4:] in ("05", "06", "11", "12") else g[:1]
+        rows = []
+        for d in pick:
+            for code in ("1028", "2203"):
+                r = _retry(lambda: stock.get_index_portfolio_deposit_file(code, d))
+                if r is not None and len(r):
+                    rows.append(pd.DataFrame({"date": d, "index": code, "ticker": list(r)}))
+        if rows:
+            f = out / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            pd.concat(rows, ignore_index=True).to_csv(f, index=False, compression="gzip")
+            print(f"  idx {y}: {len(pick)}일", flush=True)
+
+
 def probe():
     from pykrx import stock
     tests = [
@@ -232,6 +258,8 @@ def main():
         run_daily(out, have, "cap", one_cap, y0, y1)
     elif mode == "short":
         run_daily(out, have, "short", one_short, max(y0, 2016), y1)
+    elif mode == "idx":
+        run_idx(out, have, y0, y1)
     elif mode == "fund":
         run_fund(out, have, y0, y1)
     else:
