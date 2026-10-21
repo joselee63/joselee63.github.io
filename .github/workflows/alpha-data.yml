@@ -1,0 +1,101 @@
+name: alpha-data
+
+# 비가격 알파 연구용 KRX 전 종목 횡단면 데이터 (수급·시총·펀더멘털·공매도, 상폐 포함)
+#   → data 브랜치 alpha/  (tools/alpha/krx_collect.py)
+# 수동 실행: mode = probe | flows | cap | fund | short (쉼표로 여러 개),
+#            chunks = 연도 구간 JSON 목록 — 구간마다 병렬 작업 1개 (예: ["2015-2017","2018-2020"])
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "probe | flows,cap,fund,short"
+        required: false
+        default: "probe"
+      chunks:
+        description: '연도 구간 JSON 목록 (예: ["2015-2018","2019-2022","2023-2026"])'
+        required: false
+        default: '["2015-2026"]'
+  schedule:
+    - cron: "47 20 * * 1-5"          # 평일 20:47 — 올해분 이어받기 (이번 달은 매번 다시 받음)
+      timezone: "Asia/Seoul"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: alpha-data
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        chunk: ${{ fromJSON(github.event.inputs.chunks || '["this-year"]') }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 패키지 설치
+        run: pip install pandas pykrx lxml
+
+      - name: data 브랜치 가져오기 (이미 받은 달 건너뛰기용)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone -q --depth 1 -b data "$URL" datadir || mkdir -p datadir
+
+      - name: 수집
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+        run: |
+          CHUNK="${{ matrix.chunk }}"
+          if [ "$CHUNK" = "this-year" ]; then Y=$(TZ=Asia/Seoul date +%Y); Y0=$Y; Y1=$Y; else Y0=${CHUNK%-*}; Y1=${CHUNK#*-}; fi
+          MODES="${{ github.event.inputs.mode || 'flows,cap,short,fund' }}"
+          for M in ${MODES//,/ }; do
+            python tools/alpha/krx_collect.py out "$M" "$Y0" "$Y1" --have datadir || echo "::warning::$M 실패"
+          done
+
+      - name: 결과 올리기 (중간 실패해도 받은 만큼)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha-${{ strategy.job-index }}
+          path: out/
+          if-no-files-found: ignore
+          retention-days: 3
+
+  save:
+    needs: collect
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: parts
+
+      - name: data 브랜치에 저장
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone -q --depth 1 -b data "$URL" datadir
+          shopt -s nullglob
+          for p in parts/*/; do cp -r "$p"/. datadir/; done
+          cd datadir
+          [ -d alpha ] || { echo "저장할 데이터 없음"; exit 0; }
+          git add -A alpha
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "alpha $(TZ=Asia/Seoul date +%Y-%m-%d) (${{ github.event_name }})"
+          for i in 1 2 3; do git push -q origin data && break; git pull -q --rebase origin data; done
