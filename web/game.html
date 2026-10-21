@@ -450,7 +450,8 @@ header .lnk,header .status{color:var(--hd-mu)}
     stopMin: 0.05, stopMax: 0.18,                  //   손절폭 하한·상한
     risk: 0.02,          // 2%룰: 손절선에 걸려도 계좌의 2%만 잃는 수량
     addAtR: 1,           // 매매 계획: +1R 오르면 처음과 같은 수량을 한 번 추가 (불타기)
-    targetR: 3,          //            목표가 = 처음 진입가 + 3R (손익비 1:3)
+    targetR: 3,          //            목표가 = 처음 진입가 + 3R (손익비 1:3) → 여기서 일부만 매도
+    takePart: 1 / 3,     //            3R에서 1/3 매도, 나머지는 고점 따라가기 손절로 보유 (검증: 3R 전량 매도보다 기대값 2배 이상)
     trailK: 3,           // 손절선 따라 올리기: 보유 중 최고 종가 − (손절폭 × 3) 까지 올림 (내리지는 않음)
     trailMin: 0.12, trailMax: 0.30   //   그 간격은 12~30% 안으로 (검증: 본전 이동·바짝 따라가기보다 기대값이 높았음)
   };
@@ -657,7 +658,12 @@ header .lnk,header .status{color:var(--hd-mu)}
     var p = price(), all = Math.floor(G.cash / (p * (1 + BUY_FEE)));
     return ratio === "risk" ? Math.min(all, riskQty()) : Math.floor(G.cash * ratio / (p * (1 + BUY_FEE)));
   }
-  function sellQty(){ return G.qty ? (ratio === "risk" ? G.qty : Math.max(1, Math.floor(G.qty * ratio))) : 0; }   // 비중 = 보유 수량의 n% (2%룰이면 전량)
+  function at3R(){ var P = G.plan; return !!(G.qty && P && !P.took && price() >= P.E + RULE.targetR * P.R); }
+  function sellQty(){                                    // 비중 = 보유 수량의 n% · 2%룰 모드: 3R 도달 시 1/3, 그 밖엔 전량
+    if (!G.qty) return 0;
+    if (ratio === "risk") return at3R() ? Math.max(1, Math.round(G.qty * RULE.takePart)) : G.qty;
+    return Math.max(1, Math.floor(G.qty * ratio));
+  }
   function msg(t){ $("msg").textContent = t || ""; }
 
   // ---------- 규칙 도우미 ----------
@@ -700,8 +706,8 @@ header .lnk,header .status{color:var(--hd-mu)}
     var cap = G.qty * (G.avg - stop) / eq;              // 손절선에서 팔면 원금 대비 잃는(−면 지키는) 계좌 비율
     var why = stop <= base + 1e-9 ? "" : floor >= trail && floor >= stop - 1e-9 ? "불타기 후 2%룰" : "고점 −" + (tp * 100).toFixed(0) + "%";
     return { stop: stop, raised: !!why, why: why, base: base, pct: G.stopPct, tp: tp, top: top, risk: Math.max(0, cap), cap: cap,
-             avg: G.avg, plan: P, target: P ? P.E + RULE.targetR * P.R : null, addAt: P && !P.added ? P.E + RULE.addAtR * P.R : null,
-             hit: p <= stop ? "손절선" : null, goal: P && p >= P.E + RULE.targetR * P.R };
+             avg: G.avg, plan: P, target: P && !P.took ? P.E + RULE.targetR * P.R : null, addAt: P && !P.added ? P.E + RULE.addAtR * P.R : null,
+             hit: p <= stop ? "손절선" : null, goal: P && !P.took && p >= P.E + RULE.targetR * P.R };
   }
   function riskQty(){                                    // 2%룰 수량: 손절선에 걸려도 계좌의 RULE.risk 만 잃도록
     var p = price(), eq = asset(), budget = eq * RULE.risk;
@@ -747,7 +753,9 @@ header .lnk,header .status{color:var(--hd-mu)}
       if (glb && glb.risk > RULE.risk * 1.25) G.rules.risk++;                   // 매수 뒤 손절 시 손실이 계좌 2.5% 초과
     } else if (kind === "S") {
       if (!G.qty) { msg("보유 주식이 없습니다"); return; }
-      sell(p, sellQty(), false);
+      var took = at3R(), sq = sellQty();
+      sell(p, sq, false);
+      if (took && G.qty && G.plan) G.plan.took = true;  // 3R에서 일부 매도 완료 → 나머지는 따라가기 손절로
     }
     G.cur++; G.turn++;                                   // 종목·코스피 차트가 함께 하루 진행
     if (G.turn >= TURNS) finish();
@@ -1149,7 +1157,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (gl) {
       var P = gl.plan, mu = function(t){ return ' <span style="color:var(--muted)">' + t + "</span>"; };
       if (P) h += "<div>1R <b>" + px(P.R) + "</b>" + mu("(" + (G.stopPct * 100).toFixed(1) + "%) · 진입 " + px(P.E)) + "</div>";
-      h += "<div>평단 <b>" + px(gl.avg) + "</b> · 목표 3R <b>" + (gl.target ? px(gl.target) : "-") + "</b></div>";
+      h += "<div>평단 <b>" + px(gl.avg) + "</b> · " + (gl.target ? "3R <b>" + px(gl.target) + "</b>" + mu("(1/3 매도)") : P && P.took ? mu("3R 1/3 매도 완료") : "") + "</div>";
       var dist = gl.avg - gl.stop;
       h += gl.raised ? "<div>손절 ↑ <b>" + px(gl.stop) + "</b>" + mu("(" + gl.why + "로 올림 · 평단 " + (dist >= 0 ? "−" + px(dist) : "+" + px(-dist)) + ")") + "</div>"
                      : "<div>손절 <b>" + px(gl.stop) + "</b>" + mu("(평단 −" + px(dist) + " · −" + (dist / gl.avg * 100).toFixed(1) + "%)") + "</div>";
@@ -1158,14 +1166,14 @@ header .lnk,header .status{color:var(--hd-mu)}
          : gl.risk > RULE.risk * 1.25 ? '<div class="w">⚠ 손절 시 계좌 −' + (gl.risk * 100).toFixed(1) + "% (2% 넘음)</div>"
          : '<div style="color:var(--muted)">손절 시 계좌 −' + (gl.risk * 100).toFixed(1) + "%</div>";
       h += gl.hit ? '<div class="sig">● 매도 신호 — 종가가 손절선 아래</div>'
-         : gl.goal ? '<div class="sig" style="color:var(--ok)">● 목표 3R 도달 — 계획상 매도</div>'
+         : gl.goal ? '<div class="sig" style="color:var(--ok)">● 3R 도달 — 1/3 매도 (' + comma(Math.max(1, Math.round(G.qty * RULE.takePart))) + "주) · 나머지는 손절 ↑ 따라가기</div>"
          : '<div class="ok">보유 유지 — 손절선 위</div>';
       if (P && !P.added) {
         if (price() >= gl.addAt) {
           var pv = addPreview(P.q0);
           h += '<div class="w">▲ 불타기 신호: +1R 도달 → ' + comma(P.q0) + "주 추가" + mu("(추가하면 평단 " + px(pv.avg) + " · 손절 " + px(pv.stop) + "로 올림 · 손절 시 −" + (Math.max(0, pv.risk) * 100).toFixed(1) + "%)") + "</div>";
         } else h += "<div>" + mu("불타기: +1R " + px(gl.addAt) + " 도달 시 " + comma(P.q0) + "주 추가") + "</div>";
-      } else if (P) h += "<div>" + mu("불타기 완료 · 목표 3R " + px(gl.target) + "에서 매도") + "</div>";
+      } else if (P) h += "<div>" + mu(P.took ? "나머지는 고점 따라가기 손절로 보유 (고점 −" + (gl.tp * 100).toFixed(0) + "%)" : "불타기 완료 · 3R " + px(gl.target) + "에서 1/3 매도") + "</div>";
     }
     h += bw.length ? '<div class="w">지금 사면 ⚠ ' + list(bw) + "</div>" : '<div class="ok">지금 사면 ✓ 문제 없음</div>';
     var rq = Math.min(riskQty(), Math.floor(G.cash / (price() * (1 + BUY_FEE)))), rp = rq * price() / asset();
@@ -1426,7 +1434,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       ctx.fillText((opt.guide.raised ? "손절 ↑ " : "손절 ") + px(opt.guide.stop), 6, Y(opt.guide.stop) + 11);
       if (opt.guide.target) {                            // 목표 3R · +1R 불타기 가격
         dashed(opt.guide.target, C.up, .95, [8, 4]);
-        ctx.fillStyle = C.up; ctx.fillText("목표 3R " + px(opt.guide.target), 6, Y(opt.guide.target) - 9);
+        ctx.fillStyle = C.up; ctx.fillText("3R (1/3 매도) " + px(opt.guide.target), 6, Y(opt.guide.target) - 9);
       }
       if (opt.guide.addAt) {
         dashed(opt.guide.addAt, C.mu, .7, [2, 4]);
