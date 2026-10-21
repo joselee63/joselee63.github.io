@@ -402,11 +402,12 @@ header .lnk,header .status{color:var(--hd-mu)}
         <button class="rb" type="button" data-r="0.25">25%</button>
         <button class="rb" type="button" data-r="0.5">50%</button>
         <button class="rb on" type="button" data-r="1">100%</button>
+        <button class="rb" type="button" data-r="risk" title="손절선에 걸려도 계좌의 2%만 잃는 수량으로 매수 (매도는 전량) · 단축키 5">2%룰</button>
       </div>
       <div class="buyinfo" id="buyinfo"></div>
       <div class="msg" id="msg"></div>
       <label class="gtog" title="추격 매수·물타기·하락 추세 매수 경고와 손절선·추적 손절선 표시"><input type="checkbox" id="guideOn"> 규칙 도우미</label>
-      <div class="keys"><span><kbd>B</kbd>매수</span><span><kbd>H</kbd>다음</span><span><kbd>S</kbd>매도</span><span><kbd>N</kbd>다음 종목</span><span><kbd>1</kbd>~<kbd>4</kbd>비중</span></div>
+      <div class="keys"><span><kbd>B</kbd>매수</span><span><kbd>H</kbd>다음</span><span><kbd>S</kbd>매도</span><span><kbd>N</kbd>다음 종목</span><span><kbd>1</kbd>~<kbd>5</kbd>비중</span></div>
     </div>
 
     <div class="card pad">
@@ -444,7 +445,10 @@ header .lnk,header .status{color:var(--hd-mu)}
     volLook: 60,         //   σ = 최근 60일 일간 수익률의 표준편차 → 종목마다 기준이 달라짐 (조용한 종목은 낮게, 출렁이는 종목은 높게)
     trendMA: 60,         // 이 이동평균 아래이거나
     trendLook: 10,       // 이 기간 전보다 그 이동평균이 낮으면 = 하락 추세
-    stop: 0.10,          // 손절선 = 평단 −10%
+    stopBase: 0.09,      // 손절폭 = 9% × √(종목 σ ÷ 시장 보통 σ) — 평소 변동이 시장 보통의 4배면 손절폭 2배 (18%)
+    volRef: MKT.market === "kr" ? 0.032 : 0.024,   //   시장 보통 σ = 사이트 종목 60일 일간 변동성의 중앙값
+    stopMin: 0.05, stopMax: 0.18,                  //   손절폭 하한·상한
+    risk: 0.02,          // 2%룰: 손절선에 걸려도 계좌의 2%만 잃는 수량
     trail: 0.20          // 추적 손절선 = 보유 중 최고 종가 −20%
   };
   var GUIDE_KEY = "krsc_game_guide", GUIDE_MIN_KEY = "krsc_game_guide_min";
@@ -635,7 +639,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   function start(P, s){
     G = { d: P.d, n: P.n, ma: P.ma, k: P.k, s: s, cur: s, turn: 0, cash: CASH0, qty: 0, avg: 0, cost: 0,
           trades: [], done: false, reveal: null, evals: null, focus: null,
-          pos0: -1, sigSeen: false, lastWarn: null, rules: { buys: 0, chase: 0, avgdown: 0, down: 0, ignore: 0 } };
+          pos0: -1, sigSeen: false, lastWarn: null, rules: { buys: 0, chase: 0, avgdown: 0, down: 0, ignore: 0, risk: 0 }, stopPct: RULE.stopBase };
     hover = -1;
     $("kpane").style.display = P.k ? "" : "none";
     $("loading").style.display = "none";
@@ -646,8 +650,11 @@ header .lnk,header .status{color:var(--hd-mu)}
   // ---------- 매매 ----------
   function price(){ return G.d.c[G.cur]; }
   function asset(){ return G.cash + G.qty * price(); }
-  function buyQty(){ var p = price(); return Math.floor(G.cash * ratio / (p * (1 + BUY_FEE))); }   // 비중 = 현금의 n%
-  function sellQty(){ return G.qty ? Math.max(1, Math.floor(G.qty * ratio)) : 0; }                  // 비중 = 보유 수량의 n%
+  function buyQty(){                                     // 비중 = 현금의 n% · 2%룰 = 손절 시 계좌 2% 손실 수량
+    var p = price(), all = Math.floor(G.cash / (p * (1 + BUY_FEE)));
+    return ratio === "risk" ? Math.min(all, riskQty()) : Math.floor(G.cash * ratio / (p * (1 + BUY_FEE)));
+  }
+  function sellQty(){ return G.qty ? (ratio === "risk" ? G.qty : Math.max(1, Math.floor(G.qty * ratio))) : 0; }   // 비중 = 보유 수량의 n% (2%룰이면 전량)
   function msg(t){ $("msg").textContent = t || ""; }
 
   // ---------- 규칙 도우미 ----------
@@ -675,13 +682,25 @@ header .lnk,header .status{color:var(--hd-mu)}
   function chaseHint(i){                                 // 추격 기준선: 오늘 몇 % 넘게 오르면 추격인지
     var sd = dailyVol(i); return sd ? "하루 +" + (RULE.chaseK * sd * 100).toFixed(1) + "% · 5일 +" + (RULE.chaseK * sd * Math.sqrt(5) * 100).toFixed(1) + "%" : "";
   }
-  function guideLines(){                                 // 보유 중: 손절선(평단 기준) · 추적 손절선(보유 중 최고 종가 기준)
+  function stopPctAt(i){                                 // 변동성 손절폭 (검증: 손절 걸리는 비율이 변동성과 관계없이 고르게 됨)
+    var sd = dailyVol(i), k = sd ? RULE.stopBase * Math.sqrt(sd / RULE.volRef) : RULE.stopBase;
+    return Math.max(RULE.stopMin, Math.min(RULE.stopMax, k));
+  }
+  function guideLines(){                                 // 보유 중: 손절선(평단 기준, 진입 때 정한 폭) · 추적 손절선(보유 중 최고 종가 기준)
     if (!G.qty || G.pos0 < 0) return null;
     var top = 0; for (var j = G.pos0; j <= G.cur; j++) top = Math.max(top, G.d.c[j]);
-    var stop = G.avg * (1 - RULE.stop), trail = top * (1 - RULE.trail), p = price();
-    return { stop: stop, trail: trail, hit: p <= stop ? "손절선" : p <= trail ? "추적 손절선" : null };
+    var stop = G.avg * (1 - G.stopPct), trail = top * (1 - RULE.trail), p = price();
+    var risk = Math.max(0, G.qty * (p - stop)) / asset();                     // 지금 손절선까지 빠지면 잃는 계좌 비율
+    return { stop: stop, trail: trail, pct: G.stopPct, risk: risk, hit: p <= stop ? "손절선" : p <= trail ? "추적 손절선" : null };
   }
-  function rulePct(x){ return Math.round(x * 100) + "%"; }
+  function riskQty(){                                    // 2%룰 수량: 손절선에 걸려도 계좌의 RULE.risk 만 잃도록
+    var p = price(), eq = asset(), budget = eq * RULE.risk;
+    if (G.qty && p < G.avg) return 0;                    // 손실 중 추가 매수(물타기)는 권하지 않음
+    if (G.qty) { var gl = guideLines(); budget -= gl ? gl.risk * eq : 0; }
+    var pct = G.qty ? G.stopPct : stopPctAt(G.cur);
+    return Math.max(0, Math.floor(budget / (p * pct)));
+  }
+  function rulePct(x){ return Math.round(x * 1000) / 10 + "%"; }
 
   function act(kind){
     if (!G || G.done || busy) return;
@@ -692,9 +711,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     G.lastWarn = null;
     if (kind === "B") {
       var q = buyQty();
-      if (q < 1) { msg("현금이 부족합니다"); return; }
+      if (q < 1) { msg(ratio === "risk" ? (G.qty && p < G.avg ? "2%룰: 손실 중에는 추가 매수하지 않습니다" : "2%룰상 추가 매수 여유가 없습니다") : "현금이 부족합니다"); return; }
       var bw = buyWarnings(G.cur);
-      if (!G.qty) G.pos0 = G.cur;
+      if (!G.qty) { G.pos0 = G.cur; G.stopPct = stopPctAt(G.cur); }
       G.rules.buys++;
       bw.forEach(function(w){ G.rules[w.k]++; });
       if (bw.length) G.lastWarn = bw;
@@ -702,6 +721,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       G.avg = (G.avg * G.qty + p * q) / (G.qty + q);
       G.qty += q; G.cash -= cost; G.cost += cost;
       G.trades.push({ i: G.cur, side: "B", p: p, q: q });
+      var glb = guideLines();
+      if (glb && glb.risk > RULE.risk * 1.25) G.rules.risk++;                   // 매수 뒤 손절 시 손실이 계좌 2.5% 초과
     } else if (kind === "S") {
       if (!G.qty) { msg("보유 주식이 없습니다"); return; }
       sell(p, sellQty(), false);
@@ -926,7 +947,8 @@ header .lnk,header .status{color:var(--hd-mu)}
         rl(RU.chase, "추격 매수 (평소 변동의 " + RULE.chaseK + "배 넘게 오른 날·5일 뒤)"),
         rl(RU.avgdown, "물타기 (손실 중 추가 매수)"),
         rl(RU.down, "하락 추세 매수 (" + RULE.trendMA + "일선 아래·하락)"),
-        rl(RU.ignore, "매도 신호 무시 (손절선 −" + rulePct(RULE.stop) + " · 추적 −" + rulePct(RULE.trail) + " 이탈 후 안 팖)")]);
+        rl(RU.risk, "계좌 위험 초과 매수 (손절 시 계좌 −" + rulePct(RULE.risk * 1.25) + " 넘는 수량)"),
+        rl(RU.ignore, "매도 신호 무시 (변동성 손절선 · 추적 −" + rulePct(RULE.trail) + " 이탈 후 안 팖)")]);
     }
     h += '<div class="foot">저항·지지는 매수 시점까지 확정된 고점·저점(좌우 5일)과 MA20·60·120으로 자동 판정합니다. 사람이 긋는 추세선·매물대와 다를 수 있습니다.</div></div>';
     return h;
@@ -1038,7 +1060,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     L.push("\n# 결과\n내 수익률 " + sgn(ret * 100, 2) + "% · 종목 그냥 보유 " + sgn(bh * 100, 2) + "%" + (kr === null ? "" : " · 비교 지수 " + sgn(kr * 100, 2) + "%") +
            " · 시작 자산 " + money(CASH0) + " · 수수료·세금 반영");
     var RU = G.rules;
-    L.push("\n# 규칙 체크 (매수 " + RU.buys + "회 · 추격 = 평소 변동성의 " + RULE.chaseK + "배 넘는 급등 뒤 매수)\n추격 매수 " + RU.chase + "회 · 물타기 " + RU.avgdown + "회 · 하락 추세 매수 " + RU.down + "회 · 손절선(평단 -" + rulePct(RULE.stop) + ")·추적 손절선(최고 종가 -" + rulePct(RULE.trail) + ") 이탈 후 매도 안 함 " + RU.ignore + "회");
+    L.push("\n# 규칙 체크 (매수 " + RU.buys + "회 · 추격 = 평소 변동성의 " + RULE.chaseK + "배 넘는 급등 뒤 매수)\n추격 매수 " + RU.chase + "회 · 물타기 " + RU.avgdown + "회 · 하락 추세 매수 " + RU.down + "회 · 계좌 위험 2.5% 초과 매수 " + RU.risk + "회 · 손절선(종목 변동성 기준 평단 -" + rulePct(RULE.stopMin) + "~" + rulePct(RULE.stopMax) + ")·추적 손절선(최고 종가 -" + rulePct(RULE.trail) + ") 이탈 후 매도 안 함 " + RU.ignore + "회");
     var E = G.evals || evaluate();
     L.push("\n# 규칙 기반 자동 평가 (참고용)\n등급 " + E.grade + (E.score !== null ? " · 점수 " + Math.round(E.score) : "") + " · " + E.summary);
     E.entries.forEach(function(e, n){
@@ -1103,10 +1125,15 @@ header .lnk,header .status{color:var(--hd-mu)}
     var h = '<div class="gh"><span>규칙 도우미</span><button class="gmin" type="button" title="접기">–</button></div>';
     if (G.lastWarn) h += '<div class="w">⚠ 방금 매수: ' + list(G.lastWarn) + "</div>";
     if (gl) {
-      h += "<div>손절 <b>" + px(gl.stop) + "</b> · 추적 <b>" + px(gl.trail) + "</b></div>";
+      h += "<div>손절 <b>" + px(gl.stop) + "</b> <span style=\"color:var(--muted)\">(−" + (gl.pct * 100).toFixed(1) + "%)</span> · 추적 <b>" + px(gl.trail) + "</b></div>";
+      h += gl.risk > RULE.risk * 1.25 ? '<div class="w">⚠ 손절 시 계좌 −' + (gl.risk * 100).toFixed(1) + "% (2% 넘음)</div>"
+                                      : '<div style="color:var(--muted)">손절 시 계좌 −' + (gl.risk * 100).toFixed(1) + "%</div>";
       h += gl.hit ? '<div class="sig">● 매도 신호 — ' + gl.hit + " 아래</div>" : '<div class="ok">보유 유지 — 두 선 위</div>';
     }
     h += bw.length ? '<div class="w">지금 사면 ⚠ ' + list(bw) + "</div>" : '<div class="ok">지금 사면 ✓ 문제 없음</div>';
+    var rq = Math.min(riskQty(), Math.floor(G.cash / (price() * (1 + BUY_FEE)))), rp = rq * price() / asset();
+    h += rq > 0 ? "<div>2%룰 " + (G.qty ? "추가 " : "") + "<b>" + comma(rq) + "주</b> <span style=\"color:var(--muted)\">(자산의 " + Math.round(rp * 100) + "% · 손절 −" + ((G.qty ? G.stopPct : stopPctAt(G.cur)) * 100).toFixed(1) + "%)</span></div>"
+                : '<div style="color:var(--muted)">' + (G.qty && price() < G.avg ? "2%룰: 손실 중이라 추가 매수 안 함" : "2%룰상 추가 매수 여유 없음") + "</div>";
     if (!bw.some(function(x){ return x.k === "chase"; }) && chaseHint(G.cur)) h += '<div style="color:var(--muted);font-size:11px">추격 기준 ' + chaseHint(G.cur) + "</div>";
     box.innerHTML = h;
   }
@@ -1414,10 +1441,10 @@ header .lnk,header .status{color:var(--hd-mu)}
   function setRatio(r){
     ratio = r;
     var bs = document.querySelectorAll(".rb");
-    for (var i = 0; i < bs.length; i++) bs[i].classList.toggle("on", parseFloat(bs[i].getAttribute("data-r")) === r);
+    for (var i = 0; i < bs.length; i++) bs[i].classList.toggle("on", bs[i].getAttribute("data-r") === String(r));
     if (G) renderPanel();
   }
-  $("ratio").addEventListener("click", function(e){ var r = e.target.getAttribute && e.target.getAttribute("data-r"); if (r) setRatio(parseFloat(r)); });
+  $("ratio").addEventListener("click", function(e){ var r = e.target.getAttribute && e.target.getAttribute("data-r"); if (r) setRatio(r === "risk" ? r : parseFloat(r)); });
   // 한글 입력 상태에서도 동작하도록 e.code(물리 키) 사용
   document.addEventListener("keydown", function(e){
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
@@ -1428,7 +1455,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     else if (k === "KeyH" || k === "Space") act("H");
     else if (k === "KeyS") act("S");
     else if (k === "KeyN" || k === "KeyR") reset();
-    else if (/^Digit[1-4]$/.test(k)) setRatio([0.1, 0.25, 0.5, 1][+k.slice(5) - 1]);
+    else if (/^Digit[1-5]$/.test(k)) setRatio([0.1, 0.25, 0.5, 1, "risk"][+k.slice(5) - 1]);
     else return;
     e.preventDefault();
   });
