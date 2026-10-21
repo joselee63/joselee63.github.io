@@ -18,8 +18,11 @@
 한계 (중요):
   - 분기 첫 영업일 스냅샷 → 분기 중 업종 변경·신규상장은 다음 스냅샷부터 반영.
   - 지수 목록(index_list)은 '현재' 존재하는 지수 기준 → 폐지된 업종지수의 일봉은 빠질 수 있음.
-  - KRX 업종 체계 개편(예: 2021년) 시점 전후로 업종명이 달라질 수 있음 — 스냅샷별 업종명이
-    그 시점 체계인지 현재 체계 소급인지는 수집된 업종명 변화로 확인할 것.
+  - 업종 체계: 2026-10 probe에서 2020-01-02 KOSPI 조회에 '일반서비스'(2024년 개편 후 명칭)가
+    나옴 → KRX가 **현재 업종 체계를 과거 날짜에 소급 적용**하는 것으로 보임. 구성종목은
+    그 날짜 상장종목(상폐 포함)이 맞지만, 업종명은 당시 체계가 아닐 수 있음.
+    verify의 연도별 업종명 개수로 재확인할 것. (소급이면 백테스트에서 look-ahead 소지:
+    당시 투자자가 알 수 없던 분류 — 다만 업종 소속은 대체로 안정적이라 영향 제한적)
   - KIND 폴백의 '업종'은 표준산업분류(세분류)라서 KRX 업종지수 체계와 다르고 현재 상장사만 포함.
 """
 import datetime as dt
@@ -77,30 +80,52 @@ def probe():
 
 
 # ------------------------------------------------------------ ① 업종분류 스냅샷
-def collect_sectors(out: Path):
+def _cls(date: str, market: str):
+    """빈 응답(일시 실패/휴장 구분 불가)에 대비해 같은 날짜 2회 시도."""
     from pykrx import stock
+    for _ in range(2):
+        df = stock.get_market_sector_classifications(date, market)
+        time.sleep(SLEEP)
+        if df is not None and not df.empty:
+            return df
+        time.sleep(3)
+    return None
 
+
+def collect_sectors(out: Path):
     rows = []
     fails = []
     for q in quarter_firsts():
-        d = stock.get_nearest_business_day_in_a_week(q.strftime("%Y%m%d"), prev=False)
-        for market in ("KOSPI", "KOSDAQ"):
-            df = stock.get_market_sector_classifications(d, market)
-            time.sleep(SLEEP)
-            if df is None or df.empty:
-                print(f"  [실패] {d} {market}: 빈 응답")
-                fails.append((d, market))
+        # 영업일 helper(지수 OHLCV 의존) 대신: 분기 첫날부터 주말 건너뛰며 최초 거래일 탐색
+        got_date = None
+        for off in range(10):
+            day = q + pd.Timedelta(days=off)
+            if day.weekday() >= 5:
+                continue
+            d = day.strftime("%Y%m%d")
+            df = _cls(d, "KOSPI")
+            if df is not None:
+                got_date = d
+                break
+        if not got_date:
+            print(f"  [실패] {q.date()}: 10일 내 거래일 못 찾음")
+            fails.append((str(q.date()), "BOTH"))
+            continue
+        for market, df in (("KOSPI", df), ("KOSDAQ", _cls(got_date, "KOSDAQ"))):
+            if df is None:
+                print(f"  [실패] {got_date} {market}: 빈 응답")
+                fails.append((got_date, market))
                 continue
             df = df.reset_index()
             part = pd.DataFrame({
-                "date": pd.Timestamp(d),
+                "date": pd.Timestamp(got_date),
                 "market": market,
                 "ticker": df["종목코드"].astype(str).str.zfill(6),
                 "name": df["종목명"],
                 "sector": df["업종명"],
             })
             rows.append(part)
-            print(f"  {d} {market}: {len(part)}종목 · {part['sector'].nunique()}업종")
+            print(f"  {got_date} {market}: {len(part)}종목 · {part['sector'].nunique()}업종")
     if not rows:
         raise RuntimeError("업종분류 스냅샷을 하나도 받지 못함 (KRX 로그인 여부 확인)")
     allrows = pd.concat(rows, ignore_index=True)
@@ -127,8 +152,13 @@ def collect_index(out: Path):
     end = today_str()
     parts = []
     for _, r in lst.iterrows():
-        df = stock.get_index_ohlcv_by_date(START, end, r["index_code"])
-        time.sleep(SLEEP)
+        df = None
+        for _try in range(3):
+            df = stock.get_index_ohlcv_by_date(START, end, r["index_code"])
+            time.sleep(SLEEP)
+            if df is not None and not df.empty:
+                break
+            time.sleep(3)
         if df is None or df.empty:
             print(f"  [실패] 지수 {r['index_code']} {r['index_name']}: 빈 응답")
             continue
