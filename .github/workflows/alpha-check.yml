@@ -1,0 +1,21 @@
+name: alpha-check
+
+# 연구 데이터 검증용 일회성 점검 (KRX 로그인 필요한 원주가 대조 등) — tools/alpha/rawcheck.py
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install pandas pykrx
+      - name: 권리락일 원주가 대조
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+        run: python tools/alpha/rawcheck.py
