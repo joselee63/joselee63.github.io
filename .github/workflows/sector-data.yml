@@ -1,0 +1,60 @@
+name: sector-data
+
+# KRX 업종분류 분기별 스냅샷 + 업종지수 일봉 (B3 섹터 신고가 백테스트용) → data 브랜치 sectors/
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 20 2 1,4,7,10 *"   # 분기 둘째 날 20:37 (새 분기 스냅샷 반영, 전체 재수집)
+      timezone: "Asia/Seoul"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sector-data
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 패키지 설치
+        run: pip install pandas pykrx lxml
+
+      - name: data 브랜치 가져오기 (없으면 새로 만듦)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$URL" data >/dev/null; then
+            git clone -q --depth 1 -b data "$URL" datadir
+          else
+            mkdir datadir && cd datadir && git init -q -b data && git remote add origin "$URL"
+            printf '# 데이터 브랜치\n' > README.md
+          fi
+
+      - name: 업종분류 스냅샷 + 업종지수 일봉 수집
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+        run: python tools/sector_data.py datadir all
+
+      - name: data 브랜치에 저장 (중간 실패해도 받은 만큼 저장)
+        if: always()
+        run: |
+          cd datadir
+          [ -d sectors ] || { echo "저장할 데이터 없음"; exit 0; }
+          git add -A
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "sectors $(TZ=Asia/Seoul date +%Y-%m-%d) (${{ github.event_name }})"
+          git push -q origin data
