@@ -345,6 +345,8 @@ header .lnk,header .status{color:var(--hd-mu)}
 .kcount{font-size:13px;color:var(--muted);margin:0 0 10px}
 .kcount b{color:var(--fg)}
 .kempty{color:var(--muted);font-size:13px;padding:30px 10px;text-align:center}
+.chip.fresh{background:rgba(22,163,74,.14);color:var(--ok)} .chip.mu{background:var(--soft);color:var(--muted)}
+.kmkt{display:inline-flex;gap:6px;flex-wrap:wrap;margin-left:6px}
 @media (max-width:1000px){
   .kwrap{padding:10px 10px 60px;gap:10px} .khead{padding:12px 12px 10px} .kbody{padding:12px 10px 14px}
   .kres{grid-template-columns:minmax(0,1fr)} .kchart{position:static} .klist{max-height:420px} .kgo{margin-left:0;width:100%} #kc{height:min(440px,60vh)}
@@ -412,6 +414,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         <div class="seg" id="kkind">
           <button type="button" class="on" data-k="rsi">RSI 다이버전스</button>
           <button type="button" data-k="rs">와인스타인 RS 0 돌파</button>
+          <button type="button" data-k="nh">52주 신고가 전략</button>
           <button type="button" disabled title="준비 중">재무 (준비 중)</button>
         </div>
       </div>
@@ -429,6 +432,13 @@ header .lnk,header .status{color:var(--hd-mu)}
         <span class="lbl">RS(Mansfield)가 0을 위로 돌파한 시점</span>
         <select id="kweeks"><option value="1">이번 주</option><option value="2" selected>최근 2주</option><option value="4">최근 4주</option><option value="8">최근 8주</option></select>
         <label><input type="checkbox" id="kstage"> 2단계만 (주가가 상승하는 30주선 위)</label>
+      </div>
+      <div class="krow opts" id="opt-nh">
+        <span class="lbl">52주 신고가 경신</span>
+        <select id="knhdays"><option value="1" selected>기준일</option><option value="3">최근 3일 이내</option><option value="5">최근 5일 이내</option></select>
+        <label><input type="checkbox" id="knhvol"> 거래량 20일 평균의 2배 이상만</label>
+        <label><input type="checkbox" id="knhfresh"> 신선한 신고가만 (직전 고점 후 40일 이상)</label>
+        <label><input type="checkbox" id="knhmkt"> 시장 필터 (비교 지수가 60일선 위)</label>
       </div>
       <div class="krow">
         <label><input type="checkbox" id="ketf"> 지수·ETF 포함</label>
@@ -461,6 +471,10 @@ header .lnk,header .status{color:var(--hd-mu)}
   var MKT = window.MKT || { market: "kr", price_dec: 0, rs_index: "KOSPI" };
   var PDEC = MKT.price_dec || 0, RSI_N = 14, PIV = 3, SPAN_MAX = 60, SPAN_MIN = 5, VIEW_BEFORE = 120, VIEW_AFTER = 40;
   var IDX = null, D = [], WK = null, KIND = "rsi", DIR = "bull", RES = [], SORT = null, SEL = -1, LAST = null;
+  // 52주 신고가 전략 — 차트 게임 매매 규칙과 같은 수치 (변동성 손절 · 2%룰 · 1R 불타기 · 3R 목표)
+  var NH = { hiN: 252, ma: 60, maLook: 10, fresh: 40, volX: 2, volLook: 60, stopBase: 0.09,
+             volRef: MKT.market === "kr" ? 0.032 : 0.024, stopMin: 0.05, stopMax: 0.18, risk: 0.02, targetR: 3 };
+  var BENCH_NM = { KOSPI: "코스피", KOSDAQ: "코스닥", SPX: "S&P 500", IXIC: "나스닥" };
 
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -487,9 +501,13 @@ header .lnk,header .status{color:var(--hd-mu)}
         h[i] = Math.max(o[i], cv) + d.cu[k][i] / 1000 * pv;
         l[i] = Math.min(o[i], cv) - d.cd[k][i] / 1000 * pv;
       }
-      D.push({ c: c, o: o, h: h, l: l, rsi: rsi(c) });
+      var vr = new Float64Array(n).fill(NaN);
+      if (d.vr) for (i = 0; i < n; i++) { var vv = d.vr[k][i]; if (vv !== null && vv !== undefined) vr[i] = vv / 10; }
+      D.push({ c: c, o: o, h: h, l: l, rsi: rsi(c), vr: vr });
     }
     WK = weeks(d.dates);
+    if (MKT.market === "kr") $("knhvol").checked = true; else $("knhfresh").checked = true;   // 백테스트 최적 조건
+    if (!d.vr) { $("knhvol").checked = false; $("knhvol").disabled = true; }
     var last = d.dates[n - 1];
     $("kdate").min = iso(d.dates[0]); $("kdate").max = iso(last); $("kdate").value = iso(last);
     noteDate(); desc();
@@ -523,6 +541,15 @@ header .lnk,header .status{color:var(--hd-mu)}
   $("ktoday").addEventListener("click", function(){ if (IDX) { $("kdate").value = iso(IDX.dates[IDX.dates.length - 1]); noteDate(); } });
 
   function desc(){
+    if (KIND === "nh") {
+      $("kdesc").textContent = "52주 신고가 전략 — ① 추세: 종가 > " + NH.ma + "일 이동평균이고 " + NH.ma + "일선이 " + NH.maLook + "일 전보다 높음 " +
+        "② 종가가 직전 " + (NH.hiN - 1) + "거래일 종가보다 높음 (52주 신고가). 직전 고점 후 " + NH.fresh + "일 이상 지나 나온 신고가는 '신선'. " +
+        "거래량 배수 = 그날 거래량 ÷ 직전 20일 평균. 손절폭 = 9% × √(60일 일간 변동성 ÷ " + NH.volRef + "), " + NH.stopMin * 100 + "~" + NH.stopMax * 100 + "% · " +
+        "1R = 진입가 + 손절폭 (같은 수량 불타기) · 3R = 목표가 (1/3 매도) · 2%룰 비중 = 계좌 2% ÷ 손절폭. 진입가는 기준일 종가. " +
+        (MKT.market === "kr" ? "5년 백테스트 최적: 추세 + 신고가 + 거래량 2배 (매매당 평균 +2.65%)." : "5년 백테스트 최적: 추세 + 40~60일 만의 신고가 (매매당 평균 +2.6~2.7%).") +
+        " 비교 지수가 60일선 아래인 하락장에서는 손실이 컸으므로 시장 필터를 권합니다.";
+      return;
+    }
     var t = KIND === "rsi"
       ? "RSI(14) 다이버전스 — 좌우 " + PIV + "일보다 낮은(높은) 날을 저점(고점)으로 보고, 두 저점(고점) 간격 " + SPAN_MIN + "~" + SPAN_MAX + "거래일. " +
         "상승: 주가 저점은 낮아졌는데 RSI 저점은 높아짐 · 하락: 주가 고점은 높아졌는데 RSI 고점은 낮아짐 (RSI 차이 2 이상). 저점·고점은 좌우 " + PIV + "일로 확정되므로 두 번째 저점(고점)은 기준일보다 최소 " + PIV + "일 앞입니다."
@@ -534,7 +561,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     var k = e.target.getAttribute && e.target.getAttribute("data-k"); if (!k) return;
     KIND = k;
     [].forEach.call(this.querySelectorAll("button"), function(b){ b.classList.toggle("on", b === e.target); });
-    $("opt-rsi").classList.toggle("on", k === "rsi"); $("opt-rs").classList.toggle("on", k === "rs"); desc();
+    $("opt-rsi").classList.toggle("on", k === "rsi"); $("opt-rs").classList.toggle("on", k === "rs"); $("opt-nh").classList.toggle("on", k === "nh"); desc();
   });
   $("kdir").addEventListener("click", function(e){
     var d = e.target.getAttribute && e.target.getAttribute("data-d"); if (!d) return;
@@ -549,11 +576,11 @@ header .lnk,header .status{color:var(--hd-mu)}
       var s = IDX.stocks[k];
       if (!withEtf && (s.e || s.i)) continue;
       if (isNaN(D[k].c[t])) continue;
-      var r = KIND === "rsi" ? findDiv(k, t, DIR) : findRS(k, t);
+      var r = KIND === "rsi" ? findDiv(k, t, DIR) : KIND === "rs" ? findRS(k, t) : findNH(k, t);
       if (r) { r.k = k; r.ret = [5, 21].map(function(h){ var a = D[k].c[t], b = D[k].c[t + h]; return (b === undefined || isNaN(b)) ? null : b / a - 1; }); out.push(r); }
     }
-    RES = out; LAST = { t: t, kind: KIND, dir: DIR };
-    SORT = KIND === "rsi" ? { k: "str", d: -1 } : { k: "mrs", d: -1 };
+    RES = out; LAST = { t: t, kind: KIND, dir: DIR, days: +$("knhdays").value };
+    SORT = KIND === "rsi" ? { k: "str", d: -1 } : KIND === "rs" ? { k: "mrs", d: -1 } : MKT.market === "kr" ? { k: "vr", d: -1 } : { k: "gap", d: -1 };
     renderTable(true);
   });
 
@@ -609,14 +636,59 @@ header .lnk,header .status{color:var(--hd-mu)}
     return { mrs: m[last], cross: ends[cross], wago: last - cross, stage2: stage2, s30: s30 };
   }
 
+  // ---------- 52주 신고가 전략 ----------
+  function sma(c, i, n){
+    if (i - n + 1 < 0) return NaN;
+    var s = 0; for (var q = i - n + 1; q <= i; q++) { if (isNaN(c[q])) return NaN; s += c[q]; }
+    return s / n;
+  }
+  function dailyVol(c, i){                                 // 최근 60일 일간 수익률 표준편차 (차트 게임과 같은 계산)
+    var n = 0, s1 = 0, s2 = 0;
+    for (var j = Math.max(1, i - NH.volLook + 1); j <= i; j++) { var r = c[j] / c[j - 1] - 1; if (isNaN(r)) continue; s1 += r; s2 += r * r; n++; }
+    return n > 10 ? Math.sqrt(Math.max(0, s2 / n - (s1 / n) * (s1 / n)) * n / (n - 1)) : NaN;
+  }
+  function benchOf(k){ return IDX.stocks[k].b || (MKT.market === "kr" ? "KOSPI" : "SPX"); }
+  var BI = {};
+  function mktUp(code, t){                                 // 비교 지수 종가 > 60일선 (지수 데이터가 없으면 null)
+    if (!(code in BI)) BI[code] = IDX.stocks.findIndex(function(s){ return s.c === code; });
+    if (BI[code] < 0) return null;
+    var c = D[BI[code]].c, m = sma(c, t, NH.ma);
+    return isNaN(m) || isNaN(c[t]) ? null : c[t] > m;
+  }
+  function findNH(k, t){
+    var c = D[k].c, N = NH.hiN, days = +$("knhdays").value, day = -1, prev = -1, prevHi = NaN;
+    for (var j = t; j > t - days && j >= N - 1; j--) {
+      if (isNaN(c[j]) || isNaN(c[j - N + 1])) continue;    // 1년치 거래가 있어야 52주 신고가
+      var mx = -Infinity, mi = -1;
+      for (var q = j - N + 1; q < j; q++) if (c[q] >= mx) { mx = c[q]; mi = q; }
+      if (c[j] > mx) { day = j; prev = mi; prevHi = mx; break; }
+    }
+    if (day < 0) return null;
+    var px = c[t], m = sma(c, t, NH.ma), mb = sma(c, t - NH.maLook, NH.ma);
+    if (!(px > m && m > mb)) return null;
+    var gap = day - prev, vr = D[k].vr[day];
+    if ($("knhfresh").checked && gap < NH.fresh) return null;
+    if ($("knhvol").checked && !(vr >= NH.volX)) return null;
+    var bc = benchOf(k), mok = mktUp(bc, t);
+    if ($("knhmkt").checked && mok === false) return null;
+    var sd = dailyVol(c, t), sp = Math.max(NH.stopMin, Math.min(NH.stopMax, isNaN(sd) ? NH.stopBase : NH.stopBase * Math.sqrt(sd / NH.volRef)));
+    return { day: day, prev: prev, prevHi: prevHi, gap: gap, vr: vr, dma: px / m - 1, bench: bc, mok: mok, sd: sd, sp: sp,
+             stop: px * (1 - sp), r1: px * (1 + sp), r3: px * (1 + NH.targetR * sp), w: Math.min(1, NH.risk / sp) };
+  }
+
   // ---------- 결과 표 ----------
   function cols(){
     return LAST.kind === "rsi" ? [
       ["nm", "종목", "l"], ["sec", "섹션", "l"], ["px", "종가"], ["p2", (LAST.dir === "bull" ? "두 번째 저점" : "두 번째 고점")],
       ["pchg", "주가 변화"], ["rr", "RSI 변화"], ["str", "RSI 차이"], ["r0", "RSI"], ["r5", "1주 후"], ["r21", "1달 후"]
-    ] : [
+    ] : LAST.kind === "rs" ? [
       ["nm", "종목", "l"], ["sec", "섹션", "l"], ["px", "종가"], ["mrs", "RS"], ["cross", "0 돌파 주"], ["st", "2단계"], ["r5", "1주 후"], ["r21", "1달 후"]
-    ];
+    ] : [
+      ["nm", "종목", "l"], ["sec", "섹션", "l"], ["px", "종가"]
+    ].concat(LAST.days > 1 ? [["day", "신고가일"]] : []).concat([
+      ["gap", "직전 고점 후"], ["vr", "거래량"], ["dma", "60일선 대비"], ["mk", "지수 60일선", "l"],
+      ["sp", "손절폭"], ["stop", "손절가"], ["r1", "1R 불타기"], ["r3", "3R 목표"], ["w", "2%룰 비중"], ["r5", "1주 후"], ["r21", "1달 후"]
+    ]);
   }
   function val(r, key){
     var s = IDX.stocks[r.k];
@@ -624,17 +696,22 @@ header .lnk,header .status{color:var(--hd-mu)}
       case "nm": return s.n; case "sec": return s.s; case "px": return D[r.k].c[LAST.t];
       case "p2": return r.p2; case "pchg": return r.pchg; case "rr": return r.r2 - r.r1; case "str": return r.str; case "r0": return r.rsi;
       case "mrs": return r.mrs; case "cross": return r.cross; case "st": return r.stage2 ? 1 : 0;
+      case "day": return r.day; case "gap": return r.gap; case "vr": return r.vr; case "dma": return r.dma;
+      case "mk": return r.mok === null ? null : r.mok ? 1 : 0; case "sp": return r.sp; case "stop": return r.stop;
+      case "r1": return r.r1; case "r3": return r.r3; case "w": return r.w;
       case "r5": return r.ret[0]; case "r21": return r.ret[1];
     }
   }
   function renderTable(fresh){
     var t = LAST.t, C = cols();
     $("kressec").style.display = "";
-    $("krtitle").textContent = LAST.kind === "rsi" ? (LAST.dir === "bull" ? "RSI 상승 다이버전스" : "RSI 하락 다이버전스") : "와인스타인 RS 0 돌파";
+    $("krtitle").textContent = LAST.kind === "rsi" ? (LAST.dir === "bull" ? "RSI 상승 다이버전스" : "RSI 하락 다이버전스") : LAST.kind === "rs" ? "와인스타인 RS 0 돌파" : "52주 신고가 전략";
     $("krsub").textContent = ymd(IDX.dates[t]) + " 기준 스냅샷 · 종목을 누르면 오른쪽(휴대폰은 아래)에 차트가 나옵니다 · 제목을 누르면 정렬";
     var v = RES.map(function(r){ return r.ret[1]; }).filter(function(x){ return x !== null; });
     var avg = v.length ? v.reduce(function(a, b){ return a + b; }, 0) / v.length : null;
-    $("kcount").innerHTML = "<b>" + RES.length + "</b>개 종목" + (v.length ? " · 1달 후 평균 " + pc(avg) + " (상승 " + Math.round(v.filter(function(x){ return x > 0; }).length / v.length * 100) + "%)" : "");
+    $("kcount").innerHTML = "<b>" + RES.length + "</b>개 종목" + (v.length ? " · 1달 후 평균 " + pc(avg) + " (상승 " + Math.round(v.filter(function(x){ return x > 0; }).length / v.length * 100) + "%)" : "") +
+      (LAST.kind === "nh" ? '<span class="kmkt">' + (MKT.market === "kr" ? ["KOSPI", "KOSDAQ"] : ["SPX", "IXIC"]).map(function(b){
+        var u = mktUp(b, t); return u === null ? "" : '<span class="chip ' + (u ? "fresh" : "up") + '">' + BENCH_NM[b] + (u ? " 60일선 위" : " 60일선 아래") + "</span>"; }).join("") + "</span>" : "");
     var rows = RES.slice();
     if (SORT) rows.sort(function(a, b){ var x = val(a, SORT.k), y = val(b, SORT.k);
       if (x === null || x === undefined || (typeof x === "number" && isNaN(x))) return 1; if (y === null || y === undefined || (typeof y === "number" && isNaN(y))) return -1;
@@ -656,6 +733,15 @@ header .lnk,header .status{color:var(--hd-mu)}
           case "mrs": h = '<span class="chip up">' + num(x, 2) + "</span>"; break;
           case "cross": h = ymd(IDX.dates[x]).slice(2) + ' <span style="color:var(--muted)">(' + (r.wago ? r.wago + "주 전" : "이번 주") + ")</span>"; break;
           case "st": h = x ? "✓" : '<span style="color:var(--muted)">-</span>'; break;
+          case "day": h = ymd(IDX.dates[x]).slice(2) + ' <span style="color:var(--muted)">(' + (t - x ? t - x + "일 전" : "기준일") + ")</span>"; break;
+          case "gap": h = num(x) + "일" + (x >= NH.fresh ? ' <span class="chip fresh">신선</span>' : ""); break;
+          case "vr": h = isNaN(x) ? '<span style="color:var(--muted)">-</span>' : x >= NH.volX ? '<span class="chip up">' + num(x, 1) + "배</span>" : num(x, 1) + "배"; break;
+          case "dma": h = pc(x); break;
+          case "mk": h = (x === null ? '<span style="color:var(--muted)">-</span>' : x ? '<span style="color:var(--ok);font-weight:700">✓</span>' : '<span style="color:var(--up);font-weight:700">✕</span>') +
+                     ' <span style="color:var(--muted)">' + esc(BENCH_NM[r.bench] || r.bench) + "</span>"; break;
+          case "sp": h = num(x * 100, 1) + "%"; break;
+          case "stop": case "r1": case "r3": h = num(x, PDEC); break;
+          case "w": h = num(x * 100, 0) + "%"; break;
           default: h = pc(x);
         }
         return '<td class="' + (c[0] === "nm" ? "l nm" : c[2] || "") + '">' + h + "</td>";
@@ -691,15 +777,21 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("kcs").innerHTML = LAST.kind === "rsi"
       ? (LAST.dir === "bull" ? "저점 " : "고점 ") + ymd(IDX.dates[r.p1]) + " → " + ymd(IDX.dates[r.p2]) + " · 주가 " + pc(r.pchg) + " · RSI " + num(r.r1, 1) + " → " + num(r.r2, 1) +
         " · 기준일 이후 1주 " + pc(r.ret[0]) + " · 1달 " + pc(r.ret[1])
-      : "RS " + num(r.mrs, 2) + " · 0 돌파 " + ymd(IDX.dates[r.cross]) + (r.stage2 ? " · 2단계(30주선 위·상승)" : "") + " · 기준일 이후 1주 " + pc(r.ret[0]) + " · 1달 " + pc(r.ret[1]);
+      : LAST.kind === "rs"
+      ? "RS " + num(r.mrs, 2) + " · 0 돌파 " + ymd(IDX.dates[r.cross]) + (r.stage2 ? " · 2단계(30주선 위·상승)" : "") + " · 기준일 이후 1주 " + pc(r.ret[0]) + " · 1달 " + pc(r.ret[1])
+      : "신고가 " + ymd(IDX.dates[r.day]) + " (직전 고점 " + ymd(IDX.dates[r.prev]) + " 이후 " + r.gap + "일" + (r.gap >= NH.fresh ? " · 신선" : "") + ")" +
+        (isNaN(r.vr) ? "" : " · 거래량 " + num(r.vr, 1) + "배") + " · " + (BENCH_NM[r.bench] || r.bench) + (r.mok === null ? "" : r.mok ? " 60일선 위" : " 60일선 아래") +
+        "<br>손절폭 " + num(r.sp * 100, 1) + "% → 손절가 " + num(r.stop, PDEC) + " · 1R " + num(r.r1, PDEC) + " · 3R " + num(r.r3, PDEC) +
+        " · 2%룰 비중 " + num(r.w * 100, 0) + "% · 기준일 이후 1주 " + pc(r.ret[0]) + " · 1달 " + pc(r.ret[1]);
     var a = Math.max(0, t - VIEW_BEFORE), b = Math.min(n - 1, t + VIEW_AFTER), AX = 62, top = 8;
     var plotW = W - AX - 4, gap = 14, subH = Math.round((Hh - top - 18) * 0.28), pH = Hh - top - 18 - subH - gap, subTop = top + pH + gap;
     var sw = plotW / (b - a + 1), X = function(i){ return (i - a + 0.5) * sw; };
     var hi = -Infinity, lo = Infinity, i;
     for (i = a; i <= b; i++) if (!isNaN(x.h[i])) { hi = Math.max(hi, x.h[i]); lo = Math.min(lo, x.l[i]); }
+    if (LAST.kind === "nh") { hi = Math.max(hi, r.r3); lo = Math.min(lo, r.stop); }
     var pad = (hi - lo) * 0.06 || hi * 0.02; hi += pad; lo -= pad;
     var Y = function(p){ return top + (hi - p) / (hi - lo) * pH; };
-    var C = { up: css("--up"), dn: css("--dn"), mu: css("--muted"), grid: css("--grid") || css("--line"), line: css("--line"), warn: css("--warn") || "#d97706" };
+    var C = { up: css("--up"), dn: css("--dn"), mu: css("--muted"), grid: css("--grid") || css("--line"), line: css("--line"), warn: css("--warn") || "#d97706", ok: css("--ok") || "#16a34a" };
     ctx.font = "11px -apple-system,'Malgun Gothic',sans-serif"; ctx.textBaseline = "middle"; ctx.lineWidth = 1;
     var raw = (hi - lo) / 5, mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), f = raw / mag, step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag;
     for (var p = Math.ceil(lo / step) * step; p <= hi; p += step) {
@@ -717,6 +809,19 @@ header .lnk,header .status{color:var(--hd-mu)}
       for (i = a; i <= b; i++) { if (i < 149) continue; var sm = 0, ok = true; for (var q = i - 149; q <= i; q++) { if (isNaN(x.c[q])) { ok = false; break; } sm += x.c[q]; }
         if (!ok) continue; if (!st) { ctx.moveTo(X(i), Y(sm / 150)); st = true; } else ctx.lineTo(X(i), Y(sm / 150)); }
       ctx.stroke(); ctx.lineWidth = 1;
+    }
+    // 60일선 · 직전 52주 고점 · 매매 계획(손절가 · 1R · 3R) — 신고가 검색일 때
+    if (LAST.kind === "nh") {
+      line(ctx, a, b, t, function(i){ return sma(x.c, i, NH.ma); }, X, Y, css("--ma60") || "#9B5DE5");
+      ctx.strokeStyle = C.mu; ctx.setLineDash([2, 3]); ctx.beginPath();
+      ctx.moveTo(Math.max(0, X(r.prev)), Y(r.prevHi)); ctx.lineTo(X(r.day), Y(r.prevHi)); ctx.stroke(); ctx.setLineDash([]);
+      if (r.prev >= a) { ctx.fillStyle = C.mu; ctx.beginPath(); ctx.arc(X(r.prev), Y(r.prevHi), 3.2, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = C.warn; ctx.beginPath(); ctx.arc(X(r.day), Y(x.c[r.day]), 3.6, 0, Math.PI * 2); ctx.fill();
+      [[r.stop, C.dn, "손절 "], [x.c[t], C.mu, "진입 "], [r.r1, C.ok, "1R "], [r.r3, C.up, "3R "]].forEach(function(L){
+        var yy = Math.round(Y(L[0])) + .5, x0 = X(t);
+        ctx.strokeStyle = L[1]; ctx.lineWidth = 1.2; ctx.setLineDash([5, 3]); ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(plotW, yy); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+        ctx.fillStyle = L[1]; ctx.textAlign = "right"; ctx.fillText(L[2] + num(L[0], PDEC), plotW - 4, yy - 7);
+      });
     }
     // 캔들 (기준일 이후는 흐리게)
     var bw = Math.max(1, Math.min(10, sw * 0.66));
@@ -743,6 +848,20 @@ header .lnk,header .status{color:var(--hd-mu)}
       var col = LAST.dir === "bull" ? C.up : C.dn, P = LAST.dir === "bull" ? x.l : x.h;
       seg(ctx, X(r.p1), Y(P[r.p1]), X(r.p2), Y(P[r.p2]), col);
       seg(ctx, X(r.p1), SY(r.r1), X(r.p2), SY(r.r2), col);
+    } else if (LAST.kind === "nh") {                     // 거래량 ÷ 20일 평균 막대 (2배 이상 빨강)
+      var vm = 3;
+      for (i = a; i <= b; i++) if (!isNaN(x.vr[i])) vm = Math.max(vm, x.vr[i]);
+      vm = Math.min(vm * 1.08, 6); var VY = sub(0, vm), vb = VY(0);
+      for (i = a; i <= b; i++) {
+        if (isNaN(x.vr[i])) continue;
+        var vy = VY(Math.min(x.vr[i], vm)); ctx.globalAlpha = i > t ? .35 : .85; ctx.fillStyle = x.vr[i] >= NH.volX ? C.up : C.mu;
+        ctx.fillRect(X(i) - bw / 2, vy, Math.max(1, bw), vb - vy);
+      }
+      ctx.globalAlpha = 1;
+      [1, NH.volX].forEach(function(lv){ var yy = Math.round(VY(lv)) + .5; ctx.strokeStyle = lv === 1 ? C.grid : C.up; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(plotW, yy); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = C.mu; ctx.textAlign = "left"; ctx.fillText(lv + "배", plotW + 6, yy); });
+      ctx.fillText("거래량", plotW + 6, subTop + 6);
+      if (!IDX.vr) { ctx.textAlign = "center"; ctx.fillText("거래량 데이터는 다음 업데이트부터 표시됩니다", plotW / 2, subTop + subH / 2); }
     } else {
       var ends = weekEnds(n - 1), m = mrsSeries(r.k, ends), mx = 0;
       for (var j = 0; j < ends.length; j++) if (ends[j] >= a && ends[j] <= b && !isNaN(m[j])) mx = Math.max(mx, Math.abs(m[j]));

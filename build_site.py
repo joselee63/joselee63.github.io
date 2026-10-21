@@ -713,11 +713,12 @@ def write_supply_data(data, sections, listing, build_id):
     return len(stocks)
 
 
-def write_similar_data(data, sections, build_id):
+def write_similar_data(data, sections, build_id, listing=None, exch=None):
     """
     유사 차트 찾기용 데이터 (site/similar/)
       · index.json : 시장 달력(기준 지수의 거래일) + 모든 종목의 종가(달력에 맞춤, 상장 전은 null) — 브라우저에서 패턴 비교
                      + 캔들 모양 cb·cu·cd = 몸통·윗꼬리·아랫꼬리 (전날 종가 대비, 0.1% 단위 정수) — 캔들 유사도용
+                     + vr = 거래량 ÷ 직전 20일 평균 거래량 (0.1배 단위 정수) · 종목별 b = 비교 지수 코드 — 종목 검색(52주 신고가)용
       · s/{코드}.json : 종목별 최근 SIM_OHLC_BARS 일봉 (기준 차트 그리기·구간 선택용)
       · 가격은 정수로 저장: 한국은 원, 미국은 센트(×100) — scale 로 되돌림
     """
@@ -729,7 +730,7 @@ def write_similar_data(data, sections, build_id):
     sdir = os.path.join(SITE_DIR, "similar", "s")
     os.makedirs(sdir, exist_ok=True)
     stocks, closes, seen = [], [], set()
-    cbody, cup, cdown = [], [], []
+    cbody, cup, cdown, vratio = [], [], [], []
     etf_codes = {c for s, it in sections if s in ETF_SECTIONS for c, _, _ in it}
     for s, it in sections:
         for c, nm, _ in it:
@@ -754,7 +755,12 @@ def write_similar_data(data, sections, build_id):
             q = lambda ser: [None if (pd.isna(v) or not ok) else int(max(-999, min(999, round(v * 1000))))
                              for v, ok in zip(ser.values, live)]
             cbody.append(q((col - o) / base)); cup.append(q((h - top_) / base)); cdown.append(q((bot_ - lo) / base))
-            stocks.append({"c": c, "n": nm, "s": s, "e": c in etf_codes, "i": c in INDEX_CODES})
+            vol = df["Volume"]
+            vr = (vol / vol.shift(1).rolling(20, min_periods=15).mean()).reindex(cal)
+            vratio.append([None if (pd.isna(v) or np.isinf(v) or not ok) else int(min(999, round(v * 10)))
+                           for v, ok in zip(vr.values, live)])
+            stocks.append({"c": c, "n": nm, "s": s, "e": c in etf_codes, "i": c in INDEX_CODES,
+                           "b": bench_of(c, listing, exch)})
             t = df.iloc[-SIM_OHLC_BARS:]
             rec = {"d": [int(x.strftime("%Y%m%d")) for x in t.index]}
             for k, cc in (("o", "Open"), ("h", "High"), ("l", "Low"), ("c", "Close")):
@@ -764,7 +770,7 @@ def write_similar_data(data, sections, build_id):
                 json.dump(rec, f, separators=(",", ":"))
     with open(os.path.join(SITE_DIR, "similar", "index.json"), "w", encoding="utf-8") as f:
         json.dump({"build": build_id, "scale": scale, "dates": [int(x.strftime("%Y%m%d")) for x in cal],
-                   "stocks": stocks, "close": closes, "cb": cbody, "cu": cup, "cd": cdown},
+                   "stocks": stocks, "close": closes, "cb": cbody, "cu": cup, "cd": cdown, "vr": vratio},
                   f, ensure_ascii=False, separators=(",", ":"))
     return len(stocks)
 
@@ -988,7 +994,7 @@ def main():
     open(os.path.join(SITE_DIR, ".nojekyll"), "w").close()
     if GAME_BARS:
         print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'], listing, exch)}개")
-        print(f"      유사 차트 종목 {write_similar_data(data, sections, meta['build_id'])}개")
+        print(f"      유사 차트 종목 {write_similar_data(data, sections, meta['build_id'], listing, exch)}개")
     if MARKET == "kr":
         print(f"      수급 오실레이터 종목 {write_supply_data(data, sections, listing, meta['build_id'])}개")
 
