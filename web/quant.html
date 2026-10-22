@@ -626,8 +626,10 @@ header .lnk,header .status{color:var(--hd-mu)}
         <div class="qi" id="cbinfo"></div>
         <canvas id="cbc" aria-label="종가베팅 계좌와 지수 누적 수익률 · 낙폭 차트"></canvas>
       </div>
-      <h3 style="margin:18px 0 8px;font-size:14px">연도별</h3>
-      <div class="qscroll"><table class="qtbl" id="cbyear"></table></div>
+      <div class="q2">
+        <div><h3>연도별 수익률 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">연도를 누르면 월별 수익률</span></h3><div class="qscroll"><table class="qtbl qyear" id="cbyear"></table></div></div>
+        <div><h3 id="cbmtitle">월별 수익률</h3><div class="mchart" id="cbmonth"></div></div>
+      </div>
       <h3 class="qlogh">매매 내역 <span class="c" id="cblogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
       <div class="qscroll"><table class="qtbl" id="cblog"></table></div>
       <button type="button" class="cbmore" id="cbmore" hidden>더 보기</button>
@@ -935,15 +937,22 @@ header .lnk,header .status{color:var(--hd-mu)}
     // 연도표
     $("cbyear").innerHTML = '<thead><tr><th class="l">연도</th><th>계좌</th><th>' + bname + "</th><th>매매일</th><th>밤당 평균</th><th>승률</th></tr></thead><tbody>" +
       yr.map(function(y, i){ var a = Y[y.k] || { n: 0, s: 0, w: 0 };
-        return '<tr><td class="l">' + y.k + (y.part ? '<span class="c">일부</span>' : "") + "</td><td>" + cpc(y.s) + "</td><td>" + cpc(y.b) + "</td><td>" + a.n + "</td><td>" + (a.n ? cpc(a.s / a.n, 2) : "-") + "</td><td>" + (a.n ? Math.round(a.w / a.n * 100) + "%" : "-") + "</td></tr>"; }).join("") + "</tbody>";
+        return '<tr data-y="' + y.k + '"><td class="l">' + y.k + (y.part ? '<span class="c">일부</span>' : "") + "</td><td>" + cpc(y.s) + "</td><td>" + cpc(y.b) + "</td><td>" + a.n + "</td><td>" + (a.n ? cpc(a.s / a.n, 2) : "-") + "</td><td>" + (a.n ? Math.round(a.w / a.n * 100) + "%" : "-") + "</td></tr>"; }).join("") + "</tbody>";
+    R.M = periodYears(R, 100); R.bname = bname;
+    var keepY = yr.filter(function(y){ return y.k === CBSELY; })[0];
+    cbMonthChart(keepY ? CBSELY : yr[yr.length - 1].k);
     cbLogTable();
     cbCandTable();
     cbDraw();
   }
-  function periodYears(R){                               // 연도별 계좌 · 지수 수익
+  var CBSELY = null;
+  $("cbyear").addEventListener("click", function(e){ var tr = e.target.closest("tr[data-y]"); if (tr) cbMonthChart(+tr.getAttribute("data-y")); });
+  function cbMonthChart(y){ if (!CBR || !CBR.M) return; CBSELY = y; renderMonths(CBR, y, "cbyear", "cbmtitle", "cbmonth"); }
+  function periodYears(R, div){                          // 연도별(div 10000) · 월별(div 100) 계좌 · 지수 수익
+    div = div || 10000;
     var out = [], ps = R.eq[0], pb = R.bq[0], n = R.dts.length;
     for (var i = 0; i < n; i++) {
-      var y = Math.floor(R.dts[i] / 10000), end = i === n - 1 || Math.floor(R.dts[i + 1] / 10000) !== y;
+      var y = Math.floor(R.dts[i] / div), end = i === n - 1 || Math.floor(R.dts[i + 1] / div) !== y;
       if (end) { out.push({ k: y, s: R.eq[i] / ps - 1, b: isFinite(R.bq[i]) && isFinite(pb) ? R.bq[i] / pb - 1 : NaN, part: !out.length || i === n - 1 }); ps = R.eq[i]; pb = R.bq[i]; }
     }
     return out;
@@ -1408,7 +1417,10 @@ header .lnk,header .status{color:var(--hd-mu)}
   function monthChart(y){                                // 선택한 연도의 월별 수익률 (전략 · 벤치마크 막대)
     var R = LAST; if (!R || !R.M) return;
     SELY = y;
-    [].forEach.call($("qyear").querySelectorAll("tr[data-y]"), function(tr){ tr.classList.toggle("sel", +tr.getAttribute("data-y") === y); });
+    renderMonths(R, y, "qyear", "qmtitle", "qmonth");
+  }
+  function renderMonths(R, y, tblId, titleId, boxId){    // R.M = [{k: yyyymm, s, b}] · R.bname
+    [].forEach.call($(tblId).querySelectorAll("tr[data-y]"), function(tr){ tr.classList.toggle("sel", +tr.getAttribute("data-y") === y); });
     var ms = R.M.filter(function(m){ return Math.floor(m.k / 100) === y; }), by = {};
     ms.forEach(function(m){ by[m.k % 100] = m; });
     var mx = 0.01; ms.forEach(function(m){ mx = Math.max(mx, Math.abs(m.s), Math.abs(m.b)); });
@@ -1416,14 +1428,14 @@ header .lnk,header .status{color:var(--hd-mu)}
       var h = Math.abs(v) / mx * 46; return '<i class="' + cls + '" style="height:' + h.toFixed(1) + "%;" + (v >= 0 ? "bottom:50%" : "top:50%") + '" title="' + pc(v) + '"></i>'; };
     var win = ms.filter(function(m){ return m.s > m.b; }).length;
     var tot = ms.reduce(function(a, m){ return a * (1 + m.s); }, 1) - 1, btot = ms.reduce(function(a, m){ return a * (1 + m.b); }, 1) - 1;
-    $("qmtitle").innerHTML = y + "년 월별 수익률 " + '<span class="c" style="font-weight:500;color:var(--muted);font-size:12px">전략 ' + pc(tot) + " · " + esc(R.bname) + " " + pc(btot) + " · 지수보다 나은 달 " + win + " / " + ms.length + "</span>";
+    $(titleId).innerHTML = y + "년 월별 수익률 " + '<span class="c" style="font-weight:500;color:var(--muted);font-size:12px">전략 ' + pc(tot) + " · " + esc(R.bname) + " " + pc(btot) + " · 지수보다 나은 달 " + win + " / " + ms.length + "</span>";
     var html = '<div class="mlegend"><span><i style="background:var(--dn)"></i>전략</span><span><i style="background:var(--muted)"></i>' + esc(R.bname) + "</span></div>" + '<div class="mgrid">';
     for (var m = 1; m <= 12; m++) {
       var d = by[m];
       html += '<div class="mcol' + (d ? "" : " empty") + '"><div class="mv" style="color:' + (d ? col(d.s) : "var(--muted)") + '">' + (d ? pc(d.s) : "") + "</div>" +
         '<div class="mbars">' + bar(d ? d.s : undefined, "ms") + bar(d ? d.b : undefined, "mb") + '</div><div class="mbv">' + (d ? pc(d.b) : "") + '</div><div class="mq">' + m + "월</div></div>";
     }
-    $("qmonth").innerHTML = html + "</div>";
+    $(boxId).innerHTML = html + "</div>";
   }
   function yearTable(Y, bname){
     $("qyear").innerHTML = '<thead><tr><th class="l">연도</th><th>전략</th><th>' + esc(bname) + "</th><th>차이</th></tr></thead><tbody>" +
