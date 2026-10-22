@@ -4,6 +4,8 @@
   ohlcv.npz      전 종목 수정주가 일봉 (2015~, 상폐 종목은 마지막 거래일까지 그대로 보관)
   universe.csv   KIND 현재 상장 ∪ 2015년 이후 상장폐지 (tools/backtest_data.py 와 같은 정의)
   index.csv      KOSPI(1001)·KOSDAQ(2001) 지수 일봉 (레짐 계산용)
+  frozen.txt     연구 데이터에서 일봉이 비어 있던 오래된 종목 — 연구 결과와 같게 하려고 계속 비워 둠 (pack 이 만듦)
+                 (2026-10 수집 때 015360~016100 구간 9종목(한국전력 등)이 빈 결과로 저장됨 → 넣으면 연구 수치가 바뀜)
 
 python tools/closebet/daily_data.py pack STORE          # 로컬 data-backtest/ → STORE (처음 한 번)
 python tools/closebet/daily_data.py update STORE        # KIND 목록 + 네이버 최근 봉 이어 붙이기
@@ -103,6 +105,11 @@ def load_store(store):
     return df, uni, ix
 
 
+def load_frozen(store):
+    f = Path(store) / "frozen.txt"
+    return set(f.read_text().split()) if f.exists() else set()
+
+
 def save_store(store, df, uni, ix):
     store = Path(store); store.mkdir(parents=True, exist_ok=True)
     df = df.sort_values(["ticker", "date"]).reset_index(drop=True)
@@ -124,6 +131,11 @@ def pack(store):
     ix = pd.read_csv(BT / "sectors/index_ohlcv.csv", dtype={"index_code": str}, parse_dates=["date"])
     ix = ix[ix["index_code"].isin(INDEX)]
     save_store(store, df.drop(columns=["change"]), uni, ix)
+    # 일봉이 없던 종목 중 상장 1년 반 넘은 것(=연구 기간 시세가 빠진 것)은 고정. 최근 상장은 300봉 전엔 패널에 안 들어가므로 계속 받음
+    cut = df["date"].max() - pd.Timedelta(days=550)
+    fz = uni[~uni["ticker"].isin(set(df["ticker"])) & (uni["listed_date"].isna() | (uni["listed_date"] < cut))]["ticker"]
+    (Path(store) / "frozen.txt").write_text(" ".join(sorted(fz)))
+    print(f"frozen {len(fz)}: {sorted(fz)}")
     print(f"pack: {len(df):,}행 · {df['ticker'].nunique():,}종목 · ~{df['date'].max():%Y-%m-%d} → {store}")
 
 
@@ -160,8 +172,10 @@ def update(store):
     # 2) 받을 종목: 지금 상장 + 최근까지 시세가 있던 종목(정리매매 마지막 봉)
     last = df.groupby("ticker")["date"].max()
     recent = set(last[last >= pd.Timestamp(now_kst().date()) - pd.Timedelta(days=KEEP_DELISTED_DAYS)].index)
-    todo = sorted(set(uni.loc[uni["is_listed_now"], "ticker"]) | recent)
+    frozen = load_frozen(store)
+    todo = sorted((set(uni.loc[uni["is_listed_now"], "ticker"]) | recent) - frozen)
     old = {t: g.reset_index(drop=True) for t, g in df[df["ticker"].isin(todo)].groupby("ticker", sort=False)}
+    print(f"고정(연구 데이터에 시세 없던 종목, 받지 않음) {len(frozen)}")
     print(f"받을 종목 {len(todo):,} (지금 상장 {int(uni['is_listed_now'].sum()):,} + 최근 시세 {len(recent - set(uni.loc[uni['is_listed_now'], 'ticker'])):,})")
 
     stat = {"same": 0, "append": 0, "refetch": 0, "new": 0, "empty": 0, "fail": 0}
