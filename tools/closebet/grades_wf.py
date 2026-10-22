@@ -19,7 +19,7 @@ import pandas as pd
 from cb import CB, load_panel, stats, line, nw_t
 
 sys.path.insert(0, str(CB.parent / "tools" / "alpha"))
-from common import load_alpha  # noqa: E402
+from common import BT, load_alpha  # noqa: E402
 
 P = load_panel()
 T, N = P.T, P.N
@@ -34,7 +34,7 @@ with np.errstate(invalid="ignore"):
 SIG_BUY = SIG_ALL & ~LOCK                                                 # 체결 가능
 
 # ---------------------------------------------------------------- 레짐
-ix = pd.read_csv(CB.parent / "data-backtest/sectors/index_ohlcv.csv", dtype={"index_code": str}, parse_dates=["date"])
+ix = pd.read_csv(BT / "sectors/index_ohlcv.csv", dtype={"index_code": str}, parse_dates=["date"])
 
 
 def idx(code):

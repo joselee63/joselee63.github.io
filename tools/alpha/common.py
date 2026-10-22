@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
-BT = ROOT / "data-backtest"
+BT = Path(os.environ.get("BACKTEST_DIR", ROOT / "data-backtest"))   # 매일 갱신(closebet.yml)·시험용으로 바꿀 수 있음
 ALPHA = Path(os.environ.get("ALPHA_DIR", ROOT / "data-alpha"))   # data 브랜치 alpha/ 를 받아 둔 곳
 COST_KR = 0.0025          # 왕복 (수수료+거래세+슬리피지)
 COST_KR_OLD = 0.002       # 기존 종가베팅 연구의 비용 가정 (비교용)

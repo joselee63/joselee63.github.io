@@ -963,7 +963,9 @@ header .lnk,header .status{color:var(--hd-mu)}
   function cbCandTable(){
     var c = CBR.c, t = CB.dates.length - 1, G = c.grade || c.sort === "grade" ? cbGrades(c.gn) : null, cs = cbCands(c, t, G);
     var RG = c.reg === "none" ? null : CB.reg[c.reg];
-    $("cbcandh").innerHTML = "데이터 마지막 날 후보 — " + ymd(CB.dates[t]) + ' <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">이 데이터는 연구용 스냅숏이라 매일 갱신되지 않습니다</span>';
+    var lag = Math.round((Date.now() - new Date(iso(CB.dates[t]) + "T18:00:00+09:00")) / 864e5);   // 기준일 저녁(갱신 시각) 이후 지난 날
+    $("cbcandh").innerHTML = "최근 후보 — 데이터 기준일 " + ymd(CB.dates[t]) + ' <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">평일 저녁(18:40 무렵) 장 마감 데이터로 자동 갱신 · 마감 종가로 고른 것이라 15:20 판단 때와 조금 다를 수 있음' +
+      (lag > 4 ? ' · <b style="color:var(--up)">갱신이 ' + lag + "일째 늦어지고 있음</b>" : "") + "</span>";
     if (RG && !RG[t]) { $("cbcand").innerHTML = '<tbody><tr><td class="l">레짐 꺼짐 (' + REGN[c.reg] + " 아님) — 이날은 매수하지 않음</td></tr></tbody>"; return; }
     if (!cs.length) { $("cbcand").innerHTML = '<tbody><tr><td class="l">조건을 통과한 종목 없음</td></tr></tbody>'; return; }
     $("cbcand").innerHTML = '<thead><tr><th class="l">순위</th><th class="l">종목</th><th>등락률</th><th>고가권</th><th>거래량</th><th>거래대금(20일)</th><th>시총</th><th>등급(백분위)</th><th>테마 연속</th></tr></thead><tbody>' +

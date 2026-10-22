@@ -1,0 +1,92 @@
+name: closebet-data
+
+# 퀀트 페이지 '종가베팅' 데이터 매일 갱신 — 상장폐지 포함 전 종목 일봉에 오늘 봉을 붙이고 closebet.json 을 새로 만듦
+#   저장 위치: 릴리스 'closebet-data' 첨부 파일 (매일 덮어써서 git 기록이 쌓이지 않음)
+#     ohlcv.npz · universe.csv · index.csv  ← tools/closebet/daily_data.py 의 일봉 저장소
+#     closebet.json · asof.txt              ← tools/closebet/export_web.py 결과 (daily.yml 이 받아 한국 사이트에 넣음)
+#   시총은 data 브랜치 alpha/cap (alpha-data.yml) — 신호 '전날' 시총만 쓰므로 오늘 시총이 아직 없어도 됨
+on:
+  schedule:
+    - cron: "37 18 * * 1-5"          # 평일 18:37 (시간외 단일가 18:00 종료 뒤 → 거래량 확정, daily.yml 21:07 보다 앞)
+      timezone: "Asia/Seoul"
+    - cron: "17 20 * * 1-5"          # 보조: 18:37 실행이 밀리거나 실패했을 때 (이미 오늘 것을 만들었으면 건너뜀)
+      timezone: "Asia/Seoul"
+  workflow_dispatch:                 # 수동 실행 → 항상 새로 만듦
+
+permissions:
+  contents: write                    # 릴리스 첨부 파일 올리기
+
+concurrency:
+  group: closebet-data
+  cancel-in-progress: false
+
+env:
+  TAG: closebet-data
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 오늘 것을 이미 만들었는지
+        id: chk
+        run: |
+          TODAY=$(TZ=Asia/Seoul date +%Y-%m-%d)
+          gh release download "$TAG" -p asof.txt -D chk 2>/dev/null || true
+          ASOF=$(cat chk/asof.txt 2>/dev/null || true)
+          echo "릴리스 기준일 '${ASOF}' · 오늘 ${TODAY}"
+          if [ "$ASOF" = "$TODAY" ] && [ "${{ github.event_name }}" = "schedule" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-python@v7
+        if: steps.chk.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 패키지 설치
+        if: steps.chk.outputs.skip != 'true'
+        run: pip install pandas numpy requests lxml
+
+      - name: 일봉 저장소 · 시총 받기
+        if: steps.chk.outputs.skip != 'true'
+        run: |
+          gh release download "$TAG" -p ohlcv.npz -p universe.csv -p index.csv -D store
+          git clone -q --depth 1 --filter=blob:none --sparse -b data \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" datadir
+          git -C datadir sparse-checkout set alpha/cap
+          ls -la store; ls datadir/alpha/cap | tail -3
+
+      - name: 일봉 갱신 (KIND 상장·폐지 목록 + 네이버 최근 봉)
+        if: steps.chk.outputs.skip != 'true'
+        run: python tools/closebet/daily_data.py update store
+
+      - name: 일봉 저장소 올리기
+        if: steps.chk.outputs.skip != 'true'
+        run: gh release upload "$TAG" store/ohlcv.npz store/universe.csv store/index.csv --clobber
+
+      - name: closebet.json 만들기 (연구와 같은 정의, 전 기간 다시 계산)
+        if: steps.chk.outputs.skip != 'true'
+        env:
+          ALPHA_DIR: ${{ github.workspace }}/datadir
+          ALPHA_CACHE: ${{ runner.temp }}/panel.pkl
+          CLOSEBET_OUT: ${{ github.workspace }}/out/closebet.json
+        run: |
+          python tools/closebet/daily_data.py materialize store
+          mkdir -p out
+          (cd tools/closebet && python -W ignore export_web.py)
+          python - <<'EOF'
+          import json
+          d = json.load(open("out/closebet.json", encoding="utf-8"))
+          n = len(d["rows"]["i"]); last = len(d["dates"]) - 1
+          today = sum(1 for i in d["rows"]["i"] if i == last)
+          print(f"asof {d['asof']} · 날짜 {len(d['dates'])} · 후보 행 {n:,} (마지막 날 {today}) · 종목 {len(d['stocks']):,}")
+          assert n > 390000 and len(d["stocks"]) > 2800, "결과가 너무 작음"
+          open("out/asof.txt", "w").write(d["asof"])
+          EOF
+
+      - name: closebet.json 올리기
+        if: steps.chk.outputs.skip != 'true'
+        run: gh release upload "$TAG" out/closebet.json out/asof.txt --clobber

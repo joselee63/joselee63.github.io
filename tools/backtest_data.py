@@ -107,6 +107,18 @@ def krx_snapshots():
     return pd.DataFrame(out, columns=["date", "ticker"])
 
 
+def merge_universe(listed, deli):
+    """KIND 현재 상장 ∪ 상장폐지 목록 → universe (tools/closebet/daily_data.py 도 같은 함수 사용)"""
+    listed = listed.copy()
+    listed["is_listed_now"] = True
+    deli = deli.sort_values("delisted_date").drop_duplicates("ticker", keep="last")
+    uni = listed.merge(deli, on="ticker", how="outer", suffixes=("", "_d"))
+    uni["name"] = uni["name"].fillna(uni["name_d"])
+    uni["market"] = uni["market"].fillna(uni["market_d"])
+    uni["is_listed_now"] = uni["is_listed_now"].eq(True)
+    return uni.drop(columns=["name_d", "market_d"])
+
+
 def build_universe():
     OUT.mkdir(exist_ok=True)
     listed = kind_listed()
@@ -116,13 +128,7 @@ def build_universe():
     print(f"KIND 2015년 이후 상장폐지: {len(deli)}")
     snaps = krx_snapshots()
 
-    listed["is_listed_now"] = True
-    deli = deli.sort_values("delisted_date").drop_duplicates("ticker", keep="last")
-    uni = listed.merge(deli, on="ticker", how="outer", suffixes=("", "_d"))
-    uni["name"] = uni["name"].fillna(uni["name_d"])
-    uni["market"] = uni["market"].fillna(uni["market_d"])
-    uni["is_listed_now"] = uni["is_listed_now"].eq(True)
-    uni = uni.drop(columns=["name_d", "market_d"])
+    uni = merge_universe(listed, deli)
     if snaps is not None:
         snaps.to_csv(OUT / "snapshots_krx.csv", index=False)
         extra = sorted(set(snaps["ticker"]) - set(uni["ticker"]))
@@ -170,6 +176,16 @@ def fetch_ohlcv(tickers, end=None):
 COLS = {"시가": "open", "고가": "high", "저가": "low", "종가": "close", "거래량": "volume", "등락률": "change"}
 
 
+def listing_periods(uni, periods, last_day):
+    """uni + 티커별 first_date/last_date/n_bars → listing_periods (Panel 이 delisted_in_data·code_reused_or_moved 를 씀)"""
+    per = uni.merge(periods, on="ticker", how="left")
+    per["has_data"] = per["n_bars"].fillna(0) > 0
+    # 폐지일 이후에도 시세가 이어지면: 이전상장(같은 코드 유지) 또는 코드 재사용 → 폐지로 보지 않음
+    per["delisted_in_data"] = per["has_data"] & (per["last_date"] < last_day - pd.Timedelta(days=10))
+    per["code_reused_or_moved"] = per["delisted_date"].notna() & (per["last_date"] > per["delisted_date"] + pd.Timedelta(days=10))
+    return per
+
+
 def build_outputs():
     uni = pd.read_csv(OUT / "universe.csv", dtype={"ticker": str},
                       parse_dates=["listed_date", "delisted_date"])
@@ -194,12 +210,8 @@ def build_outputs():
     allpx["ticker"] = allpx["ticker"].astype("category")
     allpx.to_pickle(OUT / "ohlcv_all.pkl")
 
-    per = uni.merge(pd.DataFrame(periods), on="ticker", how="left")
     last_day = allpx["date"].max()
-    per["has_data"] = per["n_bars"].fillna(0) > 0
-    # 폐지일 이후에도 시세가 이어지면: 이전상장(같은 코드 유지) 또는 코드 재사용 → 폐지로 보지 않음
-    per["delisted_in_data"] = per["has_data"] & (per["last_date"] < last_day - pd.Timedelta(days=10))
-    per["code_reused_or_moved"] = per["delisted_date"].notna() & (per["last_date"] > per["delisted_date"] + pd.Timedelta(days=10))
+    per = listing_periods(uni, pd.DataFrame(periods), last_day)
     per.to_csv(OUT / "listing_periods.csv", index=False, encoding="utf-8-sig")
 
     dates = pd.DatetimeIndex(sorted(allpx["date"].unique()))

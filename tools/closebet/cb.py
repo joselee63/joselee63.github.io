@@ -16,7 +16,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "alpha"))
-from common import (COST_KR, load_panel, overnight_pool, nw_t, roll)  # noqa: E402,F401
+from common import (BT, COST_KR, load_panel, overnight_pool, nw_t, roll)  # noqa: E402,F401
 
 CB = ROOT / "data-closebet"
 
@@ -136,7 +136,7 @@ def macro_frame(P):
 # ------------------------------------------------------------------ 시장(날짜) 특성
 def market_frame(P):
     """t일 장 마감 기준 시장 특성 (모두 t일 종가 근사 = 15:20 시점에 관찰 가능한 값)"""
-    ix = pd.read_csv(ROOT / "data-backtest/sectors/index_ohlcv.csv", dtype={"index_code": str}, parse_dates=["date"])
+    ix = pd.read_csv(BT / "sectors/index_ohlcv.csv", dtype={"index_code": str}, parse_dates=["date"])
     out = pd.DataFrame(index=P.dates)
     for code, nm in (("1001", "ks"), ("2001", "kq")):
         x = ix[ix["index_code"] == code].set_index("date").reindex(P.dates)
@@ -231,7 +231,7 @@ def stock_features(P, df):
 # ------------------------------------------------------------------ 업종(테마) 동반 강세
 def sector_map(P):
     """분기 스냅샷 업종 → 날짜×종목 업종코드 (직전 스냅샷 기준; 2016-01 이전은 첫 스냅샷 사용)"""
-    cl = pd.read_csv(ROOT / "data-backtest/sectors/classifications.csv", dtype=str)
+    cl = pd.read_csv(BT / "sectors/classifications.csv", dtype=str)
     cl["date"] = pd.to_datetime(cl["date"])
     cl["key"] = cl["market"] + ":" + cl["sector"]
     codes = {k: n for n, k in enumerate(sorted(cl["key"].unique()))}

@@ -42,13 +42,22 @@ jobs:
           ref: data
           path: invdata
 
+      - name: 종가베팅 데이터 가져오기 (closebet.yml 이 매일 만드는 릴리스 closebet-data 의 closebet.json)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download closebet-data -p closebet.json -D cbnew
+
       - name: 배포된 기준일 읽기
         id: prev
         run: |
           ref() { [ -f "$1" ] && grep -o '"ref_date": *"[0-9-]*"' "$1" | head -1 | grep -o '[0-9-]\{10\}' || true; }
+          cbref() { [ -f "$1" ] && head -c 300 "$1" | grep -o '"asof":"[0-9-]*"' | grep -o '[0-9-]\{10\}' || true; }
           echo "kr=$(ref prev/data/summary.js)" >> "$GITHUB_OUTPUT"
           echo "us=$(ref prev/us/data/summary.js)" >> "$GITHUB_OUTPUT"
-          echo "배포된 기준일 — 한국 $(ref prev/data/summary.js) · 미국 $(ref prev/us/data/summary.js)"
+          echo "cb=$(cbref prev/closebet.json)" >> "$GITHUB_OUTPUT"
+          echo "cbnew=$(cbref cbnew/closebet.json)" >> "$GITHUB_OUTPUT"
+          echo "배포된 기준일 — 한국 $(ref prev/data/summary.js) · 미국 $(ref prev/us/data/summary.js) · 종가베팅 $(cbref prev/closebet.json) (새 데이터 $(cbref cbnew/closebet.json))"
 
       - uses: actions/setup-python@v7
         with:
@@ -84,9 +93,12 @@ jobs:
           KR_OK=0; US_OK=0
           built "${{ steps.kr.outcome }}" "${{ steps.kr.outputs.skip }}" && KR_OK=1
           built "${{ steps.us.outcome }}" "${{ steps.us.outputs.skip }}" && US_OK=1
+          CB_PREV="${{ steps.prev.outputs.cb }}"; CB_NEW="${{ steps.prev.outputs.cbnew }}"
+          CB_FRESH=0; [ -n "$CB_NEW" ] && [[ "$CB_NEW" > "$CB_PREV" ]] && CB_FRESH=1
           if [ $KR_OK = 0 ] && [ $US_OK = 0 ]; then
             if [ "${{ steps.kr.outcome }}" != "success" ] && [ "${{ steps.us.outcome }}" != "success" ]; then echo "두 시장 모두 빌드 실패"; exit 1; fi
-            echo "두 시장 모두 새 데이터 없음 — 기존 페이지 유지"; echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0
+            if [ $CB_FRESH = 0 ]; then echo "두 시장 모두 새 데이터 없음 — 기존 페이지 유지"; echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+            echo "두 시장 차트는 새 데이터 없음 · 종가베팅 데이터만 새로 나옴 ($CB_PREV → $CB_NEW) → 이전 페이지에 새 closebet.json 만 바꿔 배포"
           fi
           mkdir -p site
           if [ $KR_OK = 0 ]; then
@@ -100,13 +112,20 @@ jobs:
             [ -d prev/us ] && cp -r prev/us site/us
             [ "${{ steps.us.outcome }}" = "success" ] && echo "미국: 새 데이터 없음 → 이전 페이지 유지" || echo "::warning::미국 빌드 실패 → 이전 페이지 유지"
           fi
+          # 종가베팅: 릴리스의 최신 closebet.json 이 사이트에 있는 것보다 새것이면 교체 (main 의 web/closebet.json 은 연구 시점 스냅숏)
+          SITE_CB=$(head -c 300 site/closebet.json 2>/dev/null | grep -o '"asof":"[0-9-]*"' | grep -o '[0-9-]\{10\}' || true)
+          if [ -n "$CB_NEW" ] && ! [[ "$CB_NEW" < "$SITE_CB" ]]; then
+            cp cbnew/closebet.json site/closebet.json; echo "종가베팅 데이터 $CB_NEW 반영"
+          else
+            echo "::warning::종가베팅 새 데이터 없음 → 사이트의 closebet.json(${SITE_CB:-없음}) 유지"
+          fi
           echo "deploy=true" >> "$GITHUB_OUTPUT"
 
       - name: gh-pages 브랜치에 배포
         if: steps.merge.outputs.deploy == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REF_DATE: "kr ${{ steps.kr.outputs.ref_date }} · us ${{ steps.us.outputs.ref_date }}"
+          REF_DATE: "kr ${{ steps.kr.outputs.ref_date }} · us ${{ steps.us.outputs.ref_date }} · cb ${{ steps.prev.outputs.cbnew }}"
         run: |
           cd site
           git init -q -b gh-pages

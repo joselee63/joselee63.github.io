@@ -1,5 +1,6 @@
-"""퀀트 페이지 '종가베팅' 백테스트용 데이터 → web/closebet.json  (한국만, 정적 스냅숏)
-python tools/closebet/export_web.py
+"""퀀트 페이지 '종가베팅' 백테스트용 데이터 → web/closebet.json  (한국만)
+python tools/closebet/export_web.py   (CLOSEBET_OUT 으로 출력 경로, BACKTEST_DIR 로 일봉 폴더 변경 가능)
+매일 갱신: .github/workflows/closebet.yml (daily_data.py update → materialize → 이 스크립트 → 릴리스 closebet-data → daily.yml 이 사이트에 넣음)
 
 무편향 일봉(상장폐지 포함, data-backtest/)에서 '후보가 될 수 있는 행'만 뽑아 브라우저가 조건을 바꿔 가며 백테스트할 수 있게 함.
   후보 행(마지막 날은 수익 null): 당일 +3% 이상 · 체결 가능(+28.5% 미만) · 상장 60일+ · 20일 평균 거래대금 10억+ · 청산 수익을 알 수 있음
@@ -10,12 +11,14 @@ python tools/closebet/export_web.py
 large_cap.py 의 정의(RET·THEME·MC1·G.yearly_grades)를 그대로 가져다 씀 → 페이지 결과가 연구 표와 같아야 함.
 """
 import json
+import os
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import large_cap as L
 
 P, G, T, N = L.P, L.G, L.T, L.N
-OUT = L.CB.parent / "web" / "closebet.json"
+OUT = Path(os.environ.get("CLOSEBET_OUT", L.CB.parent / "web" / "closebet.json"))
 
 with np.errstate(invalid="ignore", divide="ignore"):
     VM = P.v / P.v20
