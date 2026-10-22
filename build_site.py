@@ -730,6 +730,43 @@ def write_supply_data(data, sections, listing, build_id):
     return len(stocks)
 
 
+def flow_rank(cal):
+    """외국인·기관 수급 순위 (한국만) — 비가격 연구(docs/alpha-research.md §3.1)의 채택 필터와 같은 정의.
+      · 강도 = 직전 40거래일 (외국인 + 기타외국인 + 기관계) 순매수 합 ÷ 시가총액, 그날 매수 전에 알 수 있게 하루 늦춤(t−1까지)
+      · 순위 = 그날 20일 평균 거래대금 10억 원 이상인 '전 종목' 중 백분위 (0~100, 100이 가장 강함)
+      · 원본: data 브랜치 alpha/flows (투자자별 순매수, 전 종목) · alpha/cap (시총·거래대금) — alpha-data 워크플로가 평일 20:47 수집
+    → {코드: pd.Series(백분위, index=cal)} · 데이터가 없으면 {}"""
+    import glob
+    adir = os.environ.get("ALPHA_DIR") or os.path.join(os.path.dirname(os.environ.get("INVESTOR_DIR", "").rstrip("/\\")), "alpha")
+    if MARKET != "kr" or not os.path.isdir(os.path.join(adir, "flows")):
+        return {}
+    y0 = cal[0].year - 1
+    def read(kind, cols):
+        fs = [f for f in sorted(glob.glob(os.path.join(adir, kind, "*", "*.csv.gz"))) if int(os.path.basename(f)[:4]) >= y0]
+        return pd.concat([pd.read_csv(f, usecols=cols, dtype={"ticker": str}) for f in fs], ignore_index=True) if fs else None
+    fl = read("flows", ["date", "ticker", "frg_nv", "frg2_nv", "inst_nv"])
+    cp = read("cap", ["date", "ticker", "mcap", "value"])
+    if fl is None or cp is None:
+        return {}
+    fl["fpi"] = fl["frg_nv"].fillna(0) + fl["frg2_nv"].fillna(0) + fl["inst_nv"].fillna(0)
+    F = fl.pivot_table(index="date", columns="ticker", values="fpi", aggfunc="last")
+    MC = cp.pivot_table(index="date", columns="ticker", values="mcap", aggfunc="last").reindex(index=F.index, columns=F.columns)
+    VAL = cp.pivot_table(index="date", columns="ticker", values="value", aggfunc="last").reindex(index=F.index, columns=F.columns)
+    raw = (F.rolling(40, min_periods=40).sum() / MC.where(MC > 0)).to_numpy()
+    liqm = (VAL.rolling(20, min_periods=15).mean() >= 1e9).to_numpy()
+    fd = pd.to_datetime(F.index.astype(str), format="%Y%m%d")
+    prev = fd.searchsorted(cal, side="left") - 1          # 그날보다 앞선 마지막 수급일 (t−1까지 — 오늘 수급이 아직 없어도 계산됨)
+    upto = fd.searchsorted(cal, side="right") - 1         # 그날까지의 마지막 거래대금일
+    X = np.full((len(cal), F.shape[1]), np.nan); L = np.zeros((len(cal), F.shape[1]), bool)
+    okp = (prev >= 0) & ((cal - fd[np.clip(prev, 0, None)]).days <= 7)   # 일주일 넘게 끊긴 데이터는 쓰지 않음
+    X[okp] = raw[prev[okp]]
+    oku = upto >= 0
+    L[oku] = liqm[upto[oku]]
+    rk = pd.DataFrame(np.where(L, X, np.nan), index=cal, columns=F.columns).rank(axis=1, pct=True) * 100
+    print(f"      수급 순위(외+기 40일): {rk.notna().any().sum()}개 종목 · {rk.index[rk.notna().any(axis=1)].min():%Y-%m-%d}~")
+    return {c: rk[c] for c in rk.columns}
+
+
 def write_similar_data(data, sections, build_id, listing=None, exch=None):
     """
     유사 차트 찾기용 데이터 (site/similar/)
@@ -748,6 +785,7 @@ def write_similar_data(data, sections, build_id, listing=None, exch=None):
     os.makedirs(sdir, exist_ok=True)
     stocks, closes, seen = [], [], set()
     cbody, cup, cdown, vratio = [], [], [], []
+    FR = flow_rank(cal); franks = []
     etf_codes = {c for s, it in sections if s in ETF_SECTIONS for c, _, _ in it}
     for s, it in sections:
         for c, nm, _ in it:
@@ -776,6 +814,9 @@ def write_similar_data(data, sections, build_id, listing=None, exch=None):
             vr = (vol / vol.shift(1).rolling(20, min_periods=15).mean()).reindex(cal)
             vratio.append([None if (pd.isna(v) or np.isinf(v) or not ok) else int(min(999, round(v * 10)))
                            for v, ok in zip(vr.values, live)])
+            if FR:
+                fr = FR.get(c)
+                franks.append([None] * len(cal) if fr is None else [None if pd.isna(v) else int(round(v)) for v in fr.values])
             stocks.append({"c": c, "n": nm, "s": s, "e": c in etf_codes, "i": c in INDEX_CODES,
                            "b": bench_of(c, listing, exch)})
             t = df.iloc[-SIM_OHLC_BARS:]
@@ -787,7 +828,8 @@ def write_similar_data(data, sections, build_id, listing=None, exch=None):
                 json.dump(rec, f, separators=(",", ":"))
     with open(os.path.join(SITE_DIR, "similar", "index.json"), "w", encoding="utf-8") as f:
         json.dump({"build": build_id, "scale": scale, "dates": [int(x.strftime("%Y%m%d")) for x in cal],
-                   "stocks": stocks, "close": closes, "cb": cbody, "cu": cup, "cd": cdown, "vr": vratio},
+                   "stocks": stocks, "close": closes, "cb": cbody, "cu": cup, "cd": cdown, "vr": vratio,
+                   **({"fr": franks} if FR else {})},
                   f, ensure_ascii=False, separators=(",", ":"))
     return len(stocks)
 

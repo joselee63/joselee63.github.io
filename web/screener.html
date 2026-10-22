@@ -439,6 +439,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         <label><input type="checkbox" id="knhvol"> 거래량 20일 평균의 2배 이상만</label>
         <label><input type="checkbox" id="knhfresh"> 신선한 신고가만 (직전 고점 후 40일 이상)</label>
         <label><input type="checkbox" id="knhmkt"> 시장 필터 (비교 지수가 60일선 위)</label>
+        <label title="직전 40거래일 외국인+기관 순매수 ÷ 시가총액이 그날 거래대금 10억+ 전 종목 중 상위 30% — 비가격 연구 채택 필터"><input type="checkbox" id="knhflow"> 외국인·기관 수급 상위 30%만</label>
       </div>
       <div class="krow">
         <label><input type="checkbox" id="ketf"> 지수·ETF 포함</label>
@@ -475,6 +476,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   var NH = { hiN: 252, ma: 60, maLook: 10, fresh: 40, volX: 2, volLook: 60, stopBase: 0.09,
              volRef: MKT.market === "kr" ? 0.032 : 0.024, stopMin: 0.05, stopMax: 0.18, risk: 0.02, targetR: 3 };
   var BENCH_NM = { KOSPI: "코스피", KOSDAQ: "코스닥", SPX: "S&P 500", IXIC: "나스닥" };
+  var HAS_FR = false, FLOW_TOP = 70;                       // 수급 순위(백분위) 70 이상 = 상위 30%
 
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -503,11 +505,15 @@ header .lnk,header .status{color:var(--hd-mu)}
       }
       var vr = new Float64Array(n).fill(NaN);
       if (d.vr) for (i = 0; i < n; i++) { var vv = d.vr[k][i]; if (vv !== null && vv !== undefined) vr[i] = vv / 10; }
-      D.push({ c: c, o: o, h: h, l: l, rsi: rsi(c), vr: vr });
+      var fr = new Float64Array(n).fill(NaN);
+      if (d.fr) for (i = 0; i < n; i++) { var fv = d.fr[k][i]; if (fv !== null && fv !== undefined) fr[i] = fv; }
+      D.push({ c: c, o: o, h: h, l: l, rsi: rsi(c), vr: vr, fr: fr });
     }
     WK = weeks(d.dates);
     if (MKT.market === "kr") $("knhvol").checked = true; else $("knhfresh").checked = true;   // 백테스트 최적 조건
     if (!d.vr) { $("knhvol").checked = false; $("knhvol").disabled = true; }
+    HAS_FR = !!d.fr;
+    if (!HAS_FR) { $("knhflow").checked = false; $("knhflow").disabled = true; $("knhflow").parentNode.style.display = "none"; }
     var last = d.dates[n - 1];
     $("kdate").min = iso(d.dates[0]); $("kdate").max = iso(last); $("kdate").value = iso(last);
     noteDate(); desc();
@@ -546,7 +552,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         "② 종가가 직전 " + (NH.hiN - 1) + "거래일 종가보다 높음 (52주 신고가). 직전 고점 후 " + NH.fresh + "일 이상 지나 나온 신고가는 '신선'. " +
         "거래량 배수 = 그날 거래량 ÷ 직전 20일 평균. 손절폭 = 9% × √(60일 일간 변동성 ÷ " + NH.volRef + "), " + NH.stopMin * 100 + "~" + NH.stopMax * 100 + "% · " +
         "1R = 진입가 + 손절폭 (같은 수량 불타기) · 3R = 목표가 (1/3 매도) · 2%룰 비중 = 계좌 2% ÷ 손절폭. 진입가는 신고가 당일 종가 (추세·변동성·시장 필터도 그날 기준, 1주·1달 후 수익률도 그날부터). " +
-        (MKT.market === "kr" ? "5년 백테스트 최적: 추세 + 신고가 + 거래량 2배 (매매당 평균 +2.65%)." : "5년 백테스트 최적: 추세 + 40~60일 만의 신고가 (매매당 평균 +2.6~2.7%).") +
+        (MKT.market === "kr" ? "검증(상장폐지 포함 전 종목 12년): 추세 + 신고가 + 거래량 2배 + 시장 필터는 매매당 +0.4~0.6%, 여기에 '외국인·기관 수급 상위 30%'(직전 40일 외+기 순매수 ÷ 시총, 거래대금 10억+ 전 종목 중 순위)를 더하면 +0.71%. 가격만 강하고 수급이 약한 돌파는 엣지가 없었습니다." : "백테스트(사이트 종목, 생존편향 있음): 추세 + 40~60일 만의 신고가가 가장 좋았습니다.") +
         " 비교 지수가 60일선 아래인 하락장에서는 손실이 컸으므로 시장 필터를 권합니다.";
       return;
     }
@@ -672,8 +678,10 @@ header .lnk,header .status{color:var(--hd-mu)}
     if ($("knhvol").checked && !(vr >= NH.volX)) return null;
     var bc = benchOf(k), mok = mktUp(bc, day);
     if ($("knhmkt").checked && mok === false) return null;
+    var fr = D[k].fr ? D[k].fr[day] : NaN;
+    if ($("knhflow").checked && !(fr >= FLOW_TOP)) return null;
     var sd = dailyVol(c, day), sp = Math.max(NH.stopMin, Math.min(NH.stopMax, isNaN(sd) ? NH.stopBase : NH.stopBase * Math.sqrt(sd / NH.volRef)));
-    return { at: day, px: px, day: day, prev: prev, prevHi: prevHi, gap: gap, vr: vr, dma: px / m - 1, bench: bc, mok: mok, sd: sd, sp: sp,
+    return { at: day, px: px, day: day, prev: prev, prevHi: prevHi, gap: gap, vr: vr, fr: fr, dma: px / m - 1, bench: bc, mok: mok, sd: sd, sp: sp,
              stop: px * (1 - sp), r1: px * (1 + sp), r3: px * (1 + NH.targetR * sp), w: Math.min(1, NH.risk / sp) };
   }
 
@@ -687,9 +695,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     ] : [
       ["nm", "종목", "l"], ["sec", "섹션", "l"], ["px", "진입가"]
     ].concat(LAST.days > 1 ? [["day", "신고가일"]] : []).concat([
-      ["gap", "직전 고점 후"], ["vr", "거래량"], ["dma", "60일선 대비"], ["mk", "지수 60일선", "l"],
+      ["gap", "직전 고점 후"], ["vr", "거래량"]].concat(HAS_FR ? [["fr", "수급(40일)"]] : []).concat([["dma", "60일선 대비"], ["mk", "지수 60일선", "l"],
       ["sp", "손절폭"], ["stop", "손절가"], ["r1", "1R 불타기"], ["r3", "3R 목표"], ["w", "2%룰 비중"], ["r5", "1주 후"], ["r21", "1달 후"]
-    ]);
+    ]));
   }
   function val(r, key){
     var s = IDX.stocks[r.k];
@@ -697,7 +705,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       case "nm": return s.n; case "sec": return s.s; case "px": return r.px !== undefined ? r.px : D[r.k].c[LAST.t];
       case "p2": return r.p2; case "pchg": return r.pchg; case "rr": return r.r2 - r.r1; case "str": return r.str; case "r0": return r.rsi;
       case "mrs": return r.mrs; case "cross": return r.cross; case "st": return r.stage2 ? 1 : 0;
-      case "day": return r.day; case "gap": return r.gap; case "vr": return r.vr; case "dma": return r.dma;
+      case "day": return r.day; case "gap": return r.gap; case "vr": return r.vr; case "fr": return r.fr; case "dma": return r.dma;
       case "mk": return r.mok === null ? null : r.mok ? 1 : 0; case "sp": return r.sp; case "stop": return r.stop;
       case "r1": return r.r1; case "r3": return r.r3; case "w": return r.w;
       case "r5": return r.ret[0]; case "r21": return r.ret[1];
@@ -737,6 +745,8 @@ header .lnk,header .status{color:var(--hd-mu)}
           case "day": h = ymd(IDX.dates[x]).slice(2) + ' <span style="color:var(--muted)">(' + (t - x ? t - x + "일 전" : "기준일") + ")</span>"; break;
           case "gap": h = num(x) + "일" + (x >= NH.fresh ? ' <span class="chip fresh">신선</span>' : ""); break;
           case "vr": h = isNaN(x) ? '<span style="color:var(--muted)">-</span>' : x >= NH.volX ? '<span class="chip up">' + num(x, 1) + "배</span>" : num(x, 1) + "배"; break;
+          case "fr": h = isNaN(x) ? '<span style="color:var(--muted)" title="거래대금 10억 미만 또는 데이터 없음">-</span>'
+                       : x >= FLOW_TOP ? '<span class="chip up">상위 ' + Math.max(1, Math.round(100 - x)) + "%</span>" : '<span style="color:var(--muted)">상위 ' + Math.max(1, Math.round(100 - x)) + "%</span>"; break;
           case "dma": h = pc(x); break;
           case "mk": h = (x === null ? '<span style="color:var(--muted)">-</span>' : x ? '<span style="color:var(--ok);font-weight:700">✓</span>' : '<span style="color:var(--up);font-weight:700">✕</span>') +
                      ' <span style="color:var(--muted)">' + esc(BENCH_NM[r.bench] || r.bench) + "</span>"; break;
