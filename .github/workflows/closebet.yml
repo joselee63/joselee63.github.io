@@ -48,7 +48,7 @@ jobs:
 
       - name: 패키지 설치
         if: steps.chk.outputs.skip != 'true'
-        run: pip install pandas numpy requests lxml
+        run: pip install "pandas==2.3.3" "numpy==2.5.4" requests lxml   # 로컬 연구 환경과 같은 버전 (pandas 3 은 to_numpy 가 읽기 전용이라 Panel 이 깨짐)
 
       - name: 일봉 저장소 · 시총 받기
         if: steps.chk.outputs.skip != 'true'
