@@ -368,6 +368,14 @@ header .lnk,header .status{color:var(--hd-mu)}
 .qbox .qgrid{margin:0}
 .qbox h3{margin:0 0 10px;font-size:13px;font-weight:700}
 .qbox[hidden],.qf[hidden]{display:none}
+.cbpre{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.cbpre button{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--card);color:inherit;border-radius:999px;padding:6px 12px;cursor:pointer}
+.cbpre button:hover{border-color:var(--hoverline)}
+.cbpre button b{font-weight:700}
+.cbnote{font-size:12.5px;color:var(--muted);line-height:1.6;margin:8px 0 0}
+#cbc{width:100%;height:340px;display:block}
+.cbmore{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--card);color:inherit;border-radius:9px;padding:6px 12px;cursor:pointer;margin-top:8px}
+[hidden]{display:none !important}
 .qmetrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:16px}
 .qm{background:var(--soft);border-radius:12px;padding:10px 12px}
 .qm span{display:block;font-size:12px;color:var(--muted)}
@@ -479,6 +487,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         <div class="seg" id="qstrat">
           <button type="button" class="on" data-s="dual">듀얼 모멘텀</button>
           <button type="button" data-s="nh">52주 신고가</button>
+          <button type="button" data-s="cb" id="qstrat-cb">종가베팅</button>
           <button type="button" disabled title="준비 중">밸류 (준비 중)</button>
           <button type="button" disabled title="준비 중">저변동성 (준비 중)</button>
         </div>
@@ -518,7 +527,47 @@ header .lnk,header .status{color:var(--hd-mu)}
             <div class="line"><select id="nhsort" style="max-width:100%"></select></div><span class="kdesc" id="nhsortdesc"></span></div>
         </div>
       </div>
-      <div class="qgrid">
+      <div id="box-cb" hidden>
+        <p class="cbnote" style="margin:0 0 10px">종가 무렵(15:20) 조건에 맞는 종목을 사서 <b>다음 날 시가(동시호가)에 전량 매도</b>하는 하룻밤 전략입니다.
+          대상은 이 사이트 종목이 아니라 <b>상장폐지 종목까지 포함한 코스피·코스닥 전 종목</b>(2015~)이라 생존 편향이 없고, 연구 보고서(docs/closing-bet-research.md)와 같은 데이터·같은 계산입니다.
+          거래정지는 재개 후 첫 시가, 상장폐지는 마지막 종가로 청산해 손실을 그대로 반영합니다.</p>
+        <div class="cbpre" id="cbpre">
+          <button type="button" data-p="large"><b>대형주 · 등급</b> (연구 추천: 시총 5천억·거래대금 300억)</button>
+          <button type="button" data-p="final"><b>전 종목 개선 규칙</b> (종가=고가→테마→등락률)</button>
+          <button type="button" data-p="base"><b>기준선</b> (+3%·거래량 2배·고가권·코스피 60일선)</button>
+        </div>
+        <div class="qbox">
+          <h3>종목 조건 — 매수일(신호일) 기준으로 그때 알 수 있는 값만 사용</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">시가총액 (신호 전날)</span><div class="line"><input type="number" id="cbmc" min="0" step="500" value="5000" style="width:90px"><span>억 원 이상</span></div></div>
+            <div class="qf"><span class="lbl">20일 평균 거래대금</span><div class="line"><input type="number" id="cbtv" min="10" step="10" value="300" style="width:90px"><span>억 원 이상 (최소 10억)</span></div></div>
+            <div class="qf"><span class="lbl">당일 상승률</span><div class="line"><input type="number" id="cbd" min="3" max="25" step="0.5" value="3"><span>% 이상 ·</span><select id="cbdx"><option value="2850" selected>상한가 잠김만 제외 (+28.5% 미만)</option><option value="2500">+25% 이상 제외</option><option value="2000">+20% 이상 제외</option></select></div></div>
+            <div class="qf"><span class="lbl">거래량 (20일 평균 대비)</span><div class="line"><label><input type="checkbox" id="cbvon"> 사용</label><input type="number" id="cbv" min="1" max="20" step="0.5" value="2"><span>배 이상</span></div></div>
+            <div class="qf"><span class="lbl">고가권 마감 (저가 0 ~ 고가 1)</span><div class="line"><label><input type="checkbox" id="cbpon"> 사용</label><input type="number" id="cbp" min="0" max="1" step="0.05" value="0.7"><span>이상</span></div></div>
+            <div class="qf"><span class="lbl">기타 제외</span><div class="line"><label title="장중 +28.5% 이상(상한가 근처)까지 갔다가 밀린 종목"><input type="checkbox" id="cblt"> 상한가 터치 후 풀린 종목</label><label><input type="checkbox" id="cbold"> 상장 1년 미만</label></div></div>
+          </div>
+        </div>
+        <div class="qbox">
+          <h3>필터 · 선별</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">레짐 (시장 필터 — 꺼지면 그날은 쉼)</span><div class="line"><select id="cbreg">
+              <option value="kq20" selected>코스닥 지수 &gt; 20일선</option><option value="ks60">코스피 지수 &gt; 60일선</option><option value="old">이전 체계 — 지수 밤갭 평균 &gt; 0</option><option value="none">사용 안 함</option></select></div></div>
+            <div class="qf"><span class="lbl">종목 랭킹(등급) — 과거 '+3% 마감 다음 날 시가' 평균 수익의 백분위</span><div class="line"><label><input type="checkbox" id="cbg" checked> 사용 ·</label><span>상위</span><input type="number" id="cbgt" min="5" max="100" step="5" value="20"><span>% 만 (S·A = 20%)</span></div></div>
+            <div class="qf"><span class="lbl">등급 계산 — 해마다 1월 1일에 그 전 데이터로 다시 계산</span><div class="line"><span>신호</span><input type="number" id="cbgn" min="10" max="300" step="10" value="60"><span>건 이상 종목만 등급 부여</span></div></div>
+            <div class="qf"><span class="lbl">후보가 많을 때 정렬</span><div class="line"><select id="cbsort">
+              <option value="grade" selected>등급 높은 순</option><option value="top">종가=고가 → 테마 연속일 → 등락률</option><option value="pos">고가권 → 등락률</option><option value="day">등락률 큰 순</option><option value="vol">거래량 배수 큰 순</option></select></div></div>
+            <div class="qf"><span class="lbl">하루 매수 종목 수</span><div class="line"><input type="number" id="cbk" min="1" max="10" value="3"><span>개 · 각 1/N 비중 (후보가 적으면 남는 몫은 현금)</span></div></div>
+            <div class="qf"><span class="lbl">매매 비용 (왕복 · 수수료+세금+슬리피지)</span><div class="line"><input type="number" id="cbcost" min="0" max="2" step="0.05" value="0.25"><span>%</span></div></div>
+            <div class="qf"><span class="lbl">백테스트 기간</span><div class="line"><input type="date" id="cbfrom" value="2018-01-02"><span>~</span><input type="date" id="cbto"></div></div>
+            <div class="qf"><span class="lbl">벤치마크</span><div class="line"><select id="cbbench"><option value="kq">코스닥</option><option value="ks">코스피</option></select></div></div>
+          </div>
+        </div>
+        <div class="krow" style="margin-top:12px">
+          <p class="kdesc" id="cbdesc" style="flex:1;min-width:260px;margin:0"></p>
+          <button class="kgo" id="cbgo" type="button">백테스트 실행</button>
+        </div>
+      </div>
+      <div class="qgrid" id="q-common">
         <div class="qf"><span class="lbl">보유 종목 수</span><div class="line"><input type="number" id="qtop" min="1" max="50" value="10"><span>개 · 동일 비중</span></div></div>
         <div class="qf"><span class="lbl">리밸런싱 주기</span><div class="line"><select id="qreb">
           <option value="5">1주</option><option value="10">2주</option><option value="21" selected>1개월</option><option value="63">3개월</option><option value="126">6개월</option></select>
@@ -543,7 +592,7 @@ header .lnk,header .status{color:var(--hd-mu)}
           <div class="qf"><span class="lbl">변동성 조절</span><div class="line"><label><input type="checkbox" id="gvol"> 목표 변동성 연</label><input type="number" id="gvolv" value="25" min="5" max="80" style="width:56px"><span>% — 담을 종목들의 최근 60일 변동성이 높으면 비중을 줄이고 나머지는 현금</span></div></div>
         </div>
       </div>
-      <div class="krow" style="margin-top:12px">
+      <div class="krow" id="row-go" style="margin-top:12px">
         <p class="kdesc" id="qdesc" style="flex:1;min-width:260px;margin:0"></p>
         <button class="kgo" id="qgo" type="button">백테스트 실행</button>
       </div>
@@ -565,6 +614,26 @@ header .lnk,header .status{color:var(--hd-mu)}
       </div>
       <h3 class="qlogh">리밸런싱 내역 <span class="c" id="qlogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
       <div class="qscroll"><table class="qtbl" id="qlog"></table></div>
+    </div>
+  </section>
+
+  <section class="card" id="cbres" hidden>
+    <div class="khead"><h2>종가베팅 백테스트 결과</h2><p class="sub" id="cbrsub"></p></div>
+    <div class="kbody">
+      <div class="qverdict" id="cbverdict"></div>
+      <div class="qmetrics" id="cbmetrics"></div>
+      <div class="qchart">
+        <div class="qi" id="cbinfo"></div>
+        <canvas id="cbc" aria-label="종가베팅 계좌와 지수 누적 수익률 · 낙폭 차트"></canvas>
+      </div>
+      <h3 style="margin:18px 0 8px;font-size:14px">연도별</h3>
+      <div class="qscroll"><table class="qtbl" id="cbyear"></table></div>
+      <h3 class="qlogh">매매 내역 <span class="c" id="cblogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
+      <div class="qscroll"><table class="qtbl" id="cblog"></table></div>
+      <button type="button" class="cbmore" id="cbmore" hidden>더 보기</button>
+      <h3 class="qlogh" id="cbcandh">최근 후보</h3>
+      <div class="qscroll"><table class="qtbl" id="cbcand"></table></div>
+      <p class="qnote" id="cbnote"></p>
     </div>
   </section>
 
@@ -676,12 +745,286 @@ header .lnk,header .status{color:var(--hd-mu)}
     var b = e.target.closest("button"); if (!b || b.disabled) return;
     STRAT = b.getAttribute("data-s");
     [].forEach.call(this.children, function(x){ x.classList.toggle("on", x === b); });
-    var nh = STRAT === "nh";
-    $("row-mode").style.display = nh ? "none" : "";
-    $("box-mom").hidden = nh || MODE !== "mom"; $("box-pull").hidden = nh || MODE !== "pull"; $("box-nh").hidden = !nh;
+    var nh = STRAT === "nh", cbs = STRAT === "cb";
+    $("row-mode").style.display = nh || cbs ? "none" : "";
+    $("box-mom").hidden = nh || cbs || MODE !== "mom"; $("box-pull").hidden = nh || cbs || MODE !== "pull"; $("box-nh").hidden = !nh;
+    $("box-cb").hidden = !cbs; $("q-common").hidden = cbs; $("box-guard").hidden = cbs; $("row-go").hidden = cbs;
+    $("cbres").hidden = !cbs || !CBR;
+    ["qres", "qdecsec", "qpicksec"].forEach(function(id){ if (cbs) { if ($(id).style.display !== "none") $(id).setAttribute("data-was", "1"); $(id).style.display = "none"; } else if ($(id).getAttribute("data-was")) { $(id).style.display = ""; $(id).removeAttribute("data-was"); } });
+    if (cbs) cbLoad();
     if (nh) $("dfac").value = $("nhsort").value;
-    desc();
+    if (!cbs) desc();
   });
+  if (US) $("qstrat-cb").style.display = "none";
+
+  // ======================================================================
+  // 종가베팅 — closebet.json (상장폐지 포함 전 종목 후보 행, tools/closebet/export_web.py)
+  //   매수: 신호일 종가 · 매도: 다음 날 시가 (정지 → 재개 후 첫 시가, 상폐 → 마지막 종가)
+  //   계좌: 하루 N슬롯 각 1/N, 남는 슬롯은 현금 · 밤 수익 = Σ(수익 − 비용)/N
+  // ======================================================================
+  var CB = null, CBR = null, CBLOADING = false, CBHOV = -1, CBLOG = true, CBSHOW = 200, CBG = {};
+  function cbLoad(){
+    if (CB || CBLOADING) return;
+    CBLOADING = true; $("cbgo").disabled = true;
+    $("cbdesc").textContent = "전 종목 데이터를 불러오는 중… (약 5MB)";
+    fetch("closebet.json", { cache: "no-cache" }).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); }).then(function(d){
+      var R = d.rows, n = R.i.length;
+      CB = { asof: d.asof, dates: d.dates.map(Number), st: d.stocks, reg: d.reg, kq: d.kq, ks: d.ks, n: n,
+             i: Int32Array.from(R.i), j: Int32Array.from(R.j), d: Int32Array.from(R.d), p: Int32Array.from(R.p), v: Int32Array.from(R.v),
+             tv: Int32Array.from(R.tv), mc: Int32Array.from(R.mc), h: Int32Array.from(R.h), th: Int32Array.from(R.th), o: Uint8Array.from(R.o), hx: Uint8Array.from(R.hx),
+             r: Float64Array.from(R.r, function(x){ return x === null ? NaN : x / 1e4; }), g: d.grade };
+      CB.year = CB.dates.map(function(x){ return Math.floor(x / 10000); });
+      CB.first = new Int32Array(CB.dates.length + 1).fill(n);              // 날짜별 첫 행
+      for (var k = n - 1; k >= 0; k--) CB.first[CB.i[k]] = k;
+      for (k = CB.dates.length - 1; k >= 0; k--) if (CB.first[k] > CB.first[k + 1]) CB.first[k] = CB.first[k + 1];
+      $("cbto").value = iso(CB.dates[CB.dates.length - 1]);
+      $("cbfrom").min = iso(CB.dates[0]); $("cbto").max = iso(CB.dates[CB.dates.length - 1]);
+      CBLOADING = false; $("cbgo").disabled = false; cbDesc();
+    }).catch(function(e){ CBLOADING = false; $("cbdesc").textContent = "데이터를 불러오지 못했습니다 (" + e.message + "). 새로고침해 보세요."; });
+  }
+  function cbCfg(){
+    var num = function(id, d){ var v = parseFloat($(id).value); return isFinite(v) ? v : d; };
+    return { mc: Math.max(0, num("cbmc", 0)), tv: Math.max(10, num("cbtv", 10)), dmin: Math.max(3, num("cbd", 3)), dx: +$("cbdx").value,
+             von: $("cbvon").checked, vmin: num("cbv", 2), pon: $("cbpon").checked, pmin: num("cbp", 0.7), lt: $("cblt").checked, old: $("cbold").checked,
+             reg: $("cbreg").value, grade: $("cbg").checked, gtop: Math.min(100, Math.max(1, num("cbgt", 20))), gn: Math.max(1, Math.round(num("cbgn", 60))),
+             sort: $("cbsort").value, k: Math.max(1, Math.min(10, Math.round(num("cbk", 3)))), cost: num("cbcost", 0.25) / 100,
+             from: fromIso($("cbfrom").value || "2018-01-02"), to: fromIso($("cbto").value || "29991231"), bench: $("cbbench").value };
+  }
+  var REGN = { kq20: "코스닥 20일선 위", ks60: "코스피 60일선 위", old: "이전 체계 밤갭 레짐", none: "레짐 없음" };
+  var SORTN = { grade: "등급순", top: "종가=고가→테마→등락률", pos: "고가권→등락률", day: "등락률순", vol: "거래량 배수순" };
+  function cbRule(c){
+    return [c.mc ? "시총 " + c.mc.toLocaleString() + "억↑" : "", "거래대금 " + c.tv.toLocaleString() + "억↑", "+" + c.dmin + "%↑" + (c.dx < 2850 ? "(+" + c.dx / 100 + "%↑ 제외)" : ""),
+            c.von ? "거래량 " + c.vmin + "배↑" : "", c.pon ? "고가권 " + c.pmin + "↑" : "", c.lt ? "상한가 터치 제외" : "", c.old ? "상장 1년↑" : "",
+            REGN[c.reg], c.grade ? "등급 상위 " + c.gtop + "%" : "", SORTN[c.sort] + " " + c.k + "개", "비용 " + (c.cost * 100).toFixed(2) + "%"].filter(Boolean).join(" · ");
+  }
+  function cbDesc(){ if (CB) $("cbdesc").textContent = cbRule(cbCfg()) + " — 데이터 " + ymd(CB.dates[0]) + " ~ " + ymd(CB.dates[CB.dates.length - 1]); }
+  ["cbmc", "cbtv", "cbd", "cbdx", "cbvon", "cbv", "cbpon", "cbp", "cblt", "cbold", "cbreg", "cbg", "cbgt", "cbgn", "cbsort", "cbk", "cbcost", "cbfrom", "cbto", "cbbench"].forEach(function(id){ $(id).addEventListener("change", cbDesc); });
+  var CBPRE = {
+    large: { cbmc: 5000, cbtv: 300, cbd: 3, cbdx: "2850", cbvon: false, cbpon: false, cblt: false, cbold: false, cbreg: "kq20", cbg: true, cbgt: 20, cbgn: 60, cbsort: "grade", cbk: 3 },
+    final: { cbmc: 0, cbtv: 10, cbd: 3, cbdx: "2500", cbvon: true, cbv: 2, cbpon: true, cbp: 0.7, cblt: true, cbold: true, cbreg: "kq20", cbg: false, cbsort: "top", cbk: 3 },
+    base:  { cbmc: 0, cbtv: 10, cbd: 3, cbdx: "2850", cbvon: true, cbv: 2, cbpon: true, cbp: 0.7, cblt: false, cbold: true, cbreg: "ks60", cbg: false, cbsort: "pos", cbk: 3 }
+  };
+  $("cbpre").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-p]"); if (!b) return;
+    var P0 = CBPRE[b.getAttribute("data-p")];
+    Object.keys(P0).forEach(function(id){ var el = $(id); if (el.type === "checkbox") el.checked = P0[id]; else el.value = P0[id]; });
+    $("cbcost").value = 0.25; $("cbfrom").value = "2018-01-02"; if (CB) $("cbto").value = iso(CB.dates[CB.dates.length - 1]);
+    cbDesc(); if (CB) cbRun();
+  });
+
+  function cbGrades(minn){                               // {연도: {gm: Float64Array(종목), gp: Float64Array}} — 연 1회 워크포워드
+    if (CBG[minn]) return CBG[minn];
+    var g = CB.g, NS = CB.st.length, ny = g.n[0].length, out = {};
+    var cn = new Float64Array(NS), cs = new Float64Array(NS);
+    for (var y = 1; y < ny; y++) {                       // y년 등급 = y0 ~ (y-1)년 신호
+      var gm = new Float64Array(NS).fill(NaN), vals = [];
+      for (var a = 0; a < g.j.length; a++) {
+        var j = g.j[a]; cn[j] += g.n[a][y - 1]; cs[j] += g.s[a][y - 1];
+        if (cn[j] >= minn && g.u[a][y]) { gm[j] = cs[j] / cn[j] / 1e4; vals.push(j); }
+      }
+      vals.sort(function(p, q){ return gm[p] - gm[q]; });
+      var gp = new Float64Array(NS).fill(NaN), m = vals.length;
+      for (var s0 = 0; s0 < m;) {                        // 동점은 평균 순위 (pandas rank pct)
+        var e = s0; while (e + 1 < m && gm[vals[e + 1]] === gm[vals[s0]]) e++;
+        var rk = (s0 + e) / 2 + 1; for (var q = s0; q <= e; q++) gp[vals[q]] = rk / m;
+        s0 = e + 1;
+      }
+      out[g.y0 + y] = { gm: gm, gp: gp, m: m };
+    }
+    return (CBG[minn] = out);
+  }
+  function cbCands(c, t, G){                             // t일 후보 → 정렬된 [{k(행), key[]}]
+    var out = [], RG = c.reg === "none" ? null : CB.reg[c.reg];
+    if (RG && !RG[t]) return out;
+    var gy = G ? G[CB.year[t]] : null;
+    if (c.grade && !gy) return out;
+    var dmin = Math.round(c.dmin * 100), vmin = Math.round(c.vmin * 100), pmin = Math.round(c.pmin * 1000), gt = 1 - c.gtop / 100 - 1e-12;
+    for (var k = CB.first[t], e = CB.first[t + 1]; k < e; k++) {
+      if (CB.d[k] < dmin || CB.d[k] >= c.dx || CB.tv[k] < c.tv || (c.mc > 0 && !(CB.mc[k] >= c.mc))) continue;
+      if (c.von && CB.v[k] < vmin) continue;
+      if (c.pon && CB.p[k] < pmin) continue;
+      if (c.lt && CB.h[k] >= 2850) continue;
+      if (c.old && !CB.o[k]) continue;
+      var gm = gy ? gy.gm[CB.j[k]] : NaN, gp = gy ? gy.gp[CB.j[k]] : NaN;
+      if (c.grade && !(gp >= gt)) continue;
+      var key = c.sort === "grade" ? [isFinite(gm) ? gm : -1e9] : c.sort === "top" ? [CB.p[k] >= 999 ? 1 : 0, CB.th[k], CB.d[k]] :
+                c.sort === "pos" ? [CB.p[k], CB.d[k]] : c.sort === "day" ? [CB.d[k]] : [CB.v[k]];
+      out.push({ k: k, key: key, gm: gm, gp: gp });
+    }
+    out.sort(function(a, b){ for (var z = 0; z < a.key.length; z++) if (a.key[z] !== b.key[z]) return b.key[z] - a.key[z]; return 0; });
+    return out;
+  }
+  function cbRun(){
+    if (!CB) return;
+    var c = cbCfg(), T = CB.dates.length;
+    var t0 = 0; while (t0 < T && CB.dates[t0] < c.from) t0++;
+    var t1 = T - 1; while (t1 > 0 && CB.dates[t1] > c.to) t1--;
+    t1 = Math.min(t1, T - 2);                            // 마지막 날은 다음 시가가 없음
+    if (t1 - t0 < 60) { $("cbdesc").textContent = "기간이 너무 짧습니다."; return; }
+    var G = c.grade || c.sort === "grade" ? cbGrades(c.gn) : null;
+    if (c.grade) { var gy0 = CB.g.y0 + 1; if (CB.year[t0] < gy0) { while (t0 < T && CB.year[t0] < gy0) t0++; } }
+    var bx = CB[c.bench], b0 = null;
+    var eq = [1], bq = [], logs = [], nights = [], dayAcct = [], few = 0, nh = 0, n10 = 0, nst = 0, cash = 0;
+    for (var t = t0; t <= t1; t++) {
+      var cs = cbCands(c, t, G), pk = cs.slice(0, c.k), acct = 0;
+      if (b0 === null && bx[t] !== null) b0 = bx[t];
+      if (pk.length) {
+        var sum = 0, ent = [];
+        pk.forEach(function(x){ var r = CB.r[x.k]; sum += r; acct += (r - c.cost) / c.k; ent.push({ k: x.k, r: r }); if (CB.hx[x.k]) nh++; if (r - c.cost <= -0.10) n10++; nst++; });
+        nights.push(sum / pk.length - c.cost);
+        if (cs.length < c.k) few++;
+        logs.push({ t: t, acct: acct, ent: ent, nc: cs.length });
+      } else cash++;
+      dayAcct.push(acct);
+      if (t > t0) eq.push(eq[eq.length - 1] * (1 + dayAcct[dayAcct.length - 2]));
+      bq.push(b0 && bx[t] !== null ? bx[t] / b0 : NaN);
+    }
+    // eq[i] = i번째 날 장 마감 직후(그날 산 종목은 아직 보유) 자산 → 마지막 밤까지 반영
+    eq.push(eq[eq.length - 1] * (1 + dayAcct[dayAcct.length - 1]));
+    var dts = CB.dates.slice(t0, t1 + 2); bq.push(bx[t1 + 1] !== null && b0 ? bx[t1 + 1] / b0 : bq[bq.length - 1]);
+    CBR = { c: c, t0: t0, t1: t1, eq: eq, bq: bq, dts: dts, logs: logs, nights: nights, few: few, nh: nh, n10: n10, nst: nst, cash: cash, days: t1 - t0 + 1 };
+    CBHOV = -1; CBSHOW = 200;
+    cbRender();
+  }
+  function cbStats(s){
+    var n = s.length, dr = [], peak = s[0], mdd = 0, pki = 0, f = 0, to = 0;
+    for (var i = 1; i < n; i++) if (isFinite(s[i]) && isFinite(s[i - 1])) dr.push(s[i] / s[i - 1] - 1);
+    for (i = 0; i < n; i++) { if (!isFinite(s[i])) continue; if (s[i] > peak) { peak = s[i]; pki = i; } var dd = s[i] / peak - 1; if (dd < mdd) { mdd = dd; f = pki; to = i; } }
+    var m = avgOf(dr), sd = Math.sqrt(dr.reduce(function(a, b){ return a + (b - m) * (b - m); }, 0) / Math.max(1, dr.length - 1));
+    var last = s[n - 1], yrs = (n - 1) / 250;
+    return { tot: last / s[0] - 1, cagr: Math.pow(last / s[0], 1 / yrs) - 1, mdd: mdd, f: f, to: to, sharpe: sd ? m / sd * Math.sqrt(250) : null, yrs: yrs };
+  }
+  function cbRender(){
+    var R = CBR, c = R.c, S = cbStats(R.eq), B = cbStats(R.bq), N = R.nights;
+    var bname = c.bench === "kq" ? "코스닥" : "코스피";
+    $("cbres").hidden = false;
+    $("cbrsub").textContent = ymd(R.dts[0]) + " ~ " + ymd(R.dts[R.dts.length - 1]) + " · " + S.yrs.toFixed(1) + "년 · " + cbRule(c);
+    var m = function(lbl, v, sub){ return '<div class="qm"><span>' + lbl + "</span><b>" + v + "</b>" + (sub ? "<small>" + sub + "</small>" : "") + "</div>"; };
+    var mean = N.length ? avgOf(N) : NaN, win = N.filter(function(x){ return x > 0; }).length, worst = N.length ? Math.min.apply(null, N) : NaN;
+    var sorted = N.slice().sort(function(a, b){ return a - b; }), p1 = sorted.length ? sorted[Math.floor(sorted.length * 0.01)] : NaN;
+    var half = Math.floor(N.length / 2), h1 = avgOf(N.slice(0, half) || [0]), h2 = avgOf(N.slice(half) || [0]);
+    // 연도별
+    var Y = {}, yk = [];
+    R.logs.forEach(function(L){ var y = Math.floor(CB.dates[L.t] / 10000); if (!Y[y]) { Y[y] = { n: 0, s: 0, w: 0 }; yk.push(y); } });
+    var ni = 0; R.logs.forEach(function(L){ var y = Math.floor(CB.dates[L.t] / 10000), v = N[ni++]; Y[y].n++; Y[y].s += v; if (v > 0) Y[y].w++; });
+    var yr = periodYears(R);
+    var ypos = yr.filter(function(y){ return Y[y.k] && Y[y.k].s > 0; }).length;
+    var tst = N.length > 2 ? tstat(N) : 0;
+    $("cbmetrics").innerHTML =
+      m("밤당 평균 (비용 후)", cpc(mean, 2), "선택 종목 평균 · t값 " + tst.toFixed(1)) +
+      m("승률 (밤)", Math.round(win / Math.max(1, N.length) * 100) + "%", win + " / " + N.length + "밤") +
+      m("누적 수익률 (계좌)", cpc(S.tot, 0), bname + " " + pc(B.tot, 0)) +
+      m("연평균 (CAGR)", cpc(S.cagr), bname + " " + pc(B.cagr)) +
+      m("최대 낙폭 (MDD)", '<span style="color:var(--dn)">' + pc(S.mdd) + "</span>", bname + " " + pc(B.mdd)) +
+      m("샤프 지수", S.sharpe === null ? "-" : S.sharpe.toFixed(2), bname + " " + (B.sharpe === null ? "-" : B.sharpe.toFixed(2))) +
+      m("매매한 날", Math.round(N.length / R.days * 100) + "%", "연 " + Math.round(N.length / S.yrs) + "일 · 후보 " + c.k + "개 미만 " + Math.round(R.few / Math.max(1, N.length) * 100) + "%") +
+      m("최악의 밤 (선택 평균)", cpc(worst, 1), "하위 1% " + pc(p1, 1)) +
+      m("앞 절반 / 뒤 절반", '<span style="white-space:nowrap">' + cpc(h1, 2) + " / " + cpc(h2, 2) + "</span>", "밤당 평균 (매매한 밤을 반으로 나눠)") +
+      m("거래정지·상폐 청산", R.nh + "건", "−10% 이하 손실 " + R.n10 + "건 / " + R.nst + "종목·밤");
+    // 판정
+    var items = [], score = 0;
+    items.push([mean > 0.001 ? "g" : mean > 0 ? "n" : "b", "밤당 평균 " + pc(mean, 2) + " (비용 " + (c.cost * 100).toFixed(2) + "% 뺀 뒤) · t값 " + tst.toFixed(1) + (tst >= 3 ? " — 우연으로 보기 어려움" : tst >= 2 ? " — 의미 있는 수준" : " — 우연일 수 있음")]);
+    score += mean > 0.001 && tst >= 2 ? 2 : mean > 0 ? 0 : -2;
+    items.push([ypos * 3 >= yr.length * 2 ? "g" : "b", "플러스였던 해 " + ypos + " / " + yr.length + "년 · 앞 절반 " + pc(h1, 2) + " · 뒤 절반 " + pc(h2, 2)]); score += ypos * 3 >= yr.length * 2 && h1 > 0 && h2 > 0 ? 1 : -1;
+    items.push([S.mdd > -0.25 ? "g" : S.mdd > -0.4 ? "n" : "b", "최대 낙폭 " + pc(S.mdd) + " (" + ymd(R.dts[S.f]) + " → " + ymd(R.dts[S.to]) + ") · 최악의 밤 " + pc(worst)]); score += S.mdd > -0.25 ? 1 : S.mdd > -0.4 ? 0 : -1;
+    if (N.length < 200) items.push(["n", "매매한 밤이 " + N.length + "번뿐 — 표본이 적어 결과가 흔들릴 수 있음"]);
+    if (c.dx >= 2850 && !c.lt) items.push(["n", "상한가 근처(+25~28.5%)에서 산 종목은 다음 날 평균 손실 — '+25% 이상 제외'나 '상한가 터치 후 풀린 종목 제외'로 비교해 보세요"]);
+    items.push(["n", "상장폐지 포함 전 종목·그때 알 수 있던 값만 쓴 결과라 생존 편향은 없습니다. 다만 다음 날 시가 체결가가 동시호가 가격과 다를 수 있고(슬리피지), 거래대금이 작은 종목은 큰 금액을 넣기 어렵습니다"]);
+    var v = score >= 3 ? ["유효", "var(--ok)"] : score >= 1 ? ["보통", "var(--warn)"] : ["약함", "var(--up)"];
+    $("cbverdict").innerHTML = '<div class="badge" style="background:' + v[1] + '">' + v[0] + "</div><ul>" + items.map(function(x){ return '<li class="' + x[0] + '">' + esc(x[1]) + "</li>"; }).join("") + "</ul>";
+    // 연도표
+    $("cbyear").innerHTML = '<thead><tr><th class="l">연도</th><th>계좌</th><th>' + bname + "</th><th>매매일</th><th>밤당 평균</th><th>승률</th></tr></thead><tbody>" +
+      yr.map(function(y, i){ var a = Y[y.k] || { n: 0, s: 0, w: 0 };
+        return '<tr><td class="l">' + y.k + (y.part ? '<span class="c">일부</span>' : "") + "</td><td>" + cpc(y.s) + "</td><td>" + cpc(y.b) + "</td><td>" + a.n + "</td><td>" + (a.n ? cpc(a.s / a.n, 2) : "-") + "</td><td>" + (a.n ? Math.round(a.w / a.n * 100) + "%" : "-") + "</td></tr>"; }).join("") + "</tbody>";
+    cbLogTable();
+    cbCandTable();
+    cbDraw();
+  }
+  function periodYears(R){                               // 연도별 계좌 · 지수 수익
+    var out = [], ps = R.eq[0], pb = R.bq[0], n = R.dts.length;
+    for (var i = 0; i < n; i++) {
+      var y = Math.floor(R.dts[i] / 10000), end = i === n - 1 || Math.floor(R.dts[i + 1] / 10000) !== y;
+      if (end) { out.push({ k: y, s: R.eq[i] / ps - 1, b: isFinite(R.bq[i]) && isFinite(pb) ? R.bq[i] / pb - 1 : NaN, part: !out.length || i === n - 1 }); ps = R.eq[i]; pb = R.bq[i]; }
+    }
+    return out;
+  }
+  function cbName(k){ var s = CB.st[CB.j[k]]; return esc(s.n) + (s.x ? '<span class="c">상폐</span>' : ""); }
+  function cbLogTable(){
+    var R = CBR, L = R.logs.slice().reverse(), show = L.slice(0, CBSHOW);
+    $("cblogn").textContent = R.logs.length + "밤 · 최근 순 · 종목 옆 괄호는 신호일 등락률";
+    $("cblog").innerHTML = '<thead><tr><th class="l">매수일 (종가)</th><th>계좌 (그 밤)</th><th>후보 수</th><th class="l">종목 — 다음 날 시가 수익 (비용 전)</th></tr></thead><tbody>' +
+      show.map(function(x){
+        return '<tr><td class="l">' + ymd(CB.dates[x.t]) + "</td><td>" + cpc(x.acct, 2) + "</td><td>" + x.nc + '</td><td class="l wrap">' +
+          x.ent.map(function(e){ return '<span class="hp">' + cbName(e.k) + ' <span class="c">(+' + (CB.d[e.k] / 100).toFixed(1) + "%)</span> " + cpc(e.r, 1) + (CB.hx[e.k] ? '<span class="c">정지·상폐 청산</span>' : "") + "</span>"; }).join("") + "</td></tr>";
+      }).join("") + "</tbody>";
+    $("cbmore").hidden = L.length <= CBSHOW;
+  }
+  $("cbmore").addEventListener("click", function(){ CBSHOW += 500; cbLogTable(); });
+  function cbCandTable(){
+    var c = CBR.c, t = CB.dates.length - 1, G = c.grade || c.sort === "grade" ? cbGrades(c.gn) : null, cs = cbCands(c, t, G);
+    var RG = c.reg === "none" ? null : CB.reg[c.reg];
+    $("cbcandh").innerHTML = "데이터 마지막 날 후보 — " + ymd(CB.dates[t]) + ' <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">이 데이터는 연구용 스냅숏이라 매일 갱신되지 않습니다</span>';
+    if (RG && !RG[t]) { $("cbcand").innerHTML = '<tbody><tr><td class="l">레짐 꺼짐 (' + REGN[c.reg] + " 아님) — 이날은 매수하지 않음</td></tr></tbody>"; return; }
+    if (!cs.length) { $("cbcand").innerHTML = '<tbody><tr><td class="l">조건을 통과한 종목 없음</td></tr></tbody>'; return; }
+    $("cbcand").innerHTML = '<thead><tr><th class="l">순위</th><th class="l">종목</th><th>등락률</th><th>고가권</th><th>거래량</th><th>거래대금(20일)</th><th>시총</th><th>등급(백분위)</th><th>테마 연속</th></tr></thead><tbody>' +
+      cs.slice(0, 20).map(function(x, i){ var k = x.k, s = CB.st[CB.j[k]];
+        return "<tr" + (i < c.k ? ' style="font-weight:700"' : "") + '><td class="l">' + (i + 1) + (i < c.k ? ' <span class="chip up">매수</span>' : "") + '</td><td class="l">' + esc(s.n) + ' <span class="c">' + s.c + " · " + (s.m === "Q" ? "코스닥" : "코스피") + "</span></td><td>" + cpc(CB.d[k] / 1e4, 1) + "</td><td>" + (CB.p[k] / 1000).toFixed(2) + "</td><td>" + (CB.v[k] / 100).toFixed(1) + "배</td><td>" +
+          CB.tv[k].toLocaleString() + "억</td><td>" + (CB.mc[k] >= 0 ? CB.mc[k].toLocaleString() + "억" : "-") + "</td><td>" + (isFinite(x.gp) ? "상위 " + Math.max(1, Math.round((1 - x.gp) * 100)) + "%" : "-") + "</td><td>" + (CB.th[k] || "-") + "</td></tr>"; }).join("") + "</tbody>";
+    $("cbnote").innerHTML = "· 등급: 그해 1월 1일까지 '+3% 마감 다음 날 시가' 평균 수익을 거래대금 10억+ 종목끼리 비교한 백분위 (신호 " + c.gn + "건 이상) · 테마 연속: 주가가 비슷하게 움직이는 종목 10개 중 3개 이상이 +3% 오른 날이 며칠째 이어지는지<br>" +
+      "· 연구 결과(2018~2026, 비용 0.25%): 대형주 등급 규칙 밤당 +0.29% · 승률 58% · MDD −18% / 전 종목 개선 규칙 +0.47% / 기준선 +0.18%";
+  }
+  $("cbgo").addEventListener("click", cbRun);
+  function cbDraw(){
+    var R = CBR; if (!R || $("cbres").hidden) return;
+    var cv = $("cbc"), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+    if (!W) return;
+    cv.width = W * dpr; cv.height = H * dpr;
+    var g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    var L = 8, Rr = 62, T = 8, H1 = Math.round((H - 30) * 0.7), G2 = 14, H2 = H - 30 - H1 - G2, n = R.eq.length;
+    var cS = css("--up"), cB = css("--muted"), grid = css("--grid") || css("--line"), mu = css("--muted");
+    var x = function(i){ return L + (W - L - Rr) * i / Math.max(1, n - 1); };
+    var vals = R.eq.concat(R.bq.filter(isFinite)), lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var tf = CBLOG ? Math.log : function(v){ return v; };
+    var a = tf(lo), b = tf(hi); if (a === b) { a -= 0.01; b += 0.01; }
+    var pad = (b - a) * 0.06; a -= pad; b += pad;
+    var y = function(v){ return T + H1 * (1 - (tf(v) - a) / (b - a)); };
+    g.font = "11px " + getComputedStyle(document.body).fontFamily; g.textBaseline = "middle";
+    for (var k = 0; k <= 4; k++) {
+      var vv = CBLOG ? Math.exp(a + (b - a) * k / 4) : a + (b - a) * k / 4, yy = y(vv);
+      g.strokeStyle = grid; g.lineWidth = 1; g.beginPath(); g.moveTo(L, yy); g.lineTo(W - Rr, yy); g.stroke();
+      g.fillStyle = mu; g.fillText(pc(vv - 1, 0), W - Rr + 6, yy);
+    }
+    g.textBaseline = "top";
+    for (var i = 1; i < n; i++) if (Math.floor(R.dts[i] / 10000) !== Math.floor(R.dts[i - 1] / 10000)) {
+      g.strokeStyle = grid; g.beginPath(); g.moveTo(x(i), T); g.lineTo(x(i), H - 18); g.stroke();
+      g.fillStyle = mu; g.fillText(String(Math.floor(R.dts[i] / 10000)), x(i) + 3, H - 15);
+    }
+    var line = function(arr, c, w){ g.strokeStyle = c; g.lineWidth = w; g.beginPath(); var st = false; for (var i = 0; i < n; i++) { if (!isFinite(arr[i])) continue; var X = x(i), Y = y(arr[i]); st ? g.lineTo(X, Y) : g.moveTo(X, Y); st = true; } g.stroke(); };
+    line(R.bq, cB, 1.4); line(R.eq, cS, 2);
+    var top2 = T + H1 + G2, dd = function(arr){ var pk = -Infinity; return arr.map(function(v){ if (!isFinite(v)) return NaN; if (v > pk) pk = v; return v / pk - 1; }); };
+    var dS = dd(R.eq), dB = dd(R.bq), mn = Math.min(Math.min.apply(null, dS), Math.min.apply(null, dB.filter(isFinite)), -0.01);
+    var y2 = function(v){ return top2 + H2 * (v / mn); };
+    g.strokeStyle = grid; g.beginPath(); g.moveTo(L, top2); g.lineTo(W - Rr, top2); g.stroke();
+    g.textBaseline = "middle"; g.fillStyle = mu; g.fillText("0%", W - Rr + 6, top2); g.fillText(pc(mn, 0), W - Rr + 6, top2 + H2);
+    g.fillStyle = cS; g.globalAlpha = 0.18; g.beginPath(); g.moveTo(x(0), top2);
+    for (i = 0; i < n; i++) g.lineTo(x(i), y2(dS[i])); g.lineTo(x(n - 1), top2); g.closePath(); g.fill(); g.globalAlpha = 1;
+    g.strokeStyle = cB; g.lineWidth = 1; g.beginPath(); var st = false; for (i = 0; i < n; i++) { if (!isFinite(dB[i])) continue; st ? g.lineTo(x(i), y2(dB[i])) : g.moveTo(x(i), y2(dB[i])); st = true; } g.stroke();
+    g.fillStyle = mu; g.textBaseline = "top"; g.fillText("낙폭", L + 2, top2 + 3);
+    var h = CBHOV >= 0 && CBHOV < n ? CBHOV : n - 1;
+    if (CBHOV >= 0 && CBHOV < n) { g.strokeStyle = mu; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(x(CBHOV), T); g.lineTo(x(CBHOV), top2 + H2); g.stroke(); g.setLineDash([]); }
+    var bname = R.c.bench === "kq" ? "코스닥" : "코스피";
+    $("cbinfo").innerHTML = "<span><b>" + ymd(R.dts[h]) + "</b></span>" +
+      '<span><i style="background:' + cS + '"></i>종가베팅 계좌 ' + cpc(R.eq[h] - 1, 0) + ' <span style="color:var(--muted)">낙폭 ' + pc(dS[h]) + "</span></span>" +
+      '<span><i style="background:' + cB + '"></i>' + bname + " " + cpc(R.bq[h] - 1, 0) + ' <span style="color:var(--muted)">낙폭 ' + pc(dB[h]) + "</span></span>" +
+      '<label class="r"><input type="checkbox" id="cblogax"' + (CBLOG ? " checked" : "") + "> 로그 축</label>";
+    $("cblogax").addEventListener("change", function(){ CBLOG = this.checked; cbDraw(); });
+  }
+  $("cbc").addEventListener("mousemove", function(e){
+    if (!CBR) return; var r = this.getBoundingClientRect(), n = CBR.eq.length;
+    CBHOV = Math.max(0, Math.min(n - 1, Math.round((e.clientX - r.left - 8) / (r.width - 70) * (n - 1)))); cbDraw();
+  });
+  $("cbc").addEventListener("mouseleave", function(){ CBHOV = -1; cbDraw(); });
+  window.addEventListener("resize", cbDraw);
 
   var HI = [], LO = [], NHF = [], LS = [], LQ = [], LN = [], CS = [], CN = [];
   function prepFactors(){                                // 52주 최고·최저(종가) · 신고가 표시 · 수익률 누적합 (한 번만 계산)
@@ -803,7 +1146,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("qdesc").textContent = "";
     desc();
     $("qdesc").textContent += " (데이터 " + ymd(D[0]) + " ~ " + ymd(D[D.length - 1]) + " · 개별 종목 " + nStock + "개)";
-    run();
+    if (STRAT !== "cb") run();
   }, function(){ $("qdesc").textContent = "데이터를 불러오지 못했습니다. 새로고침해 주세요."; });
 
   // ---------- 전략 ----------

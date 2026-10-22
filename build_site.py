@@ -1047,7 +1047,7 @@ def main():
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:
             f.write(render_page(src, page))
-    for extra in ("secret.js", "secret.json"):           # 숨은 사진 (secret.json 은 직접 만들었을 때만 있음)
+    for extra in ("secret.js", "secret.json") + (("closebet.json",) if MARKET == "kr" else ()):   # 숨은 사진 · 종가베팅 백테스트 데이터(한국)
         if os.path.exists(os.path.join(WEB_DIR, extra)):
             shutil.copy(os.path.join(WEB_DIR, extra), os.path.join(SITE_DIR, extra))
     open(os.path.join(SITE_DIR, ".nojekyll"), "w").close()
