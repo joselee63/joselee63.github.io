@@ -370,7 +370,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       </div>
       <div class="kv"><span>현금</span><span id="cash">-</span></div>
       <div class="kv"><span>평가금액</span><span id="evalamt">-</span></div>
-      <div class="kv"><span>보유주식</span><span id="hold">없음</span></div>
+      <div class="kv"><span>포지션</span><span id="hold">없음</span></div>
       <div class="kv"><span>평가손익</span><span id="pnl">-</span></div>
     </div>
 
@@ -397,9 +397,9 @@ header .lnk,header .status{color:var(--hd-mu)}
 
     <div class="card pad acts-card">
       <div class="acts">
-        <button class="act buy" id="bBuy" type="button">매수 <small>B</small></button>
+        <button class="act buy" id="bBuy" type="button"><span id="bBuyL">매수</span> <small>B</small></button>
         <button class="act next" id="bNext" type="button">다음 <small>H</small></button>
-        <button class="act sell" id="bSell" type="button">매도 <small>S</small></button>
+        <button class="act sell" id="bSell" type="button"><span id="bSellL">매도</span> <small>S</small></button>
       </div>
       <div class="ratio" id="ratio">
         <span class="lbl">비중</span>
@@ -411,8 +411,9 @@ header .lnk,header .status{color:var(--hd-mu)}
       </div>
       <div class="buyinfo" id="buyinfo"></div>
       <div class="msg" id="msg"></div>
-      <label class="gtog" title="추격 매수·물타기·하락 추세 매수 경고와 손절선·추적 손절선 표시"><input type="checkbox" id="guideOn"> 규칙 도우미</label>
-      <div class="keys"><span><kbd>B</kbd>매수</span><span><kbd>H</kbd>다음</span><span><kbd>S</kbd>매도</span><span><kbd>N</kbd>다음 종목</span><span><kbd>1</kbd>~<kbd>5</kbd>비중</span></div>
+      <label class="gtog" title="추격 진입·물타기·역추세 진입 경고와 손절선·추적 손절선 표시"><input type="checkbox" id="guideOn"> 규칙 도우미</label>
+      <label class="gtog" title="포지션이 없을 때 매도(S)를 누르면 공매도(숏)로 진입 · 숏은 매수(B)로 환매해 청산 · 숏 한도는 자산의 100%"><input type="checkbox" id="shortOn"> 숏(공매도) 허용</label>
+      <div class="keys"><span><kbd>B</kbd>매수·환매</span><span><kbd>H</kbd>다음</span><span><kbd>S</kbd>매도·공매도</span><span><kbd>N</kbd>다음 종목</span><span><kbd>1</kbd>~<kbd>5</kbd>비중</span></div>
     </div>
 
     <div class="card pad">
@@ -463,6 +464,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   var GUIDE_KEY = "krsc_game_guide", GUIDE_MIN_KEY = "krsc_game_guide_min";
   var GUIDE_MIN = store(function(){ return localStorage.getItem(GUIDE_MIN_KEY); }) === "1";   // 말풍선 접힘
   var GUIDE = store(function(){ return localStorage.getItem(GUIDE_KEY); }) !== "0";   // 기본값 켜짐
+  var SHORT_KEY = "krsc_game_short", SHORT_OK = store(function(){ return localStorage.getItem(SHORT_KEY); }) !== "0";
 
   var G = null;          // 현재 게임
   var pool = null;       // { n, build }
@@ -662,7 +664,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   }
 
   function start(P, s){
-    G = { d: P.d, n: P.n, ma: P.ma, k: P.k, s: s, cur: s, turn: 0, cash: CASH0, qty: 0, avg: 0, cost: 0,
+    G = { d: P.d, n: P.n, ma: P.ma, k: P.k, s: s, cur: s, turn: 0, cash: CASH0, qty: 0, avg: 0, cost: 0, side: 0, stopLv: null, stopFloor: null,
           trades: [], done: false, reveal: null, evals: null, focus: null,
           drawings: [], pos0: -1, sigSeen: false, lastWarn: null, rules: { buys: 0, chase: 0, avgdown: 0, down: 0, ignore: 0, risk: 0 }, stopPct: RULE.stopBase };
     hover = -1;
@@ -673,34 +675,52 @@ header .lnk,header .status{color:var(--hd-mu)}
   }
 
   // ---------- 매매 ----------
+  //   롱(매수 → 매도)과 숏(공매도 → 환매수) 모두 가능. G.side: 1 롱 · −1 숏 · 0 없음, G.qty 는 수량(항상 양수)
+  //   숏: 판 돈(수수료·세금 뺀)이 현금에 들어오고 자산 = 현금 − 수량 × 현재가 · 숏 한도 = 자산의 100% · G.cost 는 숏이면 받은 돈
+  //   주문: 매수(B) = 롱 진입·추가 또는 숏 환매(청산) · 매도(S) = 롱 매도(청산) 또는 숏 진입·추가
+  var MARGIN_CALL = 0.3;                                 // 숏: 자산이 숏 평가금액의 30% 아래로 떨어지면 자동 환매
   function price(){ return G.d.c[G.cur]; }
-  function asset(){ return G.cash + G.qty * price(); }
-  function buyQty(){                                     // 비중 = 현금의 n% · 2%룰 = 손절 시 계좌 2% 손실 수량
-    var p = price(), all = Math.floor(G.cash / (p * (1 + BUY_FEE)));
-    return ratio === "risk" ? Math.min(all, riskQty()) : Math.floor(G.cash * ratio / (p * (1 + BUY_FEE)));
+  function asset(){ return G.cash + (G.side || 0) * G.qty * price(); }
+  function openQty(d){                                   // d(1 롱 · −1 숏) 방향으로 새로·추가 진입할 수량
+    if (G.qty && G.side !== d) return 0;
+    var p = price(), q;
+    if (d > 0) {                                         // 롱: 현금의 n% · 2%룰
+      var all = Math.floor(G.cash / (p * (1 + BUY_FEE)));
+      q = ratio === "risk" ? Math.min(all, riskQty(d)) : Math.floor(G.cash * ratio / (p * (1 + BUY_FEE)));
+    } else {                                             // 숏: 자산의 n% (한도 = 자산 − 이미 판 금액) · 2%룰
+      var eq = asset(), roomQ = Math.floor(Math.max(0, eq - G.qty * p) / p);
+      q = Math.min(roomQ, ratio === "risk" ? riskQty(d) : Math.floor(eq * ratio / p));
+    }
+    return Math.max(0, q);
   }
-  function at3R(){ var P = G.plan; return !!(G.qty && P && !P.took && price() >= P.E + RULE.targetR * P.R); }
-  function sellQty(){                                    // 비중 = 보유 수량의 n% · 2%룰 모드: 3R 도달 시 1/3, 그 밖엔 전량
+  function at3R(){ var P = G.plan, S = G.side; return !!(G.qty && P && !P.took && S * (price() - (P.E + S * RULE.targetR * P.R)) >= 0); }
+  function closeQty(){                                   // 청산 수량: 비중 = 보유 수량의 n% · 2%룰 모드: 3R 도달 시 1/3, 그 밖엔 전량
     if (!G.qty) return 0;
     if (ratio === "risk") return at3R() ? Math.max(1, Math.round(G.qty * RULE.takePart)) : G.qty;
     return Math.max(1, Math.floor(G.qty * ratio));
   }
+  function closeKey(){ return G.side > 0 ? "S" : "B"; }
   function msg(t){ $("msg").textContent = t || ""; }
 
-  // ---------- 규칙 도우미 ----------
-  function buyWarnings(i){                               // i일 종가에 사면 걸리는 규칙
+  // ---------- 규칙 도우미 (롱은 그대로, 숏은 위아래를 뒤집어 같은 규칙) ----------
+  function entryWarnings(i, d){                          // i일 종가에 d 방향으로 진입하면 걸리는 규칙
     var c = G.d.c, m = G.ma[RULE.trendMA], w = [];
     var d1 = c[i] / c[i - 1] - 1, d5 = c[i] / c[i - 5] - 1, sd = dailyVol(i);
     if (sd) {
-      var x1 = d1 / sd, x5 = d5 / (sd * Math.sqrt(5));
-      if (x1 >= RULE.chaseK) w.push({ k: "chase", m: "급등일 추격 (오늘 " + sgn(d1 * 100, 1) + "% · 평소의 " + x1.toFixed(1) + "배)" });
-      else if (x5 >= RULE.chaseK) w.push({ k: "chase", m: "단기 급등 뒤 추격 (5일 " + sgn(d5 * 100, 1) + "% · 평소의 " + x5.toFixed(1) + "배)" });
+      var x1 = d * d1 / sd, x5 = d * d5 / (sd * Math.sqrt(5));
+      if (x1 >= RULE.chaseK) w.push({ k: "chase", m: (d > 0 ? "급등일 추격" : "급락일 추격 숏") + " (오늘 " + sgn(d1 * 100, 1) + "% · 평소의 " + x1.toFixed(1) + "배)" });
+      else if (x5 >= RULE.chaseK) w.push({ k: "chase", m: (d > 0 ? "단기 급등 뒤 추격" : "단기 급락 뒤 추격 숏") + " (5일 " + sgn(d5 * 100, 1) + "% · 평소의 " + x5.toFixed(1) + "배)" });
     }
-    if (G.qty && c[i] < G.avg) w.push({ k: "avgdown", m: "물타기 (평단보다 " + sgn((c[i] / G.avg - 1) * 100, 1) + "%)" });
+    if (G.qty && G.side === d && d * (c[i] - G.avg) < 0) w.push({ k: "avgdown", m: "물타기 (" + (d > 0 ? "" : "숏 ") + "평단보다 " + sgn((c[i] / G.avg - 1) * 100, 1) + "%)" });
     if (m[i] !== null) {
       var past = m[i - RULE.trendLook];
-      if (c[i] < m[i]) w.push({ k: "down", m: "하락 추세 (" + RULE.trendMA + "일선 아래)" });
-      else if (past !== null && m[i] < past) w.push({ k: "down", m: "하락 추세 (" + RULE.trendMA + "일선 하락 중)" });
+      if (d > 0) {
+        if (c[i] < m[i]) w.push({ k: "down", m: "하락 추세 (" + RULE.trendMA + "일선 아래)" });
+        else if (past !== null && m[i] < past) w.push({ k: "down", m: "하락 추세 (" + RULE.trendMA + "일선 하락 중)" });
+      } else {
+        if (c[i] > m[i]) w.push({ k: "down", m: "상승 추세 숏 (" + RULE.trendMA + "일선 위)" });
+        else if (past !== null && m[i] > past) w.push({ k: "down", m: "상승 추세 숏 (" + RULE.trendMA + "일선 상승 중)" });
+      }
     }
     return w;
   }
@@ -709,40 +729,50 @@ header .lnk,header .status{color:var(--hd-mu)}
     for (var j = Math.max(1, i - RULE.volLook + 1); j <= i; j++) { var r = c[j] / c[j - 1] - 1; s1 += r; s2 += r * r; n++; }
     return n > 10 ? Math.sqrt(Math.max(0, s2 / n - (s1 / n) * (s1 / n)) * n / (n - 1)) : 0;
   }
-  function chaseHint(i){                                 // 추격 기준선: 오늘 몇 % 넘게 오르면 추격인지
-    var sd = dailyVol(i); return sd ? "하루 +" + (RULE.chaseK * sd * 100).toFixed(1) + "% · 5일 +" + (RULE.chaseK * sd * Math.sqrt(5) * 100).toFixed(1) + "%" : "";
+  function chaseHint(i, d){                              // 추격 기준선: 오늘 몇 % 넘게 오르면(숏은 내리면) 추격인지
+    var sd = dailyVol(i), g = d < 0 ? "−" : "+";
+    return sd ? "하루 " + g + (RULE.chaseK * sd * 100).toFixed(1) + "% · 5일 " + g + (RULE.chaseK * sd * Math.sqrt(5) * 100).toFixed(1) + "%" : "";
   }
   function stopPctAt(i){                                 // 변동성 손절폭 (검증: 손절 걸리는 비율이 변동성과 관계없이 고르게 됨)
     var sd = dailyVol(i), k = sd ? RULE.stopBase * Math.sqrt(sd / RULE.volRef) : RULE.stopBase;
     return Math.max(RULE.stopMin, Math.min(RULE.stopMax, k));
   }
   function trailPctOf(sp){ return Math.max(RULE.trailMin, Math.min(RULE.trailMax, RULE.trailK * sp)); }
-  function guideLines(){                                 // 보유 중 손절선: 처음엔 평단 − 변동성 손절폭 → 고점이 오르면 따라 올라감 (내려가지 않음)
+  function guideLines(){                                 // 손절선: 롱 = 평단 − 손절폭 → 고점 따라 올라감 · 숏 = 평단 + 손절폭 → 저점 따라 내려감 (되돌아가지 않음)
     if (!G.qty || G.pos0 < 0) return null;
-    var top = 0; for (var j = G.pos0; j <= G.cur; j++) top = Math.max(top, G.d.c[j]);
-    var base = G.avg * (1 - G.stopPct), tp = trailPctOf(G.stopPct), p = price();
-    var trail = top * (1 - tp), floor = G.stopFloor || 0;
-    G.stopLv = Math.max(G.stopLv || 0, base, trail, floor);
+    var S = G.side, ext = G.d.c[G.pos0];
+    for (var j = G.pos0; j <= G.cur; j++) ext = S > 0 ? Math.max(ext, G.d.c[j]) : Math.min(ext, G.d.c[j]);
+    var base = G.avg * (1 - S * G.stopPct), tp = trailPctOf(G.stopPct), p = price();
+    var trail = ext * (1 - S * tp), fl = G.stopFloor, cand = [base, trail];
+    if (fl !== null && fl !== undefined) cand.push(fl);
+    if (G.stopLv !== null && G.stopLv !== undefined) cand.push(G.stopLv);
+    G.stopLv = S > 0 ? Math.max.apply(null, cand) : Math.min.apply(null, cand);
     var stop = G.stopLv, eq = asset(), P = G.plan;
-    var cap = G.qty * (G.avg - stop) / eq;              // 손절선에서 팔면 원금 대비 잃는(−면 지키는) 계좌 비율
-    var why = stop <= base + 1e-9 ? "" : floor >= trail && floor >= stop - 1e-9 ? "불타기 후 2%룰" : "고점 −" + (tp * 100).toFixed(0) + "%";
-    return { stop: stop, raised: !!why, why: why, base: base, pct: G.stopPct, tp: tp, top: top, risk: Math.max(0, cap), cap: cap,
-             avg: G.avg, plan: P, target: P && !P.took ? P.E + RULE.targetR * P.R : null, addAt: P && !P.added ? P.E + RULE.addAtR * P.R : null,
-             hit: p <= stop ? "손절선" : null, goal: P && !P.took && p >= P.E + RULE.targetR * P.R };
+    var cap = S * G.qty * (G.avg - stop) / eq;          // 손절선에서 청산하면 원금 대비 잃는(−면 지키는) 계좌 비율
+    var raised = S * (stop - base) > 1e-9;
+    var why = !raised ? "" : fl !== null && fl !== undefined && S * (fl - trail) >= 0 && Math.abs(fl - stop) < 1e-9 ? "불타기 후 2%룰"
+            : (S > 0 ? "고점 −" : "저점 +") + (tp * 100).toFixed(0) + "%";
+    var tgt = P ? P.E + S * RULE.targetR * P.R : null;
+    return { side: S, stop: stop, raised: raised, why: why, base: base, pct: G.stopPct, tp: tp, top: ext, risk: Math.max(0, cap), cap: cap,
+             avg: G.avg, plan: P, target: P && !P.took ? tgt : null, addAt: P && !P.added ? P.E + S * RULE.addAtR * P.R : null,
+             hit: S * (p - stop) <= 0 ? "손절선" : null, goal: !!(P && !P.took && S * (p - tgt) >= 0) };
   }
-  function riskQty(){                                    // 2%룰 수량: 손절선에 걸려도 계좌의 RULE.risk 만 잃도록
+  function riskQty(d){                                   // 2%룰 수량: 손절선에 걸려도 계좌의 RULE.risk 만 잃도록
     var p = price(), eq = asset(), budget = eq * RULE.risk;
-    if (G.qty && p < G.avg) return 0;                    // 손실 중 추가 매수(물타기)는 권하지 않음
     if (!G.qty) return Math.max(0, Math.floor(budget / (p * stopPctAt(G.cur))));
-    var P = G.plan;                                      // 계획: +1R 도달 때 처음과 같은 수량 한 번 (손절선은 2%룰에 맞춰 올림)
-    if (P && !P.added) return p >= P.E + RULE.addAtR * P.R ? P.q0 : 0;
+    if (d !== undefined && d !== G.side) return 0;
+    var S = G.side;
+    if (S * (p - G.avg) < 0) return 0;                   // 손실 중 추가 진입(물타기)은 권하지 않음
+    var P = G.plan;                                      // 계획: +1R(숏은 −1R) 도달 때 처음과 같은 수량 한 번
+    if (P && !P.added) return S * (p - (P.E + S * RULE.addAtR * P.R)) >= 0 ? P.q0 : 0;
     return 0;
   }
   function rulePct(x){ return Math.round(x * 1000) / 10 + "%"; }
   function addPreview(q){                                // q주를 지금가에 추가하면 바뀌는 평단 · 손절선
-    var p = price(), n = G.qty + q, avg = (G.avg * G.qty + p * q) / n, eq = asset();
-    var stop = Math.max(guideLines().stop, avg * (1 - G.stopPct), avg - eq * RULE.risk / n);
-    return { avg: avg, stop: stop, risk: n * (avg - stop) / eq };
+    var p = price(), S = G.side, n = G.qty + q, avg = (G.avg * G.qty + p * q) / n, eq = asset();
+    var lv = [guideLines().stop, avg * (1 - S * G.stopPct), avg - S * eq * RULE.risk / n];
+    var stop = S > 0 ? Math.max.apply(null, lv) : Math.min.apply(null, lv);
+    return { avg: avg, stop: stop, risk: S * n * (avg - stop) / eq };
   }
 
   function act(kind){
@@ -750,53 +780,73 @@ header .lnk,header .status{color:var(--hd-mu)}
     var p = price();
     msg("");
     var gl = guideLines();
-    if (gl && gl.hit && !G.sigSeen) { if (kind !== "S") G.rules.ignore++; G.sigSeen = true; }   // 매도 신호가 뜬 뒤 첫 행동
+    if (gl && gl.hit && !G.sigSeen) { if (kind !== closeKey()) G.rules.ignore++; G.sigSeen = true; }   // 청산 신호가 뜬 뒤 첫 행동
     G.lastWarn = null;
-    if (kind === "B") {
-      var q = buyQty();
-      if (q < 1) { msg(ratio === "risk" ? (G.qty && p < G.avg ? "2%룰: 손실 중에는 추가 매수하지 않습니다" : "2%룰상 추가 매수 여유가 없습니다") : "현금이 부족합니다"); return; }
-      var bw = buyWarnings(G.cur);
-      var pyr = G.qty > 0 && p > G.avg;                  // 수익 중 추가 = 불타기
-      if (!G.qty) { G.pos0 = G.cur; G.stopPct = stopPctAt(G.cur); G.stopLv = 0; G.stopFloor = 0;
-                    G.plan = { E: p, R: p * G.stopPct, q0: q, added: false }; }
-      G.rules.buys++;
-      bw.forEach(function(w){ G.rules[w.k]++; });
-      if (bw.length) G.lastWarn = bw;
-      var cost = q * p * (1 + BUY_FEE);
-      G.avg = (G.avg * G.qty + p * q) / (G.qty + q);
-      G.qty += q; G.cash -= cost; G.cost += cost;
-      G.trades.push({ i: G.cur, side: "B", p: p, q: q });
-      if (pyr) {                                         // 불타기 후: 손절선 = max(분석한 손절가, 2%룰을 지키는 손절가)
-        G.stopFloor = Math.max(G.stopFloor || 0, G.avg * (1 - G.stopPct), G.avg - asset() * RULE.risk / G.qty);
-        if (G.plan) G.plan.added = true;                 // 계획의 불타기는 한 번만
+    if (kind === "B" || kind === "S") {
+      var d = kind === "B" ? 1 : -1;
+      if (G.qty && G.side === -d) {                      // 반대 주문 = 청산 (롱 매도 · 숏 환매수)
+        var took = at3R(), cq = closeQty();
+        closePos(p, cq, false);
+        if (took && G.qty && G.plan) G.plan.took = true; // 3R에서 일부 청산 완료 → 나머지는 따라가기 손절로
+      } else {
+        if (d < 0 && !SHORT_OK) { msg("보유 주식이 없습니다 (숏을 하려면 아래 '숏(공매도) 허용'을 켜세요)"); return; }
+        if (!openPos(d)) return;
       }
-      var glb = guideLines();
-      if (glb && glb.risk > RULE.risk * 1.25) G.rules.risk++;                   // 매수 뒤 손절 시 손실이 계좌 2.5% 초과
-    } else if (kind === "S") {
-      if (!G.qty) { msg("보유 주식이 없습니다"); return; }
-      var took = at3R(), sq = sellQty();
-      sell(p, sq, false);
-      if (took && G.qty && G.plan) G.plan.took = true;  // 3R에서 일부 매도 완료 → 나머지는 따라가기 손절로
     }
     G.cur++; G.turn++;                                   // 종목·코스피 차트가 함께 하루 진행
+    if (G.qty && G.side < 0 && G.turn < TURNS && asset() <= G.qty * price() * MARGIN_CALL) {   // 숏 증거금 부족 → 반대매매(전량 환매)
+      closePos(price(), G.qty, true); G.trades[G.trades.length - 1].mc = true;
+      msg("증거금 부족 — 숏 전량 반대매매 (자산이 숏 금액의 " + Math.round(MARGIN_CALL * 100) + "% 아래)");
+    }
     if (G.turn >= TURNS) finish();
     render();
   }
-  function sell(p, q, auto){                             // 일부 매도: 매수원가도 판 비율만큼 줄이고 평단은 그대로
-    var part = G.cost * q / G.qty, proceeds = q * p * (1 - SELL_FEE - TAX);
-    G.trades.push({ i: G.cur, side: "S", p: p, q: q, r: proceeds / part - 1, auto: auto });
-    G.cash += proceeds; G.qty -= q; G.cost -= part;
-    if (!G.qty) { G.avg = 0; G.cost = 0; G.pos0 = -1; G.plan = null; G.stopFloor = 0; }
+  function openPos(d){
+    var p = price(), q = openQty(d);
+    if (q < 1) {
+      msg(ratio === "risk" ? (G.qty && d * (p - G.avg) < 0 ? "2%룰: 손실 중에는 추가 진입하지 않습니다" : "2%룰상 추가 진입 여유가 없습니다")
+                           : d > 0 ? "현금이 부족합니다" : "숏 한도(자산의 100%)가 찼습니다");
+      return false;
+    }
+    var bw = entryWarnings(G.cur, d);
+    var pyr = G.qty > 0 && d * (p - G.avg) > 0;          // 수익 중 추가 = 불타기
+    if (!G.qty) { G.side = d; G.pos0 = G.cur; G.stopPct = stopPctAt(G.cur); G.stopLv = null; G.stopFloor = null;
+                  G.plan = { E: p, R: p * G.stopPct, q0: q, added: false }; }
+    G.rules.buys++;
+    bw.forEach(function(w){ G.rules[w.k]++; });
+    if (bw.length) G.lastWarn = bw;
+    if (d > 0) { var cost = q * p * (1 + BUY_FEE); G.cash -= cost; G.cost += cost; }
+    else { var proc = q * p * (1 - SELL_FEE - TAX); G.cash += proc; G.cost += proc; }
+    G.avg = (G.avg * G.qty + p * q) / (G.qty + q);
+    G.qty += q;
+    G.trades.push({ i: G.cur, side: d > 0 ? "B" : "S", p: p, q: q, ls: d > 0 ? "L" : "S", open: true });
+    if (pyr) {                                           // 불타기 후: 손절선 = 분석한 손절가와 2%룰을 지키는 손절가 중 더 보수적인 쪽
+      var lv = [G.avg * (1 - d * G.stopPct), G.avg - d * asset() * RULE.risk / G.qty];
+      if (G.stopFloor !== null && G.stopFloor !== undefined) lv.push(G.stopFloor);
+      G.stopFloor = d > 0 ? Math.max.apply(null, lv) : Math.min.apply(null, lv);
+      if (G.plan) G.plan.added = true;                   // 계획의 불타기는 한 번만
+    }
+    var glb = guideLines();
+    if (glb && glb.risk > RULE.risk * 1.25) G.rules.risk++;                     // 진입 뒤 손절 시 손실이 계좌 2.5% 초과
+    return true;
+  }
+  function closePos(p, q, auto){                         // 일부 청산: 원가(숏은 받은 돈)도 청산 비율만큼 줄이고 평단은 그대로
+    var part = G.cost * q / G.qty, S = G.side, r;
+    if (S > 0) { var pr = q * p * (1 - SELL_FEE - TAX); r = pr / part - 1; G.cash += pr; }
+    else { var pay = q * p * (1 + BUY_FEE); r = part / pay - 1; G.cash -= pay; }
+    G.trades.push({ i: G.cur, side: S > 0 ? "S" : "B", p: p, q: q, r: r, auto: auto, ls: S > 0 ? "L" : "S" });
+    G.qty -= q; G.cost -= part;
+    if (!G.qty) { G.avg = 0; G.cost = 0; G.pos0 = -1; G.plan = null; G.stopFloor = null; G.stopLv = null; G.side = 0; }
   }
 
   function finish(){
-    if (G.qty) sell(price(), G.qty, true);
+    if (G.qty) closePos(price(), G.qty, true);
     G.done = true;
     G.reveal = decodeReveal(G.d.r) || {};
     var ret = G.cash / CASH0 - 1, bh = G.d.c[G.cur] / G.d.c[G.s] - 1;
     var kr = G.k ? G.k.c[G.cur] / G.k.c[G.s] - 1 : null;
     var rv = G.reveal, dd = rv.d || [];
-    var nb = G.trades.filter(function(t){ return t.side === "B"; }).length;
+    var nb = G.trades.filter(function(t){ return t.open; }).length, nsh = G.trades.filter(function(t){ return t.open && t.ls === "S"; }).length;
     var rec = { ret: ret, bh: bh, n: nb, name: rv.name || "?", from: dd[G.s + 1] || null, to: dd[G.cur] || null };
     var h = loadHist(); h.unshift(rec); saveHist(h.slice(0, 200));
     $("res").innerHTML =
@@ -807,7 +857,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       '<div class="cmp"><div><b style="color:' + col(ret) + '">' + sgn(ret * 100, 2) + '%</b><span>내 수익률</span></div>' +
       '<div><b style="color:' + col(bh) + '">' + sgn(bh * 100, 2) + '%</b><span>종목 등락</span></div>' +
       (kr === null ? "" : '<div><b style="color:' + col(kr) + '">' + sgn(kr * 100, 2) + '%</b><span>' + esc(MKT.index_name + (rv.bench ? " (" + rv.bench + ")" : "")) + '</span></div>') + '</div>' +
-      '<div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">매수 ' + nb + '회 · 최종 자산 ' + money(G.cash) + '</div>' +
+      '<div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">진입 ' + nb + '회' + (nsh ? " (롱 " + (nb - nsh) + " · 숏 " + nsh + ")" : "") + ' · 최종 자산 ' + money(G.cash) + '</div>' +
       '<div class="btns"><button class="act ghost" id="evbtn" type="button">매매 평가</button>' +
       '<button class="act ghost" id="aibtn" type="button">AI 분석</button>' +
       '<button class="act buy" id="again" type="button">다음 종목 <small>N</small></button></div><div id="evbox"></div><div id="aibox"></div>';
@@ -876,47 +926,88 @@ header .lnk,header .status{color:var(--hd-mu)}
     return { t: t, L: L, up: up, dn: dn, rr: rr, flags: f, score: Math.max(0, Math.min(100, sc)) };
   }
 
-  function roundTrips(){                                 // 0주 → 보유 → 0주 까지를 한 번의 매매로 묶음
-    var out = [], cur = null, q = 0;
+  function evalShort(t){                                // 숏 진입 평가 — 롱 평가의 위아래를 뒤집음 (아래 지지 = 목표, 위 저항 = 위험)
+    var d = G.d, i = t.i, p = t.p, f = [], sc = 50, add = function(k, m, s){ f.push({ k: k, m: m }); sc += s || 0; };
+    var L = levels(i, p), up = L.res ? L.res.v / p - 1 : null, dn = 1 - L.sup.v / p, rr = dn / (up === null ? 0.10 : up);
+    if (!L.res) add("b", "위로 120일 안에 고점이 없는 신고가 영역에서 숏 — 위가 열려 있는 자리", -12);
+    else if (rr >= 2) add("g", "기대 손익비 1:" + rr.toFixed(1) + " — 지지까지 먹을 폭(" + pc(-dn) + ")이 저항까지 위험(" + pc(up) + ")보다 넉넉함", 20);
+    else if (rr >= 1) add("n", "기대 손익비 1:" + rr.toFixed(1) + " — 무난하지만 여유는 크지 않음", 5);
+    else add("b", "기대 손익비 1:" + rr.toFixed(1) + " — 지지까지 " + pc(-dn) + "인데 저항까지 " + pc(up) + " (불리한 자리)", -15);
+    if (dn < 0.03 && L.sup.l.indexOf("가정") < 0) add("b", "지지(" + L.sup.l + " " + px(L.sup.v) + ") 바로 위에서 숏 — 아래로 " + pc(-dn) + "밖에 안 남음", -10);
+    if (L.res && up > 0.12) add("b", "가까운 저항까지 " + pc(up) + " — 틀렸을 때 손실 폭이 큼", -5);
+    var m20 = G.ma[20][i], m60 = G.ma[60][i], m120 = G.ma[120][i];
+    var gap = p / m20 - 1, r5 = d.c[i] / d.c[i - 5] - 1, day = d.c[i] / d.c[i - 1] - 1;
+    if (gap < -0.10) add("b", "MA20보다 " + pc(gap) + " 아래 — 낙폭 과대 구간 추격 숏", -10);
+    else if (gap > 0.12) add("n", "MA20보다 " + pc(gap) + " 위 — 과열 구간 역추세 숏", 0);
+    if (r5 < -0.15) add("b", "직전 5일 " + pc(r5) + " 급락한 뒤 숏 (추격)", -8);
+    if (day < -0.07) add("b", "당일 " + pc(day) + " 장대음봉 종가에 숏 — 다음 날 반등 위험", -5);
+    if (m20 < m60 && m60 < m120) add("g", "이평선 역배열 — 하락 추세 안에서 숏", 10);
+    else if (m20 > m60 && m60 > m120) add("b", "이평선 정배열 — 상승 추세 중 숏", -10);
+    else if (p < m120) sc += 3;
+    var va = 0; for (var j = i - 20; j < i; j++) va += d.v[j]; va /= 20;
+    if (va > 0 && d.v[i] / va >= 2) add(day < 0 ? "g" : "n", "거래량 평소의 " + (d.v[i] / va).toFixed(1) + "배 — " + (day < 0 ? "매도 물량 출회일" : "매수세 유입일"), day < 0 ? 3 : 0);
+    if (G.k) {
+      var kc = G.k.c[i], k20 = G.k.ma[20][i], k60 = G.k.ma[60][i];
+      if (kc < k20 && k20 < k60) add("g", "시장(" + MKT.index_label + ")이 하락 추세일 때 숏", 5);
+      else if (kc > k20 && k20 > k60) add("b", "시장(" + MKT.index_label + ")이 상승 추세일 때 숏", -5);
+    }
+    return { t: t, L: L, up: up, dn: dn, rr: rr, flags: f, score: Math.max(0, Math.min(100, sc)), short: true };
+  }
+
+  function roundTrips(){                                 // 0주 → 보유 → 0주 까지를 한 번의 매매로 묶음 (롱·숏)
+    var out = [], cur = null, pos = 0;
     G.trades.forEach(function(t, idx){
-      if (!cur) cur = { list: [], buyAmt: 0, buyQ: 0, cost: 0, proceeds: 0 };
+      var sq = t.side === "B" ? t.q : -t.q;
+      if (!cur) cur = { list: [], dir: sq > 0 ? 1 : -1, inAmt: 0, inQ: 0, inM: 0, outM: 0 };
       cur.list.push({ t: t, idx: idx });
-      if (t.side === "B") { q += t.q; cur.buyAmt += t.p * t.q; cur.buyQ += t.q; cur.cost += t.p * t.q * (1 + BUY_FEE); }
-      else { q -= t.q; cur.proceeds += t.p * t.q * (1 - SELL_FEE - TAX); }
-      if (q === 0) { out.push(cur); cur = null; }
+      if ((sq > 0) === (cur.dir > 0)) {                  // 진입·추가
+        cur.inAmt += t.p * t.q; cur.inQ += t.q;
+        cur.inM += cur.dir > 0 ? t.p * t.q * (1 + BUY_FEE) : t.p * t.q * (1 - SELL_FEE - TAX);
+      } else cur.outM += cur.dir > 0 ? t.p * t.q * (1 - SELL_FEE - TAX) : t.p * t.q * (1 + BUY_FEE);
+      pos += sq;
+      if (pos === 0) { out.push(cur); cur = null; }
     });
     return out;
   }
 
   function evalTrip(rt, ent){
     var d = G.d, f = [], add = function(k, m){ f.push({ k: k, m: m }); };
-    var first = rt.list[0].t, last = rt.list[rt.list.length - 1].t, avg = rt.buyAmt / rt.buyQ;
-    var ret = rt.proceeds / rt.cost - 1, mfe = -Infinity, mae = Infinity, j;
-    for (j = first.i + 1; j <= last.i; j++) { mfe = Math.max(mfe, d.h[j] / avg - 1); mae = Math.min(mae, d.l[j] / avg - 1); }
+    var S = rt.dir, first = rt.list[0].t, last = rt.list[rt.list.length - 1].t, avg = rt.inAmt / rt.inQ;
+    var ret = S > 0 ? rt.outM / rt.inM - 1 : rt.inM / rt.outM - 1, mfe = -Infinity, mae = Infinity, j;
+    for (j = first.i + 1; j <= last.i; j++) {
+      mfe = Math.max(mfe, S > 0 ? d.h[j] / avg - 1 : 1 - d.l[j] / avg);
+      mae = Math.min(mae, S > 0 ? d.l[j] / avg - 1 : 1 - d.h[j] / avg);
+    }
     if (mfe >= 0.08 && ret < mfe * 0.4) add("b", "보유 중 최고 " + pc(mfe) + "까지 갔지만 " + pc(ret) + "에 청산 — 수익 반납이 큼");
     else if (ret > 0.03 && ret >= mfe * 0.7) add("g", "보유 중 최고 수익(" + pc(mfe) + ")의 대부분을 지켜낸 청산");
     else if (mfe >= 0.15 && ret > 0) add("n", "최고 " + pc(mfe) + "에서 " + pc(ret) + "로 일부 반납 — 분할 익절을 고려할 만한 구간");
     if (ret < -0.07) add("b", "손실이 " + pc(ret) + "까지 커짐 — 손절 기준이 늦음");
     if (mae <= -0.08 && ret > 0) add("n", "한때 " + pc(mae) + "까지 밀린 걸 버텨서 수익 — 운이 따른 버티기일 수 있음");
-    var sup = ent && ent.L.sup, brk = -1;
-    if (sup && sup.l.indexOf("가정") < 0) {
-      for (j = first.i + 1; j <= last.i; j++) if (d.c[j] < sup.v * 0.98) { brk = j; break; }
-      if (brk >= 0 && last.i - brk > 2) add("b", "매수 때 지지(" + sup.l + " " + px(sup.v) + ")가 깨진 뒤에도 " + (last.i - brk) + "일 더 보유");
-      else if (brk >= 0) add("g", "지지(" + sup.l + ") 이탈 직후 정리 — 원칙적인 손절");
+    var lv = ent ? (S > 0 ? ent.L.sup : ent.L.res) : null, brk = -1;
+    if (lv && lv.l.indexOf("가정") < 0) {
+      for (j = first.i + 1; j <= last.i; j++) if (S > 0 ? d.c[j] < lv.v * 0.98 : d.c[j] > lv.v * 1.02) { brk = j; break; }
+      if (brk >= 0 && last.i - brk > 2) add("b", (S > 0 ? "매수 때 지지" : "숏 진입 때 저항") + "(" + lv.l + " " + px(lv.v) + ")" + (S > 0 ? "가 깨진" : "이 뚫린") + " 뒤에도 " + (last.i - brk) + "일 더 보유");
+      else if (brk >= 0) add("g", (S > 0 ? "지지(" + lv.l + ") 이탈" : "저항(" + lv.l + ") 돌파") + " 직후 정리 — 원칙적인 손절");
     }
-    if (last.auto) add("n", "게임 종료로 자동 청산 (마지막 날 종가)");
+    if (last.mc) add("b", "증거금 부족으로 반대매매 — 숏 손절이 너무 늦음");
+    else if (last.auto) add("n", "게임 종료로 자동 청산 (마지막 날 종가)");
     else {
       var e = Math.min(d.c.length - 1, last.i + 10), hi = -Infinity, lo = Infinity;
       for (j = last.i + 1; j <= e; j++) { hi = Math.max(hi, d.h[j] / last.p - 1); lo = Math.min(lo, d.l[j] / last.p - 1); }
-      if (hi > 0.10) add("n", "매도 후 10일 안에 " + pc(hi) + " 더 올랐음 — 조금 이른 매도");
-      else if (lo < -0.08) add("g", "매도 후 10일 안에 " + pc(lo) + " 하락 — 잘 판 자리");
+      if (S > 0) {
+        if (hi > 0.10) add("n", "매도 후 10일 안에 " + pc(hi) + " 더 올랐음 — 조금 이른 매도");
+        else if (lo < -0.08) add("g", "매도 후 10일 안에 " + pc(lo) + " 하락 — 잘 판 자리");
+      } else {
+        if (lo < -0.10) add("n", "환매 후 10일 안에 " + pc(lo) + " 더 빠졌음 — 조금 이른 환매");
+        else if (hi > 0.08) add("g", "환매 후 10일 안에 " + pc(hi) + " 반등 — 잘 환매한 자리");
+      }
     }
-    return { rt: rt, ret: ret, mfe: mfe, mae: mae, days: last.i - first.i, flags: f, first: first };
+    return { rt: rt, ret: ret, mfe: mfe, mae: mae, days: last.i - first.i, flags: f, first: first, dir: S };
   }
 
   function evaluate(){
     var entries = [], byIdx = {};
-    G.trades.forEach(function(t, idx){ if (t.side === "B") { var e = evalEntry(t); e.idx = idx; entries.push(e); byIdx[idx] = e; } });
+    G.trades.forEach(function(t, idx){ if (t.open) { var e = t.ls === "S" ? evalShort(t) : evalEntry(t); e.idx = idx; entries.push(e); byIdx[idx] = e; } });
     var trips = roundTrips().map(function(rt){ return evalTrip(rt, byIdx[rt.list[0].idx]); });
     var wins = trips.filter(function(x){ return x.ret > 0; }), loss = trips.filter(function(x){ return x.ret <= 0; });
     var avgW = wins.length ? wins.reduce(function(s, x){ return s + x.ret; }, 0) / wins.length : null;
@@ -937,21 +1028,22 @@ header .lnk,header .status{color:var(--hd-mu)}
 
   function summarize(entries, trips, ret, bh){
     if (!entries.length) {
-      if (bh > 0.10) return "한 번도 사지 않았는데 종목은 " + pc(bh) + " 올랐습니다. 기회를 지켜보기만 한 판입니다.";
-      if (bh < -0.10) return "관망한 사이 종목이 " + pc(bh) + " 빠졌습니다. 쉬는 것도 좋은 매매였습니다.";
+      if (bh > 0.10) return "한 번도 진입하지 않았는데 종목은 " + pc(bh) + " 올랐습니다. 기회를 지켜보기만 한 판입니다.";
+      if (bh < -0.10) return "관망한 사이 종목이 " + pc(bh) + " 빠졌습니다." + (SHORT_OK ? " 숏으로 수익을 낼 수 있었던 판입니다." : " 쉬는 것도 좋은 매매였습니다.");
       return "매매 없이 지켜본 판입니다 (종목 " + pc(bh) + ").";
     }
     var all = [], good = [], bad = [];
     entries.forEach(function(e){ all = all.concat(e.flags); });
     trips.forEach(function(x){ all = all.concat(x.flags); });
     var has = function(re){ return all.some(function(x){ return re.test(x.m); }); };
-    if (has(/정배열/)) good.push("상승 추세를 따라간 점");
-    if (has(/손익비 1:[2-9]|신고가 영역/)) good.push("손익비가 좋은 자리를 고른 점");
-    if (has(/지켜낸 청산|잘 판 자리|원칙적인 손절/)) good.push("청산 타이밍");
-    if (has(/불리한 자리/)) bad.push("손익비가 나쁜 자리에서 매수한 점");
-    if (has(/바로 밑에서 매수/)) bad.push("저항 바로 밑에서 매수한 점");
-    if (has(/추격|과열/)) bad.push("급등 뒤 추격 매수");
-    if (has(/역배열/)) bad.push("하락 추세 중 매수");
+    if (has(/정배열 — 상승 추세 안에서 매수|역배열 — 하락 추세 안에서 숏/)) good.push("추세 방향을 따라간 점");
+    if (has(/손익비 1:[2-9]|매물 부담이 적은/)) good.push("손익비가 좋은 자리를 고른 점");
+    if (has(/지켜낸 청산|잘 판 자리|잘 환매한 자리|원칙적인 손절/)) good.push("청산 타이밍");
+    if (has(/불리한 자리/)) bad.push("손익비가 나쁜 자리에서 진입한 점");
+    if (has(/바로 밑에서 매수|바로 위에서 숏/)) bad.push("저항·지지 바로 앞에서 진입한 점");
+    if (has(/위가 열려 있는/)) bad.push("신고가 영역에서 숏을 잡은 점");
+    if (has(/추격|과열 구간 추격/)) bad.push("급등·급락 뒤 추격 진입");
+    if (has(/역배열 — 하락 추세 중 매수|정배열 — 상승 추세 중 숏/)) bad.push("추세를 거스른 진입");
     if (has(/수익 반납/)) bad.push("수익을 지키지 못한 청산");
     if (has(/손절 기준이 늦음|깨진 뒤에도/)) bad.push("늦은 손절");
     var s = (good.length ? "좋았던 점: " + good.slice(0, 2).join(", ") + ". " : "") +
@@ -964,7 +1056,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     var gc = { A: "var(--ok)", B: "var(--dn)", C: "var(--warn)", D: "var(--up)", "-": "var(--muted)" }[E.grade];
     var stat = function(v, l){ return "<div><b>" + v + "</b><span>" + l + "</span></div>"; };
     var h = '<div class="ev"><div class="gr"><div class="grade" style="background:' + gc + '">' + E.grade + '</div>' +
-            '<div class="sum">' + esc(E.summary) + (E.score !== null ? "<small>종합 점수 " + Math.round(E.score) + " / 100 (매수 자리 50% · 결과 50%)</small>" : "") + "</div></div>";
+            '<div class="sum">' + esc(E.summary) + (E.score !== null ? "<small>종합 점수 " + Math.round(E.score) + " / 100 (진입 자리 50% · 결과 50%)</small>" : "") + "</div></div>";
     if (E.entries.length) {
       h += '<div class="stats">' + stat(E.trips.length + "회", "매매") + stat(E.trips.length ? Math.round(E.wins / E.trips.length * 100) + "%" : "-", "승률") +
            stat(E.rrR === null ? (E.avgL === null ? "손실 없음" : "-") : "1:" + E.rrR.toFixed(1), "실현 손익비") +
@@ -973,11 +1065,11 @@ header .lnk,header .status{color:var(--hd-mu)}
            stat(E.avgL === null ? "-" : '<span style="color:var(--dn)">' + pc(E.avgL) + "</span>", "평균 손실") +
            stat('<span style="color:' + col(E.ret) + '">' + pc(E.ret) + "</span>", "내 수익률") +
            stat('<span style="color:' + col(E.bh) + '">' + pc(E.bh) + "</span>", "종목 보유") + "</div>";
-      h += "<h4>매수 타점</h4>";
+      h += "<h4>진입 타점</h4>";
       E.entries.forEach(function(e, n){
         var t = e.t, chip = e.score >= 65 ? ["g", "좋은 자리"] : e.score >= 45 ? ["n", "보통"] : ["b", "불리한 자리"];
         var upW = e.up === null ? 60 : e.up / (e.up + e.dn) * 100;
-        h += '<div class="item"><div class="ih"><b>매수 ' + (n + 1) + "</b><span>" + (t.i - G.s + 1) + "턴 · " + pxu(t.p) + " × " + comma(t.q) + "주</span>" +
+        h += '<div class="item"><div class="ih"><b>' + (t.ls === "S" ? "숏 " : "롱 ") + (n + 1) + "</b><span>" + (t.i - G.s + 1) + "턴 · " + pxu(t.p) + " × " + comma(t.q) + "주</span>" +
              '<span class="chip ' + chip[0] + '">' + chip[1] + " " + e.score + '</span><button class="see" type="button" data-f="' + e.idx + '">차트에서 보기</button></div>' +
              '<div class="rr"><i style="width:' + (100 - upW) + '%;background:var(--sup)"></i><i style="width:' + upW + '%;background:var(--res)"></i></div>' +
              '<div class="rrl"><span>지지 ' + px(e.L.sup.v) + " (" + pc(-e.dn) + ", " + esc(e.L.sup.l) + ")</span><span>" +
@@ -985,7 +1077,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       });
       h += "<h4>청산</h4>";
       E.trips.forEach(function(x, n){
-        h += '<div class="item"><div class="ih"><b>매매 ' + (n + 1) + "</b><span>" + (x.first.i - G.s + 1) + "턴 진입 · " + x.days + "일 보유</span>" +
+        h += '<div class="item"><div class="ih"><b>' + (x.dir < 0 ? "숏 " : "롱 ") + "매매 " + (n + 1) + "</b><span>" + (x.first.i - G.s + 1) + "턴 진입 · " + x.days + "일 보유</span>" +
              '<span class="chip ' + (x.ret > 0 ? "g" : "b") + '">' + pc(x.ret, 2) + "</span>" +
              '<span style="color:var(--muted);font-size:12px">보유 중 최고 ' + pc(x.mfe) + " · 최저 " + pc(x.mae) + "</span></div>" +
              (x.flags.length ? flagList(x.flags) : "") + "</div>";
@@ -994,12 +1086,12 @@ header .lnk,header .status{color:var(--hd-mu)}
     var RU = G.rules;
     if (RU.buys) {
       var rl = function(n, txt){ return { k: n ? "b" : "g", m: txt + " " + n + "회" }; };
-      h += "<h4>규칙 준수 (매수 " + RU.buys + "회)</h4>" + flagList([
-        rl(RU.chase, "추격 매수 (평소 변동의 " + RULE.chaseK + "배 넘게 오른 날·5일 뒤)"),
-        rl(RU.avgdown, "물타기 (손실 중 추가 매수)"),
-        rl(RU.down, "하락 추세 매수 (" + RULE.trendMA + "일선 아래·하락)"),
-        rl(RU.risk, "계좌 위험 초과 매수 (손절 시 계좌 −" + rulePct(RULE.risk * 1.25) + " 넘는 수량)"),
-        rl(RU.ignore, "매도 신호 무시 (손절선 이탈 후 안 팖)")]);
+      h += "<h4>규칙 준수 (진입 " + RU.buys + "회)</h4>" + flagList([
+        rl(RU.chase, "추격 진입 (평소 변동의 " + RULE.chaseK + "배 넘게 오른 날 롱·내린 날 숏, 또는 5일 뒤)"),
+        rl(RU.avgdown, "물타기 (손실 중 추가 진입)"),
+        rl(RU.down, "역추세 진입 (" + RULE.trendMA + "일선 아래·하락 중 롱 / 위·상승 중 숏)"),
+        rl(RU.risk, "계좌 위험 초과 진입 (손절 시 계좌 −" + rulePct(RULE.risk * 1.25) + " 넘는 수량)"),
+        rl(RU.ignore, "청산 신호 무시 (손절선 이탈 후 청산 안 함)")]);
     }
     h += '<div class="foot">저항·지지는 매수 시점까지 확정된 고점·저점(좌우 5일)과 MA20·60·120으로 자동 판정합니다. 사람이 긋는 추세선·매물대와 다를 수 있습니다.</div></div>';
     return h;
@@ -1077,7 +1169,7 @@ header .lnk,header .status{color:var(--hd-mu)}
 
   function aiSystem(){
     return "당신은 스윙 트레이딩 코치입니다. 저는 종목명과 날짜를 모른 채 일봉 차트만 보고 하루씩 넘기며 매매하는 '차트 게임'을 마쳤습니다. " +
-      "매수·매도는 그날 종가에 체결되고, 한 턴은 하루입니다. 종목 차트 위에는 같은 기간의 비교 지수 차트가 함께 보였습니다. 아래 데이터로 제 매매를 복기해 주세요.\n" +
+      "롱(매수 → 매도)과 숏(공매도 → 환매수) 모두 할 수 있고, 주문은 그날 종가에 체결되며 한 턴은 하루입니다. 종목 차트 위에는 같은 기간의 비교 지수 차트가 함께 보였습니다. 아래 데이터로 제 매매를 복기해 주세요.\n" +
       "원칙:\n- 매매 당시까지 보였던 차트만으로 판단이 합리적이었는지 평가하세요. 결과를 알고 나서 하는 평가(사후 확신)는 피하고, 필요하면 '결과적으로는'이라고 구분하세요.\n" +
       "- 추세(이동평균 배열·기울기), 지지·저항, 거래량, 비교 지수 흐름, 손익비, 손절·익절 대응을 근거로 구체적인 날짜·가격을 들어 설명하세요.\n" +
       "- 함께 주는 규칙 기반 자동 평가는 참고만 하고, 동의하지 않으면 이유를 말하세요.\n" +
@@ -1104,22 +1196,23 @@ header .lnk,header .status{color:var(--hd-mu)}
     L.push("\n# 매매 기록 (그날 종가 체결)");
     if (!G.trades.length) L.push("매매 없음");
     G.trades.forEach(function(t){
-      L.push((t.side === "B" ? "매수" : "매도") + " · " + day(t.i) + " (턴 " + (t.i - G.s) + ") · " + f(t.p) + " × " + t.q + "주" +
-             (t.side === "S" ? " · 이 매도분 수익률 " + sgn(t.r * 100, 2) + "%" + (t.auto ? " (게임 종료로 자동 청산)" : "") : ""));
+      var lab = t.ls === "S" ? (t.open ? "공매도 (숏 진입)" : "환매수 (숏 청산)") : (t.open ? "매수 (롱 진입)" : "매도 (롱 청산)");
+      L.push(lab + " · " + day(t.i) + " (턴 " + (t.i - G.s) + ") · " + f(t.p) + " × " + t.q + "주" +
+             (!t.open ? " · 이 청산분 수익률 " + sgn(t.r * 100, 2) + "%" + (t.mc ? " (증거금 부족 반대매매)" : t.auto ? " (게임 종료로 자동 청산)" : "") : ""));
     });
     var ret = G.cash / CASH0 - 1, bh = d.c[G.cur] / d.c[G.s] - 1, kr = k ? k.c[G.cur] / k.c[G.s] - 1 : null;
     L.push("\n# 결과\n내 수익률 " + sgn(ret * 100, 2) + "% · 종목 그냥 보유 " + sgn(bh * 100, 2) + "%" + (kr === null ? "" : " · 비교 지수 " + sgn(kr * 100, 2) + "%") +
            " · 시작 자산 " + money(CASH0) + " · 수수료·세금 반영");
     var RU = G.rules;
-    L.push("\n# 규칙 체크 (매수 " + RU.buys + "회 · 추격 = 평소 변동성의 " + RULE.chaseK + "배 넘는 급등 뒤 매수)\n추격 매수 " + RU.chase + "회 · 물타기 " + RU.avgdown + "회 · 하락 추세 매수 " + RU.down + "회 · 계좌 위험 2.5% 초과 매수 " + RU.risk + "회 · 손절선(종목 변동성 기준 평단 -" + rulePct(RULE.stopMin) + "~" + rulePct(RULE.stopMax) + ", 고점이 오르면 고점 -" + rulePct(RULE.trailMin) + "~" + rulePct(RULE.trailMax) + "로 따라 올라감) 이탈 후 매도 안 함 " + RU.ignore + "회");
+    L.push("\n# 규칙 체크 (진입 " + RU.buys + "회 · 추격 = 평소 변동성의 " + RULE.chaseK + "배 넘는 급등 뒤 롱·급락 뒤 숏)\n추격 진입 " + RU.chase + "회 · 물타기 " + RU.avgdown + "회 · 역추세 진입 " + RU.down + "회 · 계좌 위험 2.5% 초과 진입 " + RU.risk + "회 · 손절선(종목 변동성 기준 평단 ∓" + rulePct(RULE.stopMin) + "~" + rulePct(RULE.stopMax) + ", 롱은 고점 −" + rulePct(RULE.trailMin) + "~" + rulePct(RULE.trailMax) + "로 따라 올라가고 숏은 저점 +로 따라 내려감) 이탈 후 청산 안 함 " + RU.ignore + "회");
     var E = G.evals || evaluate();
     L.push("\n# 규칙 기반 자동 평가 (참고용)\n등급 " + E.grade + (E.score !== null ? " · 점수 " + Math.round(E.score) : "") + " · " + E.summary);
     E.entries.forEach(function(e, n){
-      L.push("매수 " + (n + 1) + " (" + day(e.t.i) + "): 점수 " + e.score + " · 지지 " + f(e.L.sup.v) + "(" + e.L.sup.l + ")" +
+      L.push((e.short ? "숏 진입 " : "롱 진입 ") + (n + 1) + " (" + day(e.t.i) + "): 점수 " + e.score + " · 지지 " + f(e.L.sup.v) + "(" + e.L.sup.l + ")" +
              (e.L.res ? " · 저항 " + f(e.L.res.v) + "(" + e.L.res.l + ")" : " · 위 저항 없음") + " · " + e.flags.map(function(x){ return x.m; }).join(" / "));
     });
     E.trips.forEach(function(x, n){
-      L.push("매매 " + (n + 1) + ": " + sgn(x.ret * 100, 2) + "% · " + x.days + "일 보유 · 보유 중 최고 " + sgn(x.mfe * 100, 1) + "% 최저 " + sgn(x.mae * 100, 1) + "%" +
+      L.push((x.dir < 0 ? "숏 " : "롱 ") + "매매 " + (n + 1) + ": " + sgn(x.ret * 100, 2) + "% · " + x.days + "일 보유 · 보유 중 최고 " + sgn(x.mfe * 100, 1) + "% 최저 " + sgn(x.mae * 100, 1) + "%" +
              (x.flags.length ? " · " + x.flags.map(function(y){ return y.m; }).join(" / ") : ""));
     });
     return L.join("\n");
@@ -1133,29 +1226,34 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("ret").innerHTML = '<span style="color:' + col(ret) + '">' + sgn(ret * 100, 2) + "%</span>";
     $("asset").textContent = money(a);
     $("cash").textContent = money(G.cash);
-    $("evalamt").textContent = money(G.qty * p);            // 평가금액 = 현재가 × 보유수량
+    $("evalamt").textContent = money(G.qty * p);            // 평가금액 = 현재가 × 보유수량 (숏은 갚아야 할 금액)
+    var S = G.side;
     if (G.qty) {
-      var net = G.qty * p * (1 - SELL_FEE - TAX), gain = net - G.cost;
-      $("hold").textContent = comma(G.qty) + "주 · 평단 " + px(G.avg);
-      $("pnl").innerHTML = pctHtml(net / G.cost - 1) + ' <span style="color:var(--muted)">(' + (gain > 0 ? "+" : gain < 0 ? "-" : "") + money(Math.abs(gain)) + ')</span>';
+      var val = S > 0 ? G.qty * p * (1 - SELL_FEE - TAX) : G.qty * p * (1 + BUY_FEE);
+      var gain = S > 0 ? val - G.cost : G.cost - val, r = S > 0 ? val / G.cost - 1 : G.cost / val - 1;
+      $("hold").innerHTML = (S > 0 ? '<b style="color:var(--up)">롱</b> ' : '<b style="color:var(--dn)">숏</b> ') + comma(G.qty) + "주 · 평단 " + px(G.avg);
+      $("pnl").innerHTML = pctHtml(r) + ' <span style="color:var(--muted)">(' + (gain > 0 ? "+" : gain < 0 ? "-" : "") + money(Math.abs(gain)) + ')</span>';
     } else { $("hold").textContent = "없음"; $("pnl").textContent = "-"; }
     $("turn").textContent = G.turn + " / " + TURNS;
     $("prog").style.width = (G.turn / TURNS * 100) + "%";
-    var q = buyQty();
-    $("bBuy").disabled = G.done || q < 1;
-    $("bSell").disabled = G.done || !G.qty;
+    var bq = S < 0 ? closeQty() : openQty(1), sq = S > 0 ? closeQty() : SHORT_OK ? openQty(-1) : 0;
+    var bl = S < 0 ? "환매수" : S > 0 ? "추가 매수" : "매수 (롱)", sl = S > 0 ? "매도" : S < 0 ? "추가 공매도" : SHORT_OK ? "공매도 (숏)" : "매도";
+    $("bBuyL").textContent = bl; $("bSellL").textContent = sl;
+    $("bBuy").disabled = G.done || bq < 1;
+    $("bSell").disabled = G.done || sq < 1;
     $("bNext").disabled = G.done;
-    var sq = sellQty();
-    $("buyinfo").innerHTML = G.done ? "게임이 끝났습니다" :
-      "매수 <b>" + comma(q) + "주</b> (" + money(q * p) + ")" +
-      (sq ? " · 매도 <b>" + comma(sq) + "주</b>" + (sq === G.qty ? " (전량)" : "") : "") +
-      " <span style=\"opacity:.7\">· 종가 " + px(p) + "</span>";
+    var part = function(lab, q, closing){ return lab + " <b>" + comma(q) + "주</b>" + (closing ? (q === G.qty ? " (전량)" : "") : " (" + money(q * p) + ")"); };
+    var info = [];
+    if (bq) info.push(part(bl, bq, S < 0));
+    if (sq) info.push(part(sl, sq, S > 0));
+    $("buyinfo").innerHTML = G.done ? "게임이 끝났습니다" : (info.join(" · ") || "주문 가능 수량 없음") + " <span style=\"opacity:.7\">· 종가 " + px(p) + "</span>";
     var lg = "";
     for (var i = G.trades.length - 1; i >= 0; i--) {
       var t = G.trades[i], buy = t.side === "B";
-      lg += '<div><span class="s" style="color:' + (buy ? "var(--up)" : "var(--dn)") + '">' + (buy ? "매수" : (t.auto ? "청산" : "매도")) + '</span>' +
+      var tl = t.mc ? "반대매매" : t.auto ? "청산" : t.ls === "S" ? (t.open ? "공매도" : "환매수") : (t.open ? "매수" : "매도");
+      lg += '<div><span class="s" style="color:' + (buy ? "var(--up)" : "var(--dn)") + '">' + tl + '</span>' +
             '<span>' + (t.auto ? "종료" : (t.i - G.s + 1) + "턴") + '</span><span>' + px(t.p) + ' × ' + comma(t.q) + '</span>' +
-            '<span class="p">' + (buy ? "" : pctHtml(t.r)) + '</span></div>';
+            '<span class="p">' + (t.open ? "" : pctHtml(t.r)) + '</span></div>';
     }
     $("log").innerHTML = lg || '<span class="empty">아직 매매가 없습니다</span>';
   }
@@ -1164,48 +1262,58 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (!gl || !gl.hit) G.sigSeen = false;
     if (!GUIDE || G.done) { box.hidden = true; return; }
     box.hidden = false;
-    var bw = buyWarnings(G.cur);
+    var S = G.side, dirs = G.qty ? [S] : SHORT_OK ? [1, -1] : [1];
+    var ws = dirs.map(function(d){ return { d: d, w: entryWarnings(G.cur, d) }; });
+    var allW = ws.every(function(x){ return x.w.length; });
     if (GUIDE_MIN) {                                     // 접힌 상태: 알약 하나 (경고·신호가 있으면 색으로)
       box.className = "gbub mini";
-      box.innerHTML = gl && gl.hit ? '<span class="sig">● 매도 신호</span>' : G.lastWarn || bw.length ? '<span class="w">⚠ 규칙</span>' : '<span class="ok">✓ 규칙</span>';
+      box.innerHTML = gl && gl.hit ? '<span class="sig">● ' + (S > 0 ? "매도" : "환매") + " 신호</span>" : G.lastWarn || allW ? '<span class="w">⚠ 규칙</span>' : '<span class="ok">✓ 규칙</span>';
       box.title = "눌러서 규칙 도우미 펼치기";
       return;
     }
     box.className = "gbub"; box.title = "";
     var list = function(w){ return w.map(function(x){ return esc(x.m); }).join("<br>"); };
+    var mu = function(t){ return ' <span style="color:var(--muted)">' + t + "</span>"; };
     var h = '<div class="gh"><span>규칙 도우미</span><button class="gmin" type="button" title="접기">–</button></div>';
-    if (G.lastWarn) h += '<div class="w">⚠ 방금 매수: ' + list(G.lastWarn) + "</div>";
+    if (G.lastWarn) h += '<div class="w">⚠ 방금 진입: ' + list(G.lastWarn) + "</div>";
     if (gl) {
-      var P = gl.plan, mu = function(t){ return ' <span style="color:var(--muted)">' + t + "</span>"; };
-      if (P) h += "<div>1R <b>" + px(P.R) + "</b>" + mu("(" + (G.stopPct * 100).toFixed(1) + "%) · 진입 " + px(P.E)) + "</div>";
-      h += "<div>평단 <b>" + px(gl.avg) + "</b> · " + (gl.target ? "3R <b>" + px(gl.target) + "</b>" + mu("(1/3 매도)") : P && P.took ? mu("3R 1/3 매도 완료") : "") + "</div>";
-      var dist = gl.avg - gl.stop;
-      h += gl.raised ? "<div>손절 ↑ <b>" + px(gl.stop) + "</b>" + mu("(" + gl.why + "로 올림 · 평단 " + (dist >= 0 ? "−" + px(dist) : "+" + px(-dist)) + ")") + "</div>"
-                     : "<div>손절 <b>" + px(gl.stop) + "</b>" + mu("(평단 −" + px(dist) + " · −" + (dist / gl.avg * 100).toFixed(1) + "%)") + "</div>";
-      if (dist > 0 && gl.target) h += "<div>" + mu("손익비 1 : " + ((gl.target - gl.avg) / dist).toFixed(1)) + "</div>";
+      var P = gl.plan, ex = S > 0 ? "매도" : "환매", up = S > 0 ? "↑" : "↓", mv = S > 0 ? "올림" : "내림", lossSg = S > 0 ? "−" : "+";
+      h += "<div><b style=\"color:" + (S > 0 ? "var(--up)" : "var(--dn)") + "\">" + (S > 0 ? "롱" : "숏") + "</b>" + (P ? " · 1R <b>" + px(P.R) + "</b>" + mu("(" + (G.stopPct * 100).toFixed(1) + "%) · 진입 " + px(P.E)) : "") + "</div>";
+      h += "<div>평단 <b>" + px(gl.avg) + "</b> · " + (gl.target ? "3R <b>" + px(gl.target) + "</b>" + mu("(1/3 " + ex + ")") : P && P.took ? mu("3R 1/3 " + ex + " 완료") : "") + "</div>";
+      var dist = S * (gl.avg - gl.stop);                 // + = 손절선까지 손실 폭
+      h += gl.raised ? "<div>손절 " + up + " <b>" + px(gl.stop) + "</b>" + mu("(" + gl.why + "로 " + mv + " · 평단 " + (dist >= 0 ? lossSg + px(dist) : (S > 0 ? "+" : "−") + px(-dist)) + ")") + "</div>"
+                     : "<div>손절 <b>" + px(gl.stop) + "</b>" + mu("(평단 " + lossSg + px(dist) + " · " + lossSg + (dist / gl.avg * 100).toFixed(1) + "%)") + "</div>";
+      if (dist > 0 && gl.target) h += "<div>" + mu("손익비 1 : " + (S * (gl.target - gl.avg) / dist).toFixed(1)) + "</div>";
       h += gl.cap <= 0 ? '<div class="ok">손절돼도 계좌 +' + (-gl.cap * 100).toFixed(1) + "% 지킴</div>"
          : gl.risk > RULE.risk * 1.25 ? '<div class="w">⚠ 손절 시 계좌 −' + (gl.risk * 100).toFixed(1) + "% (2% 넘음)</div>"
          : '<div style="color:var(--muted)">손절 시 계좌 −' + (gl.risk * 100).toFixed(1) + "%</div>";
-      h += gl.hit ? '<div class="sig">● 매도 신호 — 종가가 손절선 아래</div>'
-         : gl.goal ? '<div class="sig" style="color:var(--ok)">● 3R 도달 — 1/3 매도 (' + comma(Math.max(1, Math.round(G.qty * RULE.takePart))) + "주) · 나머지는 손절 ↑ 따라가기</div>"
-         : '<div class="ok">보유 유지 — 손절선 위</div>';
+      h += gl.hit ? '<div class="sig">● ' + ex + " 신호 — 종가가 손절선 " + (S > 0 ? "아래" : "위") + "</div>"
+         : gl.goal ? '<div class="sig" style="color:var(--ok)">● 3R 도달 — 1/3 ' + ex + " (" + comma(Math.max(1, Math.round(G.qty * RULE.takePart))) + "주) · 나머지는 손절 " + up + " 따라가기</div>"
+         : '<div class="ok">보유 유지 — 손절선 ' + (S > 0 ? "위" : "아래") + "</div>";
       if (P && !P.added) {
-        if (price() >= gl.addAt) {
+        var r1 = S > 0 ? "+1R" : "−1R";
+        if (S * (price() - gl.addAt) >= 0) {
           var pv = addPreview(P.q0);
-          h += '<div class="w">▲ 불타기 신호: +1R 도달 → ' + comma(P.q0) + "주 추가" + mu("(추가하면 평단 " + px(pv.avg) + " · 손절 " + px(pv.stop) + "로 올림 · 손절 시 −" + (Math.max(0, pv.risk) * 100).toFixed(1) + "%)") + "</div>";
-        } else h += "<div>" + mu("불타기: +1R " + px(gl.addAt) + " 도달 시 " + comma(P.q0) + "주 추가") + "</div>";
-      } else if (P) h += "<div>" + mu(P.took ? "나머지는 고점 따라가기 손절로 보유 (고점 −" + (gl.tp * 100).toFixed(0) + "%)" : "불타기 완료 · 3R " + px(gl.target) + "에서 1/3 매도") + "</div>";
+          h += '<div class="w">▲ 불타기 신호: ' + r1 + " 도달 → " + comma(P.q0) + "주 " + (S > 0 ? "추가 매수" : "추가 공매도") + mu("(추가하면 평단 " + px(pv.avg) + " · 손절 " + px(pv.stop) + "로 " + mv + " · 손절 시 −" + (Math.max(0, pv.risk) * 100).toFixed(1) + "%)") + "</div>";
+        } else h += "<div>" + mu("불타기: " + r1 + " " + px(gl.addAt) + " 도달 시 " + comma(P.q0) + "주 추가") + "</div>";
+      } else if (P) h += "<div>" + mu(P.took ? "나머지는 " + (S > 0 ? "고점" : "저점") + " 따라가기 손절로 보유 (" + (S > 0 ? "고점 −" : "저점 +") + (gl.tp * 100).toFixed(0) + "%)" : "불타기 완료 · 3R " + px(gl.target) + "에서 1/3 " + ex) + "</div>";
     }
-    h += bw.length ? '<div class="w">지금 사면 ⚠ ' + list(bw) + "</div>" : '<div class="ok">지금 사면 ✓ 문제 없음</div>';
-    var rq = Math.min(riskQty(), Math.floor(G.cash / (price() * (1 + BUY_FEE)))), rp = rq * price() / asset();
-    if (G.qty && rp < 0.01) rq = 0;                      // 자산의 1%도 안 되는 추가 매수는 안내하지 않음
-    if (!G.qty) {                                        // 진입 전: 1R → 2%룰 수량 → 목표 3R
-      var sp0 = stopPctAt(G.cur), r0 = price() * sp0;
-      h += "<div>1R <b>" + px(r0) + "</b> <span style=\"color:var(--muted)\">(" + (sp0 * 100).toFixed(1) + "%) · 손절 " + px(price() - r0) + " · 목표 3R " + px(price() + RULE.targetR * r0) + "</span></div>";
-      h += rq > 0 ? "<div>2%룰 <b>" + comma(rq) + "주</b> <span style=\"color:var(--muted)\">(자산의 " + Math.round(rp * 100) + "% · 손절 시 계좌 −2%)</span></div>"
+    ws.forEach(function(x){
+      var lab = G.qty ? (S > 0 ? "더 사면" : "더 팔면") : x.d > 0 ? "롱 진입하면" : "숏 진입하면";
+      h += x.w.length ? '<div class="w">' + lab + " ⚠ " + list(x.w) + "</div>" : '<div class="ok">' + lab + " ✓ 문제 없음</div>";
+    });
+    if (!G.qty) {                                        // 진입 전: 1R → 손절 · 목표 3R → 2%룰 수량
+      var p0 = price(), sp0 = stopPctAt(G.cur), r0 = p0 * sp0;
+      h += "<div>1R <b>" + px(r0) + "</b>" + mu("(" + (sp0 * 100).toFixed(1) + "%)") + "</div>";
+      h += "<div>" + mu("롱: 손절 " + px(p0 - r0) + " · 목표 3R " + px(p0 + RULE.targetR * r0)) + "</div>";
+      if (SHORT_OK) h += "<div>" + mu("숏: 손절 " + px(p0 + r0) + " · 목표 3R " + px(p0 - RULE.targetR * r0)) + "</div>";
+      var rq = Math.min(riskQty(1), Math.floor(G.cash / (p0 * (1 + BUY_FEE)))), rp = rq * p0 / asset();
+      h += rq > 0 ? "<div>2%룰 <b>" + comma(rq) + "주</b>" + mu("(자산의 " + Math.round(rp * 100) + "% · 손절 시 계좌 −2%)") + "</div>"
                   : '<div style="color:var(--muted)">2%룰 수량을 살 현금이 없음</div>';
-    } else if (price() < G.avg) h += '<div style="color:var(--muted)">2%룰: 손실 중이라 추가 매수 안 함</div>';
-    if (!bw.some(function(x){ return x.k === "chase"; }) && chaseHint(G.cur)) h += '<div style="color:var(--muted);font-size:11px">추격 기준 ' + chaseHint(G.cur) + "</div>";
+    } else if (S * (price() - G.avg) < 0) h += '<div style="color:var(--muted)">2%룰: 손실 중이라 추가 진입 안 함</div>';
+    var hints = dirs.filter(function(d){ return !ws.some(function(x){ return x.d === d && x.w.some(function(y){ return y.k === "chase"; }); }); })
+                    .map(function(d){ return (dirs.length > 1 ? (d > 0 ? "롱 " : "숏 ") : "") + chaseHint(G.cur, d); }).filter(function(t){ return /\d/.test(t); });
+    if (hints.length) h += '<div style="color:var(--muted);font-size:11px">추격 기준 ' + hints.join(" · ") + "</div>";
     box.innerHTML = h;
   }
   function placeGuide(){                                 // 최근 캔들과 겹치지 않는 위·아래 빈 곳에, 꼬리는 마지막 캔들을 가리키게
@@ -1297,7 +1405,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       for (k = 0; k < L_MAS.length; k++) { var m = ma[L_MAS[k]][i]; if (m !== null) { hi = Math.max(hi, m); lo = Math.min(lo, m); } }
     }
     if (opt.avg) { hi = Math.max(hi, opt.avg); lo = Math.min(lo, opt.avg); }
-    if (opt.guide) { lo = Math.min(lo, opt.guide.stop); if (opt.guide.target) hi = Math.max(hi, opt.guide.target); }
+    if (opt.guide) { lo = Math.min(lo, opt.guide.stop); hi = Math.max(hi, opt.guide.stop); if (opt.guide.target) { hi = Math.max(hi, opt.guide.target); lo = Math.min(lo, opt.guide.target); } }
     var fe = opt.trades && G.focus !== null && G.evals ? G.evals.entries.filter(function(e){ return e.idx === G.focus; })[0] : null;
     if (fe) { lo = Math.min(lo, fe.L.sup.v); if (fe.L.res) hi = Math.max(hi, fe.L.res.v); }
     var pad = (hi - lo) * 0.06 || hi * 0.02; hi += pad; lo -= pad;
@@ -1365,7 +1473,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         ctx.save(); ctx.globalAlpha = 0.09; ctx.fillStyle = color; ctx.fillRect(0, y1, plotW, y2 - y1); ctx.restore();
       };
       zone(opt.guide.avg, opt.guide.target, C.up);
-      if (opt.guide.stop < opt.guide.avg) zone(opt.guide.stop, opt.guide.avg, C.dn);
+      if (opt.guide.side * (opt.guide.avg - opt.guide.stop) > 0) zone(opt.guide.stop, opt.guide.avg, C.dn);
       else zone(opt.guide.avg, opt.guide.stop, C.ok);
     }
     // 이동평균
@@ -1452,14 +1560,14 @@ header .lnk,header .status{color:var(--hd-mu)}
       var gc = opt.guide.raised ? C.trail : C.stop;
       dashed(opt.guide.stop, gc, .95, opt.guide.raised ? [8, 4] : [2, 3]);
       ctx.fillStyle = gc; ctx.textAlign = "left"; ctx.font = bold;
-      ctx.fillText((opt.guide.raised ? "손절 ↑ " : "손절 ") + px(opt.guide.stop), 6, Y(opt.guide.stop) + 11);
+      ctx.fillText((opt.guide.raised ? (opt.guide.side > 0 ? "손절 ↑ " : "손절 ↓ ") : "손절 ") + px(opt.guide.stop), 6, Y(opt.guide.stop) + (opt.guide.side > 0 ? 11 : -9));
       if (opt.guide.target) {                            // 목표 3R · +1R 불타기 가격
         dashed(opt.guide.target, C.up, .95, [8, 4]);
-        ctx.fillStyle = C.up; ctx.fillText("3R (1/3 매도) " + px(opt.guide.target), 6, Y(opt.guide.target) - 9);
+        ctx.fillStyle = C.up; ctx.fillText("3R (1/3 " + (opt.guide.side > 0 ? "매도" : "환매") + ") " + px(opt.guide.target), 6, Y(opt.guide.target) + (opt.guide.side > 0 ? -9 : 11));
       }
       if (opt.guide.addAt) {
         dashed(opt.guide.addAt, C.mu, .7, [2, 4]);
-        ctx.fillStyle = C.mu; ctx.font = font; ctx.fillText("+1R 불타기 " + px(opt.guide.addAt), 6, Y(opt.guide.addAt) - 6);
+        ctx.fillStyle = C.mu; ctx.font = font; ctx.fillText((opt.guide.side > 0 ? "+1R" : "−1R") + " 불타기 " + px(opt.guide.addAt), 6, Y(opt.guide.addAt) + (opt.guide.side > 0 ? -6 : 10));
       }
     }
     dashed(last, lc, .8, [3, 3]);
@@ -1729,6 +1837,12 @@ header .lnk,header .status{color:var(--hd-mu)}
     GUIDE_MIN = !GUIDE_MIN;
     store(function(){ localStorage.setItem(GUIDE_MIN_KEY, GUIDE_MIN ? "1" : "0"); });
     draw();
+  });
+  $("shortOn").checked = SHORT_OK;
+  $("shortOn").addEventListener("change", function(){
+    SHORT_OK = this.checked; this.blur();
+    store(function(){ localStorage.setItem(SHORT_KEY, SHORT_OK ? "1" : "0"); });
+    if (G) render();
   });
   $("guideOn").checked = GUIDE;
   $("guideOn").addEventListener("change", function(){
