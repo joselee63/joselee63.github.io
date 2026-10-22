@@ -527,6 +527,15 @@ header .lnk,header .status{color:var(--hd-mu)}
             <div class="line"><select id="nhsort" style="max-width:100%"></select></div><span class="kdesc" id="nhsortdesc"></span></div>
         </div>
       </div>
+      <div class="qbox" id="box-wrs">
+        <h3>와인스타인 상대강도 필터 (맨스필드 RS) — RS = (종목 ÷ 지수) ÷ 그 비율의 52주(252일) 평균 − 1, ×100 · 0 위 = 시장 대비 강세 국면 (스탠 와인스타인 2단계 조건)</h3>
+        <div class="qgrid">
+          <div class="qf"><span class="lbl">0선 돌파</span><div class="line"><label><input type="checkbox" id="wz"> 최근</label><input type="number" id="wzn" min="1" max="60" value="5" style="width:56px"><span>거래일 안에 RS가 0선을 아래→위로 돌파 (1 = 그날 돌파)</span></div></div>
+          <div class="qf"><span class="lbl">RS 값</span><div class="line"><label><input type="checkbox" id="wv"> RS가</label><input type="number" id="wvx" step="1" value="0" style="width:64px"><select id="wvop">
+            <option value="ge">이상</option><option value="le">이하</option><option value="cross">을 위로 돌파</option></select><span id="wvnw" hidden>· 최근<input type="number" id="wvn" min="1" max="60" value="5" style="width:56px;margin:0 4px">거래일 안에</span></div></div>
+          <div class="qf"><span class="lbl">비교 지수</span><div class="line"><select id="wrsb"><option value="own" selected>종목이 속한 시장 지수 (코스피·코스닥 / S&amp;P·나스닥)</option><option value="bench">위 '벤치마크'로 고른 지수</option></select></div></div>
+        </div>
+      </div>
       <div id="box-cb" hidden>
         <p class="cbnote" style="margin:0 0 10px">종가 무렵(15:20) 조건에 맞는 종목을 사서 <b>다음 날 시가(동시호가)에 전량 매도</b>하는 하룻밤 전략입니다.
           대상은 이 사이트 종목이 아니라 <b>상장폐지 종목까지 포함한 코스피·코스닥 전 종목</b>(2015~)이라 생존 편향이 없고, 연구 보고서(docs/closing-bet-research.md)와 같은 데이터·같은 계산입니다.
@@ -713,6 +722,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("box-mom").hidden = MODE !== "mom"; $("box-pull").hidden = MODE !== "pull";
     desc();
   });
+  ["wz", "wzn", "wv", "wvx", "wvop", "wvn", "wrsb"].forEach(function(id){ $(id).addEventListener("change", function(){ $("wvnw").hidden = $("wvop").value !== "cross"; desc(); }); });
   ["qlook", "qmid", "qmidpct", "qshort", "qtop", "qreb", "qabs", "qabslook", "qabsmin", "qmkt", "qbench", "qcost", "qsplit", "gma", "gman", "gstop", "gstopv", "gtrail", "gtrailv", "gdd", "gddv", "gvol", "gvolv"].forEach(function(id){ $(id).addEventListener("change", desc); });
 
   // ---------- 52주 신고가 · 정렬 기준 ----------
@@ -722,6 +732,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     ["compB", "★ 복합 B: 저가 대비 + 12개월 + 위험조정 모멘텀", "세 기준의 순위 평균 — 분위 수익률이 가장 고르게 계단식으로 올라감 (한국 단조성 0.98~0.99)"],
     ["r252", "★ 12개월 수익률", "1년 수익률 — 신고가 후보 안에서 한국·미국 모두 상위 10개가 꾸준히 강함"],
     ["compA", "★ 복합 A: 저가 대비 + 12개월 + 6개월", "세 기준의 순위 평균 — 신고가 후보 안 상위/하위 차이가 가장 큼 (한국 3개월 보유)"],
+    ["mrs", "와인스타인 RS (맨스필드, 52주)", "지수 대비 상대 주가가 1년 평균보다 얼마나 높은가 — 0 위면 시장보다 강한 국면 (비교 지수: 종목이 속한 시장)"],
     ["r126", "6개월 수익률", "6개월 수익률 — 대체로 유효하나 12개월보다 약함"],
     ["radj", "위험조정 모멘텀 (6개월 수익률 ÷ 변동성)", "덜 출렁이며 오른 종목 — 한국 전체 분위는 유효, 후보 안에서는 약함"],
     ["r21", "최근 1개월 수익률", "단기 강세 — 한국 후보 안에서는 강하나 미국 전체에선 들쭉날쭉"],
@@ -750,7 +761,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     var nh = STRAT === "nh", cbs = STRAT === "cb";
     $("row-mode").style.display = nh || cbs ? "none" : "";
     $("box-mom").hidden = nh || cbs || MODE !== "mom"; $("box-pull").hidden = nh || cbs || MODE !== "pull"; $("box-nh").hidden = !nh;
-    $("box-cb").hidden = !cbs; $("q-common").hidden = cbs; $("box-guard").hidden = cbs; $("row-go").hidden = cbs;
+    $("box-cb").hidden = !cbs; $("box-wrs").hidden = cbs; $("q-common").hidden = cbs; $("box-guard").hidden = cbs; $("row-go").hidden = cbs;
     $("cbres").hidden = !cbs || !CBR;
     ["qres", "qdecsec", "qpicksec"].forEach(function(id){ if (cbs) { if ($(id).style.display !== "none") $(id).setAttribute("data-was", "1"); $(id).style.display = "none"; } else if ($(id).getAttribute("data-was")) { $(id).style.display = ""; $(id).removeAttribute("data-was"); } });
     if (cbs) cbLoad();
@@ -1073,6 +1084,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       case "lowgain": return LO[s][t] > 0 ? p / LO[s][t] - 1 : null;
       case "r252": return ret(s, t, 252);
       case "r126": return ret(s, t, 126);
+      case "mrs": v = mrsOf(s, ownBench(s))[t]; return isFinite(v) ? v : null;
       case "r21": return ret(s, t, 21);
       case "radj": r = ret(s, t, 126); v = sdv(s, t, 126); return r !== null && v ? r / (v * Math.sqrt(126)) : null;
       case "near": return hi > 0 ? p / hi : null;
@@ -1089,6 +1101,48 @@ header .lnk,header .status{color:var(--hd-mu)}
     }
     return null;
   }
+  // ---------- 와인스타인(맨스필드) 상대강도 ----------
+  //   RS선 = 종목 종가 ÷ 지수 종가, MRS = (RS선 ÷ RS선의 252일 평균 − 1) × 100  (주봉 52주 평균의 일봉 근사)
+  var MRSC = {}, MRS_N = 252;
+  function ownBench(s){ return ST[s].b && CODE[ST[s].b] !== undefined ? ST[s].b : (BENCH[0][0]); }
+  function mrsOf(s, bcode){
+    var key = bcode + ":" + s; if (MRSC[key]) return MRSC[key];
+    var T = D.length, out = new Float64Array(T).fill(NaN), bi = CODE[bcode];
+    if (bi === undefined) return (MRSC[key] = out);
+    var r = new Float64Array(T), sum = 0, cnt = 0;
+    for (var t = 0; t < T; t++) {
+      var a = P[s][t], b = P[bi][t];
+      r[t] = a > 0 && b > 0 ? a / b : NaN;
+      if (isFinite(r[t])) { sum += r[t]; cnt++; }
+      if (t >= MRS_N && isFinite(r[t - MRS_N])) { sum -= r[t - MRS_N]; cnt--; }
+      if (t >= MRS_N - 1 && cnt >= MRS_N * 0.95 && isFinite(r[t])) out[t] = (r[t] / (sum / cnt) - 1) * 100;
+    }
+    return (MRSC[key] = out);
+  }
+  function mrsCross(m, t, x, n){                         // 최근 n거래일(t 포함) 안에 x 를 아래→위로 넘은 날이 있나
+    for (var j = t; j > t - n && j >= 1; j--) if (isFinite(m[j]) && isFinite(m[j - 1]) && m[j - 1] <= x && m[j] > x) return true;
+    return false;
+  }
+  function wrsBench(c, s){ return c.wrsB === "own" ? ownBench(s) : c.bench; }
+  function wrsPass(c, s, t){
+    if (!c.wz && !c.wv) return true;
+    var m = mrsOf(s, wrsBench(c, s)), v = m[t];
+    if (!isFinite(v)) return false;
+    if (c.wz && !mrsCross(m, t, 0, c.wzN)) return false;
+    if (c.wv) {
+      if (c.wvOp === "ge" && !(v >= c.wvX)) return false;
+      if (c.wvOp === "le" && !(v <= c.wvX)) return false;
+      if (c.wvOp === "cross" && !mrsCross(m, t, c.wvX, c.wvN)) return false;
+    }
+    return true;
+  }
+  function wrsText(c){
+    var g = [];
+    if (c.wz) g.push("최근 " + c.wzN + "거래일 안 RS 0선 돌파");
+    if (c.wv) g.push("RS " + c.wvX + (c.wvOp === "ge" ? " 이상" : c.wvOp === "le" ? " 이하" : " 상향 돌파(최근 " + c.wvN + "거래일)"));
+    return g.length ? " · 와인스타인 RS: " + g.join(", ") + (c.wrsB === "own" ? "" : " (비교: 벤치마크)") : "";
+  }
+
   var COMP = { compA: ["lowgain", "r252", "r126"], compB: ["lowgain", "r252", "radj"] };
   function scoreSet(k, set, t){                          // [{s, v}] — 복합 기준은 묶음 안 순위(0~1) 평균
     var out = [];
@@ -1116,6 +1170,8 @@ header .lnk,header .status{color:var(--hd-mu)}
              trail: $("gtrail").checked ? (+$("gtrailv").value || 15) / 100 : 0, dd: $("gdd").checked ? (+$("gddv").value || 20) / 100 : 0,
              vol: $("gvol").checked ? (+$("gvolv").value || 25) / 100 : 0,
              split: +$("qsplit").value,
+             wz: $("wz").checked, wzN: Math.max(1, Math.round(+$("wzn").value || 5)), wv: $("wv").checked, wvOp: $("wvop").value,
+             wvX: isFinite(parseFloat($("wvx").value)) ? parseFloat($("wvx").value) : 0, wvN: Math.max(1, Math.round(+$("wvn").value || 5)), wrsB: $("wrsb").value,
              bench: $("qbench").value, cost: Math.max(0, +$("qcost").value || 0) / 100, etf: $("qetf").checked,
              from: fromIso($("qfrom").value), to: fromIso($("qto").value) };
   }
@@ -1127,6 +1183,7 @@ header .lnk,header .status{color:var(--hd-mu)}
        c.mode === "mom" ? (c.rank === "single" ? perName(c.look) + " 수익률" : "가중 모멘텀(" + wText(c) + ")") + " 상위 " + c.top + "개"
                         : perName(c.mid) + " 수익률 상위 " + c.midPct + "% 안에서 " + perName(c.short) + " 수익률이 가장 낮은 " + c.top + "개") +
       "를 동일 비중으로 " + rb + "마다 교체" + (c.split > 1 ? " (자금 " + c.split + "묶음으로 나눠 교체일 분산)" : "");
+    s += wrsText(c);
     if (c.mkt) s += " · 벤치마크가 12개월 마이너스면 전량 현금";
     var g = [];
     if (c.ma) g.push("지수 " + c.ma + "일선 필터");
@@ -1170,6 +1227,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (c.strat === "nh") {
       var set = U.filter(function(s){
         if (!nhCand(c, s, t)) return false;
+        if (!wrsPass(c, s, t)) return false;
         if (!c.abs) return true;
         var a = ret(s, t, c.absLook); return a !== null && a > c.absMin;
       });
@@ -1178,6 +1236,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     }
     for (var k = 0; k < U.length; k++) {
       var s = U[k]; if (!(P[s][t] > 0)) continue;
+      if ((c.wz || c.wv) && !wrsPass(c, s, t)) continue;
       var a = c.abs ? ret(s, t, c.absLook) : null;
       if (c.abs && (a === null || a <= c.absMin)) continue;
       if (c.mode === "mom" && c.rank === "single") { var m = ret(s, t, c.look); if (m !== null) cand.push({ s: s, m: m, a: a }); }
@@ -1455,6 +1514,11 @@ header .lnk,header .status{color:var(--hd-mu)}
       }).join("") + "</tbody>";
   }
 
+  function mrsCell(c, s, t){
+    var m = mrsOf(s, wrsBench(c, s)), v = m[t]; if (!isFinite(v)) return "-";
+    var x = mrsCross(m, t, 0, 5);
+    return '<span style="color:' + col(v) + '">' + (v > 0 ? "+" : "") + v.toFixed(1) + "</span>" + (x ? '<span class="c">0선 돌파</span>' : "");
+  }
   function picks(c){
     var t = D.length - 1, U = universe(c), pk = pick(c, U, t);
     $("qpicksec").style.display = "";
@@ -1463,13 +1527,13 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (pk.cash) { $("qpick").innerHTML = '<tbody><tr><td class="l" style="padding:20px">벤치마크 12개월 수익률이 0 이하라 이 전략은 지금 전량 현금입니다.</td></tr></tbody>'; $("qpnote").textContent = ""; return; }
     if (!pk.list.length) { $("qpick").innerHTML = '<tbody><tr><td class="l" style="padding:20px">조건을 통과한 종목이 없습니다.</td></tr></tbody>'; $("qpnote").textContent = ""; return; }
     if (c.strat === "nh") {
-      $("qpick").innerHTML = '<thead><tr><th>순위</th><th class="l">종목</th><th class="l">섹터</th><th>현재가</th><th>정렬 점수</th><th>52주 고가 대비</th><th>52주 저가 대비</th><th>12개월</th><th>1개월</th><th>비중</th></tr></thead><tbody>' +
+      $("qpick").innerHTML = '<thead><tr><th>순위</th><th class="l">종목</th><th class="l">섹터</th><th>현재가</th><th>정렬 점수</th><th>52주 고가 대비</th><th>52주 저가 대비</th><th>12개월</th><th>1개월</th><th>와인스타인 RS</th><th>비중</th></tr></thead><tbody>' +
         pk.list.map(function(x, i){
           var s = x.s, sv = COMP[c.nhSort] ? Math.round(x.v * 100) : c.nhSort === "freq" ? x.v + "일" : c.nhSort === "fresh" ? -x.v + "일 전" :
                  /^(lowgain|r252|r126|r21)$/.test(c.nhSort) ? pc(x.v) : c.nhSort === "near" ? pc(x.v - 1) : x.v.toFixed(2);
           return "<tr><td>" + (i + 1) + '</td><td class="l"><b>' + esc(ST[s].n) + '</b><span class="c">' + esc(ST[s].c) + '</span></td><td class="l">' + esc(ST[s].s || "") + "</td><td>" + px(P[s][t]) +
             "</td><td><b>" + sv + "</b></td><td>" + pc(P[s][t] / HI[s][t] - 1) + "</td><td>" + cpc(P[s][t] / LO[s][t] - 1) + "</td><td>" + cpc(ret(s, t, 252)) + "</td><td>" + cpc(ret(s, t, 21)) +
-            "</td><td>" + (100 / c.top).toFixed(1) + "%</td></tr>";
+            "</td><td>" + mrsCell(c, s, t) + "</td><td>" + (100 / c.top).toFixed(1) + "%</td></tr>";
         }).join("") + "</tbody>";
       $("qpnote").textContent = "오늘 리밸런싱한다면 위 종목을 각 " + (100 / c.top).toFixed(1) + "%씩 담습니다" + (pk.list.length < c.top ? " (후보가 모자라 나머지 " + Math.round((1 - pk.list.length / c.top) * 100) + "%는 현금)" : "") +
         ". 52주 고가·저가는 종가 기준입니다. 과거 성과가 미래 수익을 보장하지 않으며, 투자 판단의 참고용입니다.";
@@ -1479,13 +1543,13 @@ header .lnk,header .status{color:var(--hd-mu)}
     var head = wcols.length ? "<th>가중 점수</th>" + wcols.map(function(p){ return "<th>" + perName(p) + "</th>"; }).join("") :
                c.mode === "mom" ? "<th>" + perName(c.look) + " 수익률</th>" : "<th>" + perName(c.mid) + " (중기)</th><th>" + perName(c.short) + " (단기)</th>";
     $("qpick").innerHTML = '<thead><tr><th>순위</th><th class="l">종목</th><th class="l">섹터</th><th>현재가</th>' + head +
-      (c.absLook !== momLook(c) && wcols.indexOf(c.absLook) < 0 ? "<th>" + perName(c.absLook) + " 수익률</th>" : "") + (wcols.indexOf(21) < 0 ? "<th>1개월</th>" : "") + "<th>비중</th></tr></thead><tbody>" +
+      (c.absLook !== momLook(c) && wcols.indexOf(c.absLook) < 0 ? "<th>" + perName(c.absLook) + " 수익률</th>" : "") + (wcols.indexOf(21) < 0 ? "<th>1개월</th>" : "") + "<th>와인스타인 RS</th><th>비중</th></tr></thead><tbody>" +
       pk.list.map(function(x, i){
         var s = x.s;
         var mc = wcols.length ? "<td><b>" + Math.round(x.m * 100) + "</b></td>" + wcols.map(function(p){ return "<td>" + cpc(ret(s, t, p)) + "</td>"; }).join("") :
                  c.mode === "mom" ? "<td>" + cpc(x.m) + "</td>" : "<td>" + cpc(x.mid) + "</td><td>" + cpc(x.sh) + "</td>";
         return "<tr><td>" + (i + 1) + '</td><td class="l"><b>' + esc(ST[s].n) + '</b><span class="c">' + esc(ST[s].c) + '</span></td><td class="l">' + esc(ST[s].s || "") + "</td><td>" + px(P[s][t]) + "</td>" + mc +
-          (c.absLook !== momLook(c) && wcols.indexOf(c.absLook) < 0 ? "<td>" + cpc(ret(s, t, c.absLook)) + "</td>" : "") + (wcols.indexOf(21) < 0 ? "<td>" + cpc(ret(s, t, 21)) + "</td>" : "") + "<td>" + (100 / c.top).toFixed(1) + "%</td></tr>";
+          (c.absLook !== momLook(c) && wcols.indexOf(c.absLook) < 0 ? "<td>" + cpc(ret(s, t, c.absLook)) + "</td>" : "") + (wcols.indexOf(21) < 0 ? "<td>" + cpc(ret(s, t, 21)) + "</td>" : "") + "<td>" + mrsCell(c, s, t) + "</td><td>" + (100 / c.top).toFixed(1) + "%</td></tr>";
       }).join("") + "</tbody>";
     $("qpnote").textContent = "오늘 리밸런싱한다면 위 종목을 각 " + (100 / c.top).toFixed(1) + "%씩 담습니다" + (pk.list.length < c.top ? " (나머지 " + Math.round((1 - pk.list.length / c.top) * 100) + "%는 현금)" : "") +
       ". 과거 성과가 미래 수익을 보장하지 않으며, 투자 판단의 참고용입니다.";
