@@ -42,6 +42,7 @@ def cat_of(title):
 def classify():
     smp = pd.read_csv(CB / "news_sample.csv", parse_dates=["date"])
     k = pd.read_csv(CB / "news_kind.csv")
+    smp = smp[smp["id"].isin(set(k["id"]))]          # 수집된 표본만 (중간에 멈춘 경우)
     k = k[k["title"] != "(공시 없음)"].copy()
     k["time"] = pd.to_datetime(k["time"])
     k = k.merge(smp[["id", "date"]], on="id")
