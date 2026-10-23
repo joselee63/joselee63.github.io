@@ -8,6 +8,7 @@ python tools/closebet/export_web.py   (CLOSEBET_OUT 으로 출력 경로, BACKTE
                  장중 고가 등락(×1e4, 상한가 터치 판정), 수익(종가→다음 시가, 거래정지·상폐 반영, ×1e4), 테마 연속일, 상장 261일+
   등급 원자료: 종목·연도별 '체결 가능 +3% 신호'의 (건수, 다음날 시가 갭 합) — 브라우저가 연 1회 워크포워드 등급을 계산
   날짜별: 레짐 3종(KOSDAQ>20일선, KOSPI>60일선, 이전 체계 밤갭), 코스닥·코스피 종가
+  panic: '패닉 낙주' 전략용 — 지수 시·고·저·종가, 시총 상위 20 경험 종목의 일봉과 날짜별 시총 순위(전날 기준)
 large_cap.py 의 정의(RET·THEME·MC1·G.yearly_grades)를 그대로 가져다 씀 → 페이지 결과가 연구 표와 같아야 함.
 """
 import json
@@ -89,6 +90,31 @@ out = {
               "n": gn[:, gidx].T.astype(int).tolist(), "s": np.round(gs[:, gidx].T * 1e4).astype(int).tolist(),
               "u": liq[:, gidx].T.astype(int).tolist()},
 }
+# ---------- 패닉일 낙주 (퀀트 '패닉 낙주' 전략) ----------
+#   지수(코스피·코스닥) 일봉 시·고·저·종가 + '전날 시총 상위 20 안에 한 번이라도 들었던' 종목의 일봉과 날짜별 시총 순위
+#   (순위 = 신호 전날 시총 기준, point-in-time · 상장폐지 종목도 포함)
+def idx_ohlc(code):
+    x = G.ix[G.ix["index_code"] == code].set_index("date").reindex(P.dates)
+    return {k: [None if pd.isna(v) else round(float(v), 2) for v in x[k]] for k in ("open", "high", "low", "close")}
+
+
+with np.errstate(invalid="ignore"):
+    MCR = pd.DataFrame(L.MC1).rank(axis=1, ascending=False, method="first").to_numpy()
+TOPN = 20
+lead = np.nonzero(np.nanmin(np.where(MCR <= TOPN, MCR, np.inf), 0) <= TOPN)[0]
+
+
+def px(a, j):
+    return [None if not np.isfinite(v) else (int(round(v)) if v >= 100 else round(float(v), 2)) for v in a[:, j]]
+
+
+out["panic"] = {
+    "ks": idx_ohlc("1001"), "kq": idx_ohlc("2001"), "topn": TOPN,
+    "stocks": [{"c": P.tickers[j], "n": P.name.get(P.tickers[j], P.tickers[j]), "x": 1 if P.tickers[j] in P.delisted else 0,
+                "o": px(P.o, j), "h": px(P.h, j), "l": px(P.l, j), "c2": px(P.c, j),
+                "rk": [int(r) if np.isfinite(r) and r <= TOPN else 0 for r in MCR[:, j]]} for j in lead],
+}
+print(f"panic: 상위{TOPN} 경험 종목 {len(lead)}개")
 s = json.dumps(out, ensure_ascii=False, separators=(",", ":"))
 OUT.write_text(s, encoding="utf-8")
 print(f"rows {len(ii):,}  stocks {len(stocks):,}  grade stocks {len(gidx):,}  {len(s)/1e6:.1f}MB → {OUT}")

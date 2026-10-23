@@ -488,6 +488,7 @@ header .lnk,header .status{color:var(--hd-mu)}
           <button type="button" class="on" data-s="dual">듀얼 모멘텀</button>
           <button type="button" data-s="nh">52주 신고가</button>
           <button type="button" data-s="cb" id="qstrat-cb">종가베팅</button>
+          <button type="button" data-s="panic" id="qstrat-pn">패닉 낙주</button>
           <button type="button" disabled title="준비 중">밸류 (준비 중)</button>
           <button type="button" disabled title="준비 중">저변동성 (준비 중)</button>
         </div>
@@ -534,6 +535,42 @@ header .lnk,header .status{color:var(--hd-mu)}
           <div class="qf"><span class="lbl">RS 값</span><div class="line"><label><input type="checkbox" id="wv"> RS가</label><input type="number" id="wvx" step="1" value="0" style="width:64px"><select id="wvop">
             <option value="ge">이상</option><option value="le">이하</option><option value="cross">을 위로 돌파</option></select><span id="wvnw" hidden>· 최근<input type="number" id="wvn" min="1" max="60" value="5" style="width:56px;margin:0 4px">거래일 안에</span></div></div>
           <div class="qf"><span class="lbl">비교 지수</span><div class="line"><select id="wrsb"><option value="own" selected>종목이 속한 시장 지수 (코스피·코스닥 / S&amp;P·나스닥)</option><option value="bench">위 '벤치마크'로 고른 지수</option></select></div></div>
+        </div>
+      </div>
+      <div id="box-pn" hidden>
+        <p class="cbnote" style="margin:0 0 10px">지수가 크게 빠진 날(패닉) <b>종가에 시가총액 최상위 대형주</b>를 사서 반등에 파는 전략입니다.
+          지수 폭락일엔 공포 매도로 대형 주도주까지 과하게 밀리는 경우가 많다는 아이디어이며, 상장폐지 포함 전 종목 일봉(2015~)과
+          그날 기준(전날 시가총액) 순위로 계산합니다. 1년에 몇 번 안 오는 기회라 '그날 망설이지 않도록' 규칙을 미리 정해 두는 용도입니다.</p>
+        <div class="cbpre" id="pnpre">
+          <button type="button" data-p="base"><b>검증 기본</b> (코스피 −4% · 삼전·하닉 · 다음날 시가)</button>
+          <button type="button" data-p="c1"><b>하루 보유</b> (코스피 −4% · 다음날 종가)</button>
+          <button type="button" data-p="two"><b>이틀 연속 급락</b> (전날·오늘 모두 −3%)</button>
+        </div>
+        <div class="qbox">
+          <h3>신호 — 그날 장 마감 직전(15:20)에 판단</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">기준 지수</span><div class="line"><select id="pnidx"><option value="ks" selected>코스피</option><option value="kq">코스닥</option></select></div></div>
+            <div class="qf"><span class="lbl">하락 조건</span><div class="line"><select id="pnsig"><option value="close" selected>당일 등락률(종가)이</option><option value="low">장중 저점이 (전날 종가 대비)</option></select>
+              <input type="number" id="pnth" step="0.5" max="-1" value="-4" style="width:64px"><span>% 이하</span></div></div>
+            <div class="qf"><span class="lbl">연속 하락</span><div class="line"><label><input type="checkbox" id="pncon"> 전날도 지수가</label><input type="number" id="pnth2" step="0.5" max="-0.5" value="-3" style="width:64px"><span>% 이하였을 때만</span></div></div>
+          </div>
+        </div>
+        <div class="qbox">
+          <h3>매수 · 매도</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">살 종목 (그날 종가)</span><div class="line"><select id="pntgt">
+              <option value="two" selected>삼성전자 + SK하이닉스</option><option value="1">시가총액 1위</option><option value="3">시가총액 상위 3</option><option value="5">시가총액 상위 5</option><option value="10">시가총액 상위 10</option><option value="20">시가총액 상위 20</option></select></div></div>
+            <div class="qf"><span class="lbl">파는 때</span><div class="line"><select id="pnexit">
+              <option value="o1" selected>다음날 시가</option><option value="c1">다음날 종가</option><option value="c2">2일 뒤 종가</option><option value="c3">3일 뒤 종가</option><option value="c5">5일 뒤 종가</option></select></div></div>
+            <div class="qf"><span class="lbl">손절 (보유 중 장중)</span><div class="line"><label><input type="checkbox" id="pnstop"> 매수가 대비</label><input type="number" id="pnsp" min="0.5" max="30" step="0.5" value="4" style="width:60px"><span>% 빠지면 그 가격에 매도 (시가가 더 낮으면 시가)</span></div></div>
+            <div class="qf"><span class="lbl">한 번에 넣는 비중</span><div class="line"><input type="number" id="pnw" min="1" max="100" step="5" value="30"><span>% (계좌 대비 · 종목끼리 똑같이 나눔 · 겹치면 합계 100%까지)</span></div></div>
+            <div class="qf"><span class="lbl">매매 비용 (왕복)</span><div class="line"><input type="number" id="pncost" min="0" max="2" step="0.05" value="0.25"><span>%</span></div></div>
+            <div class="qf"><span class="lbl">백테스트 기간</span><div class="line"><input type="date" id="pnfrom" value="2015-03-02"><span>~</span><input type="date" id="pnto"></div></div>
+          </div>
+        </div>
+        <div class="krow" style="margin-top:12px">
+          <p class="kdesc" id="pndesc" style="flex:1;min-width:260px;margin:0"></p>
+          <button class="kgo" id="pngo" type="button">백테스트 실행</button>
         </div>
       </div>
       <div id="box-cb" hidden>
@@ -623,6 +660,28 @@ header .lnk,header .status{color:var(--hd-mu)}
       </div>
       <h3 class="qlogh">리밸런싱 내역 <span class="c" id="qlogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
       <div class="qscroll"><table class="qtbl" id="qlog"></table></div>
+    </div>
+  </section>
+
+  <section class="card" id="pnres" hidden>
+    <div class="khead"><h2>패닉 낙주 백테스트 결과</h2><p class="sub" id="pnrsub"></p></div>
+    <div class="kbody">
+      <div class="qverdict" id="pnverdict"></div>
+      <div class="qmetrics" id="pnmetrics"></div>
+      <div class="qchart">
+        <div class="qi" id="pninfo"></div>
+        <canvas id="pnc" aria-label="패닉 낙주 계좌와 지수 누적 수익률 · 낙폭 차트" style="width:100%;height:340px;display:block"></canvas>
+      </div>
+      <div class="q2">
+        <div><h3>연도별 수익률 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">연도를 누르면 월별 수익률</span></h3><div class="qscroll"><table class="qtbl qyear" id="pnyear"></table></div></div>
+        <div><h3 id="pnmtitle">월별 수익률</h3><div class="mchart" id="pnmonth"></div></div>
+      </div>
+      <h3 class="qlogh" id="pnnowh">오늘 상태</h3>
+      <div id="pnnow" class="cbnote" style="margin-top:0"></div>
+      <h3 class="qlogh">신호 내역 <span class="c" id="pnlogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
+      <div class="qscroll"><table class="qtbl" id="pnlog"></table></div>
+      <p class="qnote">· 시가총액 순위는 신호 전날 기준(그때 알 수 있던 값) · 거래정지로 매도일 가격이 없으면 그 뒤 첫 거래일 가격 · 같은 날 여러 종목은 비중을 똑같이 나눔<br>
+      · 검증(2015~2026, 비용 전): 코스피 −4% 이하로 마감한 날 삼전·하닉 종가 매수 → 다음날 시가 평균 +1.97% · 승률 73% (아무 날이나 사면 +0.15% · 51%). 2026년을 빼도 −4%↓ 8일 평균 +2.67%. 최악은 다음날 시가 −10.9%</p>
     </div>
   </section>
 
@@ -758,17 +817,17 @@ header .lnk,header .status{color:var(--hd-mu)}
     var b = e.target.closest("button"); if (!b || b.disabled) return;
     STRAT = b.getAttribute("data-s");
     [].forEach.call(this.children, function(x){ x.classList.toggle("on", x === b); });
-    var nh = STRAT === "nh", cbs = STRAT === "cb";
+    var nh = STRAT === "nh", pns = STRAT === "panic", cbs = STRAT === "cb" || pns;
     $("row-mode").style.display = nh || cbs ? "none" : "";
     $("box-mom").hidden = nh || cbs || MODE !== "mom"; $("box-pull").hidden = nh || cbs || MODE !== "pull"; $("box-nh").hidden = !nh;
-    $("box-cb").hidden = !cbs; $("box-wrs").hidden = cbs; $("q-common").hidden = cbs; $("box-guard").hidden = cbs; $("row-go").hidden = cbs;
-    $("cbres").hidden = !cbs || !CBR;
+    $("box-cb").hidden = STRAT !== "cb"; $("box-pn").hidden = !pns; $("box-wrs").hidden = cbs; $("q-common").hidden = cbs; $("box-guard").hidden = cbs; $("row-go").hidden = cbs;
+    $("cbres").hidden = STRAT !== "cb" || !CBR; $("pnres").hidden = !pns || !PNR;
     ["qres", "qdecsec", "qpicksec"].forEach(function(id){ if (cbs) { if ($(id).style.display !== "none") $(id).setAttribute("data-was", "1"); $(id).style.display = "none"; } else if ($(id).getAttribute("data-was")) { $(id).style.display = ""; $(id).removeAttribute("data-was"); } });
     if (cbs) cbLoad();
     if (nh) $("dfac").value = $("nhsort").value;
     if (!cbs) desc();
   });
-  if (US) $("qstrat-cb").style.display = "none";
+  if (US) { $("qstrat-cb").style.display = "none"; $("qstrat-pn").style.display = "none"; }
 
   // ======================================================================
   // 종가베팅 — closebet.json (상장폐지 포함 전 종목 후보 행, tools/closebet/export_web.py)
@@ -778,7 +837,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   var CB = null, CBR = null, CBLOADING = false, CBHOV = -1, CBLOG = true, CBSHOW = 200, CBG = {};
   function cbLoad(){
     if (CB || CBLOADING) return;
-    CBLOADING = true; $("cbgo").disabled = true;
+    CBLOADING = true; $("cbgo").disabled = true; $("pngo").disabled = true; $("pndesc").textContent = "데이터를 불러오는 중… (약 6MB)";
     $("cbdesc").textContent = "전 종목 데이터를 불러오는 중… (약 5MB)";
     fetch("closebet.json", { cache: "no-cache" }).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); }).then(function(d){
       var R = d.rows, n = R.i.length;
@@ -792,7 +851,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       for (k = CB.dates.length - 1; k >= 0; k--) if (CB.first[k] > CB.first[k + 1]) CB.first[k] = CB.first[k + 1];
       $("cbto").value = iso(CB.dates[CB.dates.length - 1]);
       $("cbfrom").min = iso(CB.dates[0]); $("cbto").max = iso(CB.dates[CB.dates.length - 1]);
-      CBLOADING = false; $("cbgo").disabled = false; cbDesc();
+      CB.pn = d.panic || null;
+      CBLOADING = false; $("cbgo").disabled = false; cbDesc(); pnInit();
     }).catch(function(e){ CBLOADING = false; $("cbdesc").textContent = "데이터를 불러오지 못했습니다 (" + e.message + "). 새로고침해 보세요."; });
   }
   function cbCfg(){
@@ -996,9 +1056,10 @@ header .lnk,header .status{color:var(--hd-mu)}
       "· 연구 결과(2018~2026, 비용 0.25%): 대형주 등급 규칙 밤당 +0.29% · 승률 58% · MDD −18% / 전 종목 개선 규칙 +0.47% / 기준선 +0.18%";
   }
   $("cbgo").addEventListener("click", cbRun);
-  function cbDraw(){
-    var R = CBR; if (!R || $("cbres").hidden) return;
-    var cv = $("cbc"), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  function cbDraw(){ eqDraw({ R: CBR, sec: "cbres", cv: "cbc", info: "cbinfo", name: "종가베팅 계좌", hov: CBHOV, log: CBLOG, logId: "cblogax", setLog: function(v){ CBLOG = v; cbDraw(); } }); }
+  function eqDraw(o){                                   // 계좌·지수 누적 수익 + 낙폭 (o: R, sec, cv, info, name, hov, log, logId, setLog)
+    var R = o.R; if (!R || $(o.sec).hidden) return;
+    var cv = $(o.cv), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
     if (!W) return;
     cv.width = W * dpr; cv.height = H * dpr;
     var g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
@@ -1006,13 +1067,13 @@ header .lnk,header .status{color:var(--hd-mu)}
     var cS = css("--up"), cB = css("--muted"), grid = css("--grid") || css("--line"), mu = css("--muted");
     var x = function(i){ return L + (W - L - Rr) * i / Math.max(1, n - 1); };
     var vals = R.eq.concat(R.bq.filter(isFinite)), lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-    var tf = CBLOG ? Math.log : function(v){ return v; };
+    var tf = o.log ? Math.log : function(v){ return v; };
     var a = tf(lo), b = tf(hi); if (a === b) { a -= 0.01; b += 0.01; }
     var pad = (b - a) * 0.06; a -= pad; b += pad;
     var y = function(v){ return T + H1 * (1 - (tf(v) - a) / (b - a)); };
     g.font = "11px " + getComputedStyle(document.body).fontFamily; g.textBaseline = "middle";
     for (var k = 0; k <= 4; k++) {
-      var vv = CBLOG ? Math.exp(a + (b - a) * k / 4) : a + (b - a) * k / 4, yy = y(vv);
+      var vv = o.log ? Math.exp(a + (b - a) * k / 4) : a + (b - a) * k / 4, yy = y(vv);
       g.strokeStyle = grid; g.lineWidth = 1; g.beginPath(); g.moveTo(L, yy); g.lineTo(W - Rr, yy); g.stroke();
       g.fillStyle = mu; g.fillText(pc(vv - 1, 0), W - Rr + 6, yy);
     }
@@ -1032,14 +1093,14 @@ header .lnk,header .status{color:var(--hd-mu)}
     for (i = 0; i < n; i++) g.lineTo(x(i), y2(dS[i])); g.lineTo(x(n - 1), top2); g.closePath(); g.fill(); g.globalAlpha = 1;
     g.strokeStyle = cB; g.lineWidth = 1; g.beginPath(); var st = false; for (i = 0; i < n; i++) { if (!isFinite(dB[i])) continue; st ? g.lineTo(x(i), y2(dB[i])) : g.moveTo(x(i), y2(dB[i])); st = true; } g.stroke();
     g.fillStyle = mu; g.textBaseline = "top"; g.fillText("낙폭", L + 2, top2 + 3);
-    var h = CBHOV >= 0 && CBHOV < n ? CBHOV : n - 1;
-    if (CBHOV >= 0 && CBHOV < n) { g.strokeStyle = mu; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(x(CBHOV), T); g.lineTo(x(CBHOV), top2 + H2); g.stroke(); g.setLineDash([]); }
+    var h = o.hov >= 0 && o.hov < n ? o.hov : n - 1;
+    if (o.hov >= 0 && o.hov < n) { g.strokeStyle = mu; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(x(o.hov), T); g.lineTo(x(o.hov), top2 + H2); g.stroke(); g.setLineDash([]); }
     var bname = R.c.bench === "kq" ? "코스닥" : "코스피";
-    $("cbinfo").innerHTML = "<span><b>" + ymd(R.dts[h]) + "</b></span>" +
-      '<span><i style="background:' + cS + '"></i>종가베팅 계좌 ' + cpc(R.eq[h] - 1, 0) + ' <span style="color:var(--muted)">낙폭 ' + pc(dS[h]) + "</span></span>" +
+    $(o.info).innerHTML = "<span><b>" + ymd(R.dts[h]) + "</b></span>" +
+      '<span><i style="background:' + cS + '"></i>' + esc(o.name) + ' ' + cpc(R.eq[h] - 1, 0) + ' <span style="color:var(--muted)">낙폭 ' + pc(dS[h]) + "</span></span>" +
       '<span><i style="background:' + cB + '"></i>' + bname + " " + cpc(R.bq[h] - 1, 0) + ' <span style="color:var(--muted)">낙폭 ' + pc(dB[h]) + "</span></span>" +
-      '<label class="r"><input type="checkbox" id="cblogax"' + (CBLOG ? " checked" : "") + "> 로그 축</label>";
-    $("cblogax").addEventListener("change", function(){ CBLOG = this.checked; cbDraw(); });
+      '<label class="r"><input type="checkbox" id="' + o.logId + '"' + (o.log ? " checked" : "") + "> 로그 축</label>";
+    $(o.logId).addEventListener("change", function(){ o.setLog(this.checked); });
   }
   $("cbc").addEventListener("mousemove", function(e){
     if (!CBR) return; var r = this.getBoundingClientRect(), n = CBR.eq.length;
@@ -1047,6 +1108,174 @@ header .lnk,header .status{color:var(--hd-mu)}
   });
   $("cbc").addEventListener("mouseleave", function(){ CBHOV = -1; cbDraw(); });
   window.addEventListener("resize", cbDraw);
+
+  // ======================================================================
+  // 패닉 낙주 — closebet.json 의 panic (지수 일봉 + 시총 상위 20 경험 종목 일봉·순위)
+  //   신호일 종가 매수 → 다음날 시가 / N일 뒤 종가 매도 (선택: 장중 손절) · 계좌: 신호마다 비중 w 를 종목끼리 나눔, 열린 포지션 합계 ≤ 100%
+  // ======================================================================
+  var PNR = null, PNHOV = -1, PNLOG = false, PNSELY = null;
+  function pnInit(){
+    if (!CB) return;
+    $("pngo").disabled = !CB.pn;
+    $("pnto").value = iso(CB.dates[CB.dates.length - 1]); $("pnto").max = iso(CB.dates[CB.dates.length - 1]); $("pnfrom").min = iso(CB.dates[0]);
+    pnDesc();
+    if (!CB.pn) $("pndesc").textContent = "이 데이터에는 아직 패닉 낙주용 자료가 없습니다 (다음 갱신 뒤 사용 가능).";
+  }
+  function pnCfg(){
+    var num = function(id, d){ var v = parseFloat($(id).value); return isFinite(v) ? v : d; };
+    return { idx: $("pnidx").value, sig: $("pnsig").value, th: Math.min(-0.5, num("pnth", -4)) / 100, con: $("pncon").checked, th2: Math.min(-0.5, num("pnth2", -3)) / 100,
+             tgt: $("pntgt").value, exit: $("pnexit").value, stop: $("pnstop").checked ? Math.max(0.5, num("pnsp", 4)) / 100 : 0,
+             w: Math.min(100, Math.max(1, num("pnw", 30))) / 100, cost: num("pncost", 0.25) / 100,
+             from: fromIso($("pnfrom").value || "2015-01-01"), to: fromIso($("pnto").value || "29991231") };
+  }
+  var PNEX = { o1: "다음날 시가", c1: "다음날 종가", c2: "2일 뒤 종가", c3: "3일 뒤 종가", c5: "5일 뒤 종가" };
+  function pnRule(c){
+    return (c.idx === "ks" ? "코스피" : "코스닥") + (c.sig === "close" ? " 종가 " : " 장중 저점 ") + (c.th * 100) + "% 이하" + (c.con ? " · 전날도 " + (c.th2 * 100) + "% 이하" : "") +
+      " → " + (c.tgt === "two" ? "삼성전자·SK하이닉스" : "시총 상위 " + c.tgt) + " 종가 매수 → " + PNEX[c.exit] + " 매도" + (c.stop ? " · 손절 −" + (c.stop * 100) + "%" : "") +
+      " · 비중 " + Math.round(c.w * 100) + "% · 비용 " + (c.cost * 100).toFixed(2) + "%";
+  }
+  function pnDesc(){ if (CB && CB.pn) $("pndesc").textContent = pnRule(pnCfg()) + " — 데이터 " + ymd(CB.dates[0]) + " ~ " + ymd(CB.dates[CB.dates.length - 1]); }
+  ["pnidx", "pnsig", "pnth", "pncon", "pnth2", "pntgt", "pnexit", "pnstop", "pnsp", "pnw", "pncost", "pnfrom", "pnto"].forEach(function(id){ $(id).addEventListener("change", pnDesc); });
+  var PNPRE = {
+    base: { pnidx: "ks", pnsig: "close", pnth: -4, pncon: false, pntgt: "two", pnexit: "o1", pnstop: false },
+    c1:   { pnidx: "ks", pnsig: "close", pnth: -4, pncon: false, pntgt: "two", pnexit: "c1", pnstop: false },
+    two:  { pnidx: "ks", pnsig: "close", pnth: -3, pncon: true, pnth2: -3, pntgt: "two", pnexit: "o1", pnstop: false }
+  };
+  $("pnpre").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-p]"); if (!b) return;
+    var P0 = PNPRE[b.getAttribute("data-p")];
+    Object.keys(P0).forEach(function(id){ var el = $(id); if (el.type === "checkbox") el.checked = P0[id]; else el.value = P0[id]; });
+    $("pnw").value = 30; $("pncost").value = 0.25; $("pnfrom").value = "2015-03-02"; if (CB) $("pnto").value = iso(CB.dates[CB.dates.length - 1]);
+    pnDesc(); if (CB && CB.pn) pnRun();
+  });
+  function pnSignal(c, t){                               // t일이 신호일인가 + 그날 지수 등락
+    var I = CB.pn[c.idx], pc0 = I.close[t - 1], pc1 = t >= 2 ? I.close[t - 2] : null;
+    if (!(pc0 > 0) || I.close[t] === null) return null;
+    var day = I.close[t] / pc0 - 1, low = I.low[t] !== null ? I.low[t] / pc0 - 1 : day;
+    var hit = (c.sig === "close" ? day : low) <= c.th + 1e-12;
+    if (hit && c.con) hit = pc1 > 0 && pc0 / pc1 - 1 <= c.th2 + 1e-12;
+    return { hit: hit, day: day, low: low };
+  }
+  function pnTargets(c, t){
+    var S = CB.pn.stocks, out = [];
+    for (var k = 0; k < S.length; k++) {
+      var x = S[k]; if (!(x.c2[t] > 0)) continue;
+      if (c.tgt === "two" ? (x.c === "005930" || x.c === "000660") : (x.rk[t] > 0 && x.rk[t] <= +c.tgt)) out.push(k);
+    }
+    if (c.tgt !== "two") out.sort(function(a, b){ return S[a].rk[t] - S[b].rk[t]; });
+    return out;
+  }
+  function pnExit(c, k, t){                              // → { i: 매도일, px, r(비용 전), stop }
+    var x = CB.pn.stocks[k], T = CB.dates.length, e = x.c2[t], H = c.exit === "o1" ? 1 : +c.exit.slice(1);
+    var nxt = function(d){ while (d < T && !(x.o[d] > 0 && x.c2[d] > 0)) d++; return d < T ? d : -1; };
+    var d = t, n = 0, sp = c.stop ? e * (1 - c.stop) : 0;
+    while (n < H) { d = nxt(d + 1); if (d < 0) return null; n++;
+      if (sp && x.o[d] <= sp) return { i: d, px: x.o[d], r: x.o[d] / e - 1, stop: true };
+      if (c.exit === "o1") return { i: d, px: x.o[d], r: x.o[d] / e - 1 };
+      if (sp && x.l[d] > 0 && x.l[d] <= sp) return { i: d, px: sp, r: -c.stop, stop: true };
+    }
+    return { i: d, px: x.c2[d], r: x.c2[d] / e - 1 };
+  }
+  function pnRun(){
+    if (!CB || !CB.pn) return;
+    var c = pnCfg(), T = CB.dates.length, I = CB.pn[c.idx];
+    var t0 = 1; while (t0 < T && CB.dates[t0] < c.from) t0++;
+    var t1 = T - 1; while (t1 > 0 && CB.dates[t1] > c.to) t1--;
+    if (t1 - t0 < 60) { $("pndesc").textContent = "기간이 너무 짧습니다."; return; }
+    var cash = 1, open = [], eq = [], bq = [], ev = [], trades = [], b0 = null, nst = 0;
+    var settle = function(d){ open = open.filter(function(p){ if (p.i <= d) { cash += p.amt * (p.r - c.cost); return false; } return true; }); };
+    for (var t = t0; t <= t1; t++) {
+      settle(t);
+      if (b0 === null && I.close[t] !== null) b0 = I.close[t];
+      var sg = pnSignal(c, t);
+      if (sg && sg.hit && t < T - 1) {
+        var tg = pnTargets(c, t), ex = [], used = open.reduce(function(a, p){ return a + p.amt; }, 0);
+        var budget = Math.max(0, Math.min(c.w * cash, cash - used));
+        tg.forEach(function(k){ var r = pnExit(c, k, t); if (r) ex.push({ k: k, x: r }); });
+        if (ex.length) {
+          var amt = budget / ex.length;
+          ex.forEach(function(e){ open.push({ i: e.x.i, amt: amt, r: e.x.r }); trades.push(e.x.r - c.cost); if (e.x.stop) nst++; });
+          ev.push({ t: t, day: sg.day, low: sg.low, ex: ex, avg: ex.reduce(function(a, e){ return a + e.x.r; }, 0) / ex.length - c.cost, w: budget });
+        }
+      }
+      var mtm = open.reduce(function(a, p){ return a + (p.i <= t ? p.amt * (p.r - c.cost) : 0); }, 0);
+      eq.push(cash + mtm);
+      bq.push(b0 && I.close[t] !== null ? I.close[t] / b0 : NaN);
+    }
+    settle(T);
+    PNR = { c: c, t0: t0, t1: t1, eq: eq, bq: bq, dts: CB.dates.slice(t0, t1 + 1), ev: ev, trades: trades, nst: nst, bench: c.idx };
+    PNHOV = -1; pnRender();
+  }
+  function pnRender(){
+    var R = PNR, c = R.c, S = cbStats(R.eq), B = cbStats(R.bq), N = R.ev.map(function(e){ return e.avg; }), Tr = R.trades;
+    var bname = c.idx === "ks" ? "코스피" : "코스닥";
+    $("pnres").hidden = false;
+    $("pnrsub").textContent = ymd(R.dts[0]) + " ~ " + ymd(R.dts[R.dts.length - 1]) + " · " + S.yrs.toFixed(1) + "년 · " + pnRule(c);
+    var m = function(lbl, v, sub){ return '<div class="qm"><span>' + lbl + "</span><b>" + v + "</b>" + (sub ? "<small>" + sub + "</small>" : "") + "</div>"; };
+    var mean = Tr.length ? avgOf(Tr) : NaN, win = Tr.filter(function(x){ return x > 0; }).length, worst = Tr.length ? Math.min.apply(null, Tr) : NaN;
+    var best = Tr.length ? Math.max.apply(null, Tr) : NaN, tst = Tr.length > 2 ? tstat(Tr) : 0;
+    var srt = Tr.slice().sort(function(a, b){ return a - b; }), p10 = srt.length ? srt[Math.floor(srt.length * 0.1)] : NaN;
+    var half = Math.floor(N.length / 2), h1 = half ? avgOf(N.slice(0, half)) : NaN, h2 = N.length - half ? avgOf(N.slice(half)) : NaN;
+    $("pnmetrics").innerHTML =
+      m("매매당 평균 (비용 후)", cpc(mean, 2), "종목 1건 기준 · t값 " + tst.toFixed(1)) +
+      m("승률", Tr.length ? Math.round(win / Tr.length * 100) + "%" : "-", win + " / " + Tr.length + "건") +
+      m("신호 횟수", R.ev.length + "번", "연 " + (R.ev.length / Math.max(0.1, S.yrs)).toFixed(1) + "번") +
+      m("누적 수익률 (계좌)", cpc(S.tot, 1), bname + " " + pc(B.tot, 0)) +
+      m("연평균 (CAGR)", cpc(S.cagr), bname + " " + pc(B.cagr)) +
+      m("최대 낙폭 (MDD)", '<span style="color:var(--dn)">' + pc(S.mdd) + "</span>", bname + " " + pc(B.mdd)) +
+      m("최악 / 최고 (1건)", cpc(worst, 1) + ' <small style="display:inline">/</small> ' + cpc(best, 1), "하위 10% " + pc(p10, 1)) +
+      m("앞 절반 / 뒤 절반", '<span style="white-space:nowrap">' + cpc(h1, 2) + " / " + cpc(h2, 2) + "</span>", "신호별 평균 (신호를 반으로 나눠)") +
+      m("손절 발동", c.stop ? R.nst + "건" : "사용 안 함", c.stop ? "−" + (c.stop * 100) + "% 도달" : "");
+    var items = [], score = 0;
+    items.push([mean > 0.003 ? "g" : mean > 0 ? "n" : "b", "매매당 평균 " + pc(mean, 2) + " (비용 뺀 뒤) · t값 " + tst.toFixed(1) + (tst >= 3 ? " — 우연으로 보기 어려움" : tst >= 2 ? " — 의미 있는 수준" : " — 우연일 수 있음")]);
+    score += mean > 0.003 && tst >= 2 ? 2 : mean > 0 ? 0 : -2;
+    items.push([h1 > 0 && h2 > 0 ? "g" : "b", "앞 절반 신호 " + pc(h1, 2) + " · 뒤 절반 " + pc(h2, 2) + (h1 > 0 && h2 > 0 ? " — 기간이 바뀌어도 유지" : " — 한쪽 기간에 쏠림")]); score += h1 > 0 && h2 > 0 ? 1 : -1;
+    if (R.ev.length < 20) items.push(["n", "신호가 " + R.ev.length + "번뿐 — 표본이 작아 결과가 크게 흔들릴 수 있음 (조건을 조금 느슨하게 해서도 확인해 보세요)"]);
+    items.push(["n", "최악의 1건 " + pc(worst, 1) + " — 폭락이 이어지는 날(2020년 3월, 2026년 6월 서킷브레이커 등)엔 다음날 더 빠질 수 있어 비중을 계좌 일부로 제한하세요"]);
+    items.push(["n", "계좌 수익이 작아 보이는 이유: 신호가 1년에 몇 번뿐이고 그때도 계좌의 " + Math.round(c.w * 100) + "%만 넣기 때문 — 나머지 기간의 자금은 다른 전략에 쓰는 '보조 규칙'으로 보세요"]);
+    if (c.stop) items.push(["n", "검증상 장중 손절은 성과를 오히려 깎았습니다 (−4% 하루 보유: 손절 없음 +2.39% → 손절 −5% +2.11%) — 폭락 다음날 장중 흔들기에 털리기 쉬움. 대신 비중을 작게"]);
+    items.push(["n", "상장폐지 포함·그때 기준 시총 순위로 계산해 생존 편향은 없습니다. 다만 2026년에 급락일이 몰려 있어(전체의 절반 이상) 최근 장세의 영향이 큽니다"]);
+    var v = score >= 3 ? ["유효", "var(--ok)"] : score >= 1 ? ["보통", "var(--warn)"] : ["약함", "var(--up)"];
+    $("pnverdict").innerHTML = '<div class="badge" style="background:' + v[1] + '">' + v[0] + "</div><ul>" + items.map(function(x){ return '<li class="' + x[0] + '">' + esc(x[1]) + "</li>"; }).join("") + "</ul>";
+    // 연도표 · 월별
+    var yr = periodYears(R), Y = {};
+    R.ev.forEach(function(e){ var y = Math.floor(CB.dates[e.t] / 10000); if (!Y[y]) Y[y] = { n: 0, s: 0, w: 0 }; Y[y].n++; Y[y].s += e.avg; if (e.avg > 0) Y[y].w++; });
+    $("pnyear").innerHTML = '<thead><tr><th class="l">연도</th><th>계좌</th><th>' + bname + "</th><th>신호</th><th>신호당 평균</th></tr></thead><tbody>" +
+      yr.map(function(y){ var a = Y[y.k] || { n: 0, s: 0 };
+        return '<tr data-y="' + y.k + '"><td class="l">' + y.k + (y.part ? '<span class="c">일부</span>' : "") + "</td><td>" + cpc(y.s) + "</td><td>" + cpc(y.b) + "</td><td>" + a.n + "</td><td>" + (a.n ? cpc(a.s / a.n, 2) : "-") + "</td></tr>"; }).join("") + "</tbody>";
+    R.M = periodYears(R, 100); R.bname = bname;
+    var keepY = yr.filter(function(y){ return y.k === PNSELY; })[0];
+    pnMonth(keepY ? PNSELY : yr[yr.length - 1].k);
+    // 신호 내역
+    $("pnlogn").textContent = R.ev.length + "번 · 최근 순 · 괄호는 매도 시점";
+    $("pnlog").innerHTML = '<thead><tr><th class="l">신호일 (종가 매수)</th><th>지수</th><th>신호 평균</th><th class="l">종목 — 수익 (비용 전)</th></tr></thead><tbody>' +
+      R.ev.slice().reverse().map(function(e){
+        return '<tr><td class="l">' + ymd(CB.dates[e.t]) + "</td><td>" + cpc(e.day, 1) + (c.sig === "low" ? '<span class="c">저점 ' + pc(e.low, 1) + "</span>" : "") + "</td><td>" + cpc(e.avg, 2) + '</td><td class="l wrap">' +
+          e.ex.map(function(x){ var s0 = CB.pn.stocks[x.k]; return '<span class="hp">' + esc(s0.n) + " " + cpc(x.x.r, 1) + '<span class="c">' + (x.x.stop ? "손절 " : "") + ymd(CB.dates[x.x.i]).slice(5) + "</span></span>"; }).join("") + "</td></tr>";
+      }).join("") + "</tbody>";
+    pnNow();
+    pnDraw();
+  }
+  function pnNow(){                                      // 데이터 마지막 날이 신호일인가
+    var c = PNR.c, t = CB.dates.length - 1, sg = pnSignal(c, t), I = CB.pn[c.idx], nm = c.idx === "ks" ? "코스피" : "코스닥";
+    $("pnnowh").textContent = "오늘 상태 — " + ymd(CB.dates[t]) + " 종가 기준";
+    if (!sg) { $("pnnow").textContent = "지수 데이터가 없습니다."; return; }
+    var tg = pnTargets(c, t).map(function(k){ var x = CB.pn.stocks[k]; return esc(x.n) + " " + px(x.c2[t]); }).join(" · ");
+    var gap = (c.th - (c.sig === "close" ? sg.day : sg.low)) * 100;
+    $("pnnow").innerHTML = sg.hit ? '<b style="color:var(--up)">● 신호 발생</b> — ' + nm + " " + pc(sg.day, 2) + (c.sig === "low" ? " (장중 저점 " + pc(sg.low, 2) + ")" : "") + " · 규칙대로라면 종가에 매수: " + tg
+      : "신호 없음 — " + nm + " " + pc(sg.day, 2) + (c.sig === "low" ? " (장중 저점 " + pc(sg.low, 2) + ")" : "") + " · 조건(" + (c.th * 100) + "%)까지 " + Math.abs(gap).toFixed(1) + "%p 남음" +
+        "<br>장중에 조건에 닿으면 15:20 전후로 다시 확인하세요. 대상: " + tg;
+  }
+  $("pnyear").addEventListener("click", function(e){ var tr = e.target.closest("tr[data-y]"); if (tr) pnMonth(+tr.getAttribute("data-y")); });
+  function pnMonth(y){ if (!PNR || !PNR.M) return; PNSELY = y; renderMonths(PNR, y, "pnyear", "pnmtitle", "pnmonth"); }
+  function pnDraw(){ eqDraw({ R: PNR, sec: "pnres", cv: "pnc", info: "pninfo", name: "패닉 낙주 계좌", hov: PNHOV, log: PNLOG, logId: "pnlogax", setLog: function(v){ PNLOG = v; pnDraw(); } }); }
+  $("pngo").addEventListener("click", pnRun);
+  $("pnc").addEventListener("mousemove", function(e){
+    if (!PNR) return; var r = this.getBoundingClientRect(), n = PNR.eq.length;
+    PNHOV = Math.max(0, Math.min(n - 1, Math.round((e.clientX - r.left - 8) / (r.width - 70) * (n - 1)))); pnDraw();
+  });
+  $("pnc").addEventListener("mouseleave", function(){ PNHOV = -1; pnDraw(); });
+  window.addEventListener("resize", pnDraw);
 
   var HI = [], LO = [], NHF = [], LS = [], LQ = [], LN = [], CS = [], CN = [];
   function prepFactors(){                                // 52주 최고·최저(종가) · 신고가 표시 · 수익률 누적합 (한 번만 계산)
