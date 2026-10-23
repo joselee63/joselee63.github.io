@@ -1430,7 +1430,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     var c0 = cfg(); if ($("qwsum")) { var sm = c0.w.reduce(function(a, b){ return a + b; }, 0); $("qwsum").textContent = "합계 " + sm + (sm !== 100 ? " (비율로 자동 환산)" : ""); } $("qdesc").textContent = ruleText(cfg()) + ". 신호는 리밸런싱일 종가로 계산하고 다음 거래일 종가에 매매합니다. 조건을 통과한 종목이 모자라면 남는 비중은 현금으로 둡니다."; }
 
   // ---------- 데이터 ----------
-  fetch("similar/index.json?t=" + Date.now(), { cache: "no-cache" }).then(function(r){ return r.json(); }).then(function(d){
+  // 퀀트 전용 장기 종가(2017~, 백테스트는 2018년부터) · 없으면 유사 차트용 5년 데이터로
+  fetch("quant/index.json?t=" + Date.now(), { cache: "no-cache" }).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+    .catch(function(){ return fetch("similar/index.json?t=" + Date.now(), { cache: "no-cache" }).then(function(r){ return r.json(); }); }).then(function(d){
     var sc = d.scale || 1;
     D = d.dates; ST = d.stocks;
     P = d.close.map(function(a){ var f = new Float64Array(a.length); for (var i = 0; i < a.length; i++) f[i] = a[i] === null ? NaN : a[i] / sc; return f; });

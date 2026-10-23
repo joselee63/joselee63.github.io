@@ -78,6 +78,7 @@ MA_COLORS = {5: "#9B5DE5", 20: "#F4A100", 60: "#2A9D8F", 120: "#7F8C8D",
              50: "#2A9D8F", 200: "#7F8C8D", 10: "#C77DFF"}
 SUPPORT_COLOR, RESIST_COLOR = "#00A6C8", "#E0479E"
 GAME_BARS    = {"kr": 3000, "us": 4500}.get(MARKET, 1250)   # 차트 게임용 과거 일봉 수 (한국 약 12년 = 네이버 최대 · 미국 약 18년 = 금융위기 포함). 0이면 게임 데이터 안 만듦
+QUANT_FROM   = "2017-01-01"           # 퀀트(듀얼 모멘텀·52주 신고가)용 종가 달력 시작 — 12개월 모멘텀·52주 고가 준비 1년 → 백테스트는 2018년부터
 SIM_BARS     = 1250                   # 유사 차트·종목 검색·퀀트용 시장 달력 길이 (약 5년 — 브라우저가 한 번에 받는 파일이라 짧게 유지)
 GAME_MIN     = 360                    # 이보다 짧은 종목은 게임 풀에서 제외 (지표 준비 119 + 화면 120 + 100턴 + 여유)
 FETCH_BARS = max(DISPLAY_BARS + max(MA_LIST), 260, GAME_BARS) + 20
@@ -834,6 +835,36 @@ def write_similar_data(data, sections, build_id, listing=None, exch=None):
     return len(stocks)
 
 
+def write_quant_data(data, sections, build_id, listing=None, exch=None):
+    """퀀트 백테스트용 (site/quant/index.json): QUANT_FROM 부터의 시장 달력 + 종목 종가 (similar/index.json 과 같은 종목·형식, 종가만)
+       유사 차트용 파일은 5년으로 짧게 두고, 퀀트는 2018년부터 백테스트할 수 있게 따로 길게 만듦"""
+    cal_src = data.get(MK["index"], {}).get("df")
+    if cal_src is None:
+        return 0
+    cal = cal_src.index[cal_src.index >= pd.Timestamp(QUANT_FROM)]
+    scale = 10 ** PRICE_DEC
+    stocks, closes, seen = [], [], set()
+    etf_codes = {c for s, it in sections if s in ETF_SECTIONS for c, _, _ in it}
+    for s, it in sections:
+        for c, nm, _ in it:
+            if c in seen or c not in data:
+                continue
+            seen.add(c)
+            col = data[c]["df"]["Close"].reindex(cal)
+            first = col.first_valid_index()
+            if first is None:
+                continue
+            col = col.where(col.index < first, col.ffill())       # 거래 정지일은 직전 종가, 상장 전은 비움
+            closes.append([None if pd.isna(x) else int(round(x * scale)) for x in col.values])
+            stocks.append({"c": c, "n": nm, "s": s, "e": c in etf_codes, "i": c in INDEX_CODES, "b": bench_of(c, listing, exch)})
+    os.makedirs(os.path.join(SITE_DIR, "quant"), exist_ok=True)
+    with open(os.path.join(SITE_DIR, "quant", "index.json"), "w", encoding="utf-8") as f:
+        json.dump({"build": build_id, "scale": scale, "dates": [int(x.strftime("%Y%m%d")) for x in cal], "stocks": stocks, "close": closes},
+                  f, ensure_ascii=False, separators=(",", ":"))
+    print(f"      퀀트 종가 {len(stocks)}개 종목 · {cal[0]:%Y-%m-%d}~ ({len(cal)}일)")
+    return len(stocks)
+
+
 def _trigram(cx, cy, rot, pattern):
     """태극기 괘: pattern = 바깥→안 순서로 1(긴 막대)/0(끊어진 막대)"""
     bars = []
@@ -1054,6 +1085,7 @@ def main():
     if GAME_BARS:
         print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'], listing, exch, caps)}개")
         print(f"      유사 차트 종목 {write_similar_data(data, sections, meta['build_id'], listing, exch)}개")
+        write_quant_data(data, sections, meta["build_id"], listing, exch)
     if MARKET == "kr":
         print(f"      수급 오실레이터 종목 {write_supply_data(data, sections, listing, meta['build_id'])}개")
 
