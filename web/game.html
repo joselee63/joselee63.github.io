@@ -354,7 +354,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     </div>
     <div class="pane">
       <div class="info" id="info"></div>
-      <div class="prow"><div class="tools" id="tools" role="toolbar" aria-label="차트 지표"><button class="tbtn" type="button" data-ind="ma" title="이동평균선 (5·10·20·60·120일)">MA</button><button class="tbtn" type="button" data-ind="rf" title="라운드 피겨 — 심리적 가격대">RF</button><div class="tsep" id="tsep"></div><button class="tbtn" type="button" data-draw="line" title="직선 — 두 점을 잇고 상승·하락률 표시 (끌거나 두 번 클릭 · Esc 취소)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 13L13 3"/><circle cx="3" cy="13" r="1.4" fill="currentColor"/><circle cx="13" cy="3" r="1.4" fill="currentColor"/></svg></button><button class="tbtn" type="button" data-draw="div3" title="3등분 선 — 두 가격 사이를 3등분">⅓</button><button class="tbtn" type="button" data-draw="div4" title="4등분 선 — 두 가격 사이를 4등분">¼</button><button class="tbtn" type="button" data-draw="undo" title="마지막 그림 지우기">↶</button><button class="tbtn" type="button" data-draw="clear" title="그림 모두 지우기">✕</button></div><canvas id="cv" aria-label="종목 일봉 차트"></canvas></div>
+      <div class="prow"><div class="tools" id="tools" role="toolbar" aria-label="차트 지표"><button class="tbtn" type="button" data-ind="ma" title="이동평균선 (5·10·20·60·120일)">MA</button><button class="tbtn" type="button" data-ind="rf" title="라운드 피겨 — 심리적 가격대">RF</button><div class="tsep" id="tsep"></div><button class="tbtn" type="button" data-ind="disp" title="이격도 — 종가 ÷ 이동평균 × 100 (거래량 아래 칸 · 기준 이동평균은 오른쪽 패널에서 설정)">이격</button><div class="tsep"></div><button class="tbtn" type="button" data-draw="line" title="직선 — 두 점을 잇고 상승·하락률 표시 (끌거나 두 번 클릭 · Esc 취소)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 13L13 3"/><circle cx="3" cy="13" r="1.4" fill="currentColor"/><circle cx="13" cy="3" r="1.4" fill="currentColor"/></svg></button><button class="tbtn" type="button" data-draw="div3" title="3등분 선 — 두 가격 사이를 3등분">⅓</button><button class="tbtn" type="button" data-draw="div4" title="4등분 선 — 두 가격 사이를 4등분">¼</button><button class="tbtn" type="button" data-draw="undo" title="마지막 그림 지우기">↶</button><button class="tbtn" type="button" data-draw="clear" title="그림 모두 지우기">✕</button></div><canvas id="cv" aria-label="종목 일봉 차트"></canvas></div>
       <div class="gbub" id="gbub" hidden aria-live="polite"></div>
     </div>
     <div class="loading" id="loading">종목을 고르는 중…</div>
@@ -413,6 +413,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       <div class="msg" id="msg"></div>
       <label class="gtog" title="추격 진입·물타기·역추세 진입 경고와 손절선·추적 손절선 표시"><input type="checkbox" id="guideOn"> 규칙 도우미</label>
       <label class="gtog" title="포지션이 없을 때 매도(S)를 누르면 공매도(숏)로 진입 · 숏은 매수(B)로 환매해 청산 · 숏 한도는 자산의 100%"><input type="checkbox" id="shortOn"> 숏(공매도) 허용</label>
+      <label class="gtog" title="이격도 = 종가 ÷ N일 이동평균 × 100 (100 위 = 이동평균보다 위) · 차트 툴바 '이격' 버튼으로 켜고 끄기">이격도 기준 <input type="number" id="dispN" min="2" max="240" step="1" value="20" style="width:52px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit"> 일 이동평균</label>
       <div class="keys"><span><kbd>B</kbd>매수·환매</span><span><kbd>H</kbd>다음</span><span><kbd>S</kbd>매도·공매도</span><span><kbd>N</kbd>다음 종목</span><span><kbd>1</kbd>~<kbd>5</kbd>비중</span></div>
     </div>
 
@@ -445,7 +446,8 @@ header .lnk,header .status{color:var(--hd-mu)}
   var IDX_MAS = [10, 20, 60, 120];                    // 위쪽 시장 지수 차트 이동평균
   var RF = MKT.rf || [];                              // 라운드 피겨 가격 (한국만 설정됨)
   var IND_KEY = "krsc_game_ind" + (MKT.market === "kr" ? "" : "_" + MKT.market);
-  var IND = { ma: true, rf: false };                  // 종목 차트 오버레이 지표 (툴바 토글, 브라우저에 기억)
+  var IND = { ma: true, rf: false, disp: false };
+  var DISP_KEY = "krsc_game_dispn", DISP_N = Math.max(2, Math.min(240, +store(function(){ return localStorage.getItem(DISP_KEY); }) || 20));                  // 종목 차트 오버레이 지표 (툴바 토글, 브라우저에 기억)
   // 규칙 도우미 — 매수 경고 · 손절선 · 추적 손절선 (수치는 여기서 조정)
   var RULE = {
     chaseK: 2,           // 추격 = 오늘 상승 ≥ 평소 하루 변동(σ)의 2배, 또는 5일 상승 ≥ 평소 5일 변동(σ√5)의 2배
@@ -1381,12 +1383,22 @@ header .lnk,header .status{color:var(--hd-mu)}
     renderGuide();
     var C = colors();
     if (G.k) drawChart(kcv, G.k, G.k.ma, C, { dec: 2, mas: IDX_MAS });
-    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, drawings: true, avg: G.qty ? G.avg : null, guide: GUIDE && !G.done ? guideLines() : null, dec: PDEC, mas: RF.length && !IND.ma ? [] : MAS, rf: RF.length && IND.rf ? RF : null });
+    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, drawings: true, avg: G.qty ? G.avg : null, guide: GUIDE && !G.done ? guideLines() : null, dec: PDEC, mas: RF.length && !IND.ma ? [] : MAS, rf: RF.length && IND.rf ? RF : null, disp: IND.disp ? DISP_N : 0 });
     renderInfo(hover >= 0 ? hover : G.cur);
     placeGuide();
   }
 
   // S = {o,h,l,c,(v)} · opt: vol(거래량) · trades(매매 표시) · avg(평단 선) · dec(소수 자릿수)
+  function dispArr(S, n){                                // 이격도 배열 (종가 ÷ n일 단순이동평균 × 100) — 종목·기간별로 한 번만 계산
+    S._disp = S._disp || {};
+    if (S._disp[n]) return S._disp[n];
+    var c = S.c, out = new Array(c.length), sum = 0;
+    for (var i = 0; i < c.length; i++) {
+      sum += c[i]; if (i >= n) sum -= c[i - n];
+      out[i] = i >= n - 1 && sum > 0 ? c[i] / (sum / n) * 100 : null;
+    }
+    return (S._disp[n] = out);
+  }
   function drawChart(canvas, S, ma, C, opt){
     var L_MAS = opt.mas || MAS;                          // 이 차트에 그릴 이동평균
     var ctx = canvas.getContext("2d");
@@ -1396,7 +1408,8 @@ header .lnk,header .status{color:var(--hd-mu)}
     ctx.clearRect(0, 0, W, H);
     var AX = 66, top = 16, showDates = G.done && G.reveal && G.reveal.d, xlab = showDates ? 18 : 4;
     var plotW = W - AX - 4, vH = opt.vol ? Math.max(50, Math.round((H - top) * 0.17)) : 0, gap = opt.vol ? 12 : 0;
-    var pH = H - top - vH - gap - xlab - (opt.vol ? 0 : 8);
+    var dH = opt.disp ? Math.max(46, Math.round((H - top) * 0.15)) : 0, dgap = opt.disp ? 12 : 0;   // 이격도 칸 (거래량 아래)
+    var pH = H - top - vH - gap - dH - dgap - xlab - (opt.vol ? 0 : 8);
     var a = Math.max(0, G.cur - VIEW + 1), b = G.cur, slots = VIEW + RPAD, sw = plotW / slots;
     var X = function(i){ return (i - a + 0.5) * sw; };
     var font = "11px -apple-system,'Malgun Gothic',sans-serif", bold = "600 " + font;
@@ -1415,7 +1428,8 @@ header .lnk,header .status{color:var(--hd-mu)}
     var pad = (hi - lo) * 0.06 || hi * 0.02; hi += pad; lo -= pad;
     var Y = function(p){ return top + (hi - p) / (hi - lo) * pH; };
     var vTop = top + pH + gap, VY = function(v){ return vTop + vH - v / vmax * vH; };
-    var bottom = opt.vol ? vTop + vH : top + pH;
+    var dTop = (opt.vol ? vTop + vH : top + pH) + dgap;
+    var bottom = opt.disp ? dTop + dH : opt.vol ? vTop + vH : top + pH;
     LAY[canvas.id] = { a: a, b: b, sw: sw, plotW: plotW, top: top, pH: pH, hi: hi, lo: lo };
 
     // 격자 · 가격축
@@ -1456,6 +1470,32 @@ header .lnk,header .status{color:var(--hd-mu)}
         var vy = VY(S.v[i]); ctx.fillRect(X(i) - bw / 2, vy, bw, vTop + vH - vy);
       }
       ctx.globalAlpha = 1;
+    }
+
+    // 이격도 = 종가 ÷ N일 이동평균 × 100
+    if (opt.disp) {
+      var dv = dispArr(S, opt.disp), dmin = Infinity, dmax = -Infinity;
+      for (i = a; i <= b; i++) if (dv[i] !== null) { dmin = Math.min(dmin, dv[i]); dmax = Math.max(dmax, dv[i]); }
+      if (dmin === Infinity) { dmin = 95; dmax = 105; }
+      dmin = Math.min(dmin, 100); dmax = Math.max(dmax, 100);
+      var dpad = (dmax - dmin) * 0.12 || 1; dmin -= dpad; dmax += dpad;
+      var DY = function(v){ return dTop + (dmax - v) / (dmax - dmin) * dH; };
+      ctx.strokeStyle = C.line; ctx.beginPath(); ctx.moveTo(0, dTop - dgap / 2 + 0.5); ctx.lineTo(plotW, dTop - dgap / 2 + 0.5); ctx.stroke();
+      var y100 = Math.round(DY(100)) + 0.5;
+      ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = C.mu; ctx.globalAlpha = .7; ctx.beginPath(); ctx.moveTo(0, y100); ctx.lineTo(plotW, y100); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.beginPath(); ctx.rect(0, dTop, plotW, dH); ctx.clip();
+      [[C.up, function(v){ return v >= 100; }], [C.dn, function(v){ return v < 100; }]].forEach(function(z){   // 100 위·아래 옅게 칠함
+        ctx.fillStyle = z[0]; ctx.globalAlpha = .13;
+        for (var q = a; q <= b; q++) { var v = dv[q]; if (v === null || !z[1](v)) continue; var yv = DY(v); ctx.fillRect(X(q) - sw / 2, Math.min(yv, y100), sw, Math.abs(yv - y100)); }
+      });
+      ctx.globalAlpha = 1; ctx.strokeStyle = C.fg; ctx.lineWidth = 1.3; ctx.beginPath();
+      var st0 = false; for (i = a; i <= b; i++) { if (dv[i] === null) { st0 = false; continue; } st0 ? ctx.lineTo(X(i), DY(dv[i])) : ctx.moveTo(X(i), DY(dv[i])); st0 = true; }
+      ctx.stroke(); ctx.restore(); ctx.lineWidth = 1;
+      ctx.font = font; ctx.textAlign = "left"; ctx.fillStyle = C.mu;
+      ctx.fillText(dmax.toFixed(1), plotW + 8, dTop + 6); ctx.fillText(dmin.toFixed(1), plotW + 8, dTop + dH - 6); ctx.fillText("100", plotW + 8, y100);
+      var dl = dv[b];
+      ctx.font = bold; ctx.fillStyle = C.fg; ctx.fillText("이격도 (" + opt.disp + "일선)" + (dl === null ? "" : "  " + dl.toFixed(1)), 6, dTop + 8);
+      if (dl !== null) { ctx.fillStyle = dl >= 100 ? C.up : C.dn; ctx.fillRect(plotW + 1, DY(dl) - 8, AX - 4, 16); ctx.fillStyle = "#fff"; ctx.fillText(dl.toFixed(1), plotW + 6, DY(dl)); }
     }
 
     // 라운드 피겨: 화면 가격 범위 안의 RF 가격에 가로선
@@ -1814,10 +1854,17 @@ header .lnk,header .status{color:var(--hd-mu)}
     (MKT.currency === "원" && CASH0 % 10000 === 0 ? comma(CASH0 / 10000) + "만원" : money(CASH0));
   // 차트 툴바: 그리기 도구는 모든 시장 · MA/RF 지표는 RF 가격이 설정된 시장만
   $("chartcard").classList.add("has-tools");
-  if (!RF.length) [].forEach.call(document.querySelectorAll('#tools [data-ind], #tsep'), function(x){ x.hidden = true; });
-  if (RF.length) {
+  if (!RF.length) [].forEach.call(document.querySelectorAll('#tools [data-ind="ma"], #tools [data-ind="rf"], #tsep'), function(x){ x.hidden = true; });
+  $("dispN").value = DISP_N;
+  $("dispN").addEventListener("change", function(){
+    DISP_N = Math.max(2, Math.min(240, Math.round(+this.value) || 20)); this.value = DISP_N; this.blur();
+    store(function(){ localStorage.setItem(DISP_KEY, String(DISP_N)); });
+    if (!IND.disp) { IND.disp = true; store(function(){ localStorage.setItem(IND_KEY, JSON.stringify(IND)); }); syncTools(); }   // 기준을 바꾸면 바로 보이게
+    if (G) draw();
+  });
+  {
     var saved = store(function(){ return JSON.parse(localStorage.getItem(IND_KEY) || "null"); });
-    if (saved) { IND.ma = saved.ma !== false; IND.rf = !!saved.rf; }
+    if (saved) { IND.ma = saved.ma !== false; IND.rf = !!saved.rf; IND.disp = !!saved.disp; }
     $("chartcard").classList.add("has-tools");
     var syncTools = function(){
       var bs = document.querySelectorAll("#tools .tbtn");
@@ -1831,7 +1878,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       if (!k) return;
       IND[k] = !IND[k];
       store(function(){ localStorage.setItem(IND_KEY, JSON.stringify(IND)); });
-      syncTools(); draw();
+      syncTools(); if (G) draw();
     });
     syncTools();
   }
