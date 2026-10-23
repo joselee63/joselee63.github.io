@@ -470,17 +470,20 @@ header .lnk,header .status{color:var(--hd-mu)}
 (function(){
   "use strict";
   var MKT = window.MKT || { market: "kr", price_dec: 0, rs_index: "KOSPI" };
+  var COIN = MKT.market === "coin", BPY = MKT.bpy || 252;
+  if (COIN) { var rsb = document.querySelector('[data-k="rs"]'); if (rsb) rsb.remove(); }   // 코인: 와인스타인 RS 0 돌파 검색은 빼기
   var PDEC = MKT.price_dec || 0, RSI_N = 14, PIV = 3, SPAN_MAX = 60, SPAN_MIN = 5, VIEW_BEFORE = 120, VIEW_AFTER = 40;
   var IDX = null, D = [], WK = null, KIND = "rsi", DIR = "bull", RES = [], SORT = null, SEL = -1, LAST = null;
   // 52주 신고가 전략 — 차트 게임 매매 규칙과 같은 수치 (변동성 손절 · 2%룰 · 1R 불타기 · 3R 목표)
-  var NH = { hiN: 252, ma: 60, maLook: 10, fresh: 40, volX: 2, volLook: 60, stopBase: 0.09,
-             volRef: MKT.market === "kr" ? 0.032 : 0.024, stopMin: 0.05, stopMax: 0.18, risk: 0.02, targetR: 3 };
-  var BENCH_NM = { KOSPI: "코스피", KOSDAQ: "코스닥", SPX: "S&P 500", IXIC: "나스닥" };
+  var NH = { hiN: BPY, ma: 60, maLook: 10, fresh: 40, volX: 2, volLook: 60, stopBase: 0.09,
+             volRef: MKT.vol_ref || (MKT.market === "kr" ? 0.032 : 0.024), stopMin: 0.05, stopMax: 0.18, risk: 0.02, targetR: 3 };
+  var BENCH_NM = { KOSPI: "코스피", KOSDAQ: "코스닥", SPX: "S&P 500", IXIC: "나스닥", BTC: "비트코인" };
   var HAS_FR = false, FLOW_TOP = 70;                       // 수급 순위(백분위) 70 이상 = 상위 30%
 
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-  function num(v, d){ var p = (+v).toFixed(d || 0).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return p.join("."); }
+  var AUTODEC = function(v){ var a = Math.abs(+v); return a >= 100 ? 2 : a >= 1 ? 4 : a > 0 ? Math.min(10, Math.ceil(-Math.log10(a)) + 3) : 2; };
+  function num(v, d){ if (d < 0) d = AUTODEC(v); var p = (+v).toFixed(d || 0).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return p.join("."); }
   function ymd(n){ var s = String(n); return s.slice(0, 4) + "." + s.slice(4, 6) + "." + s.slice(6, 8); }
   function iso(n){ var s = String(n); return s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8); }
   function pc(x){ if (x === null || x === undefined || isNaN(x)) return '<span style="color:var(--muted)">-</span>';
@@ -584,7 +587,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       if (isNaN(D[k].c[t])) continue;
       var r = KIND === "rsi" ? findDiv(k, t, DIR) : KIND === "rs" ? findRS(k, t) : findNH(k, t);
       if (r) { r.k = k; var t0 = r.at === undefined ? t : r.at;
-        r.ret = [5, 21].map(function(h){ var a = D[k].c[t0], b = D[k].c[t0 + h]; return (b === undefined || isNaN(b)) ? null : b / a - 1; }); out.push(r); }
+        r.ret = (COIN ? [7, 30] : [5, 21]).map(function(h){ var a = D[k].c[t0], b = D[k].c[t0 + h]; return (b === undefined || isNaN(b)) ? null : b / a - 1; }); out.push(r); }
     }
     RES = out; LAST = { t: t, kind: KIND, dir: DIR, days: +$("knhdays").value };
     SORT = KIND === "rsi" ? { k: "str", d: -1 } : KIND === "rs" ? { k: "mrs", d: -1 } : MKT.market === "kr" ? { k: "vr", d: -1 } : { k: "gap", d: -1 };
@@ -654,7 +657,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     for (var j = Math.max(1, i - NH.volLook + 1); j <= i; j++) { var r = c[j] / c[j - 1] - 1; if (isNaN(r)) continue; s1 += r; s2 += r * r; n++; }
     return n > 10 ? Math.sqrt(Math.max(0, s2 / n - (s1 / n) * (s1 / n)) * n / (n - 1)) : NaN;
   }
-  function benchOf(k){ return IDX.stocks[k].b || (MKT.market === "kr" ? "KOSPI" : "SPX"); }
+  function benchOf(k){ return IDX.stocks[k].b || (MKT.market === "kr" ? "KOSPI" : COIN ? "BTC" : "SPX"); }
   var BI = {};
   function mktUp(code, t){                                 // 비교 지수 종가 > 60일선 (지수 데이터가 없으면 null)
     if (!(code in BI)) BI[code] = IDX.stocks.findIndex(function(s){ return s.c === code; });
@@ -719,7 +722,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     var v = RES.map(function(r){ return r.ret[1]; }).filter(function(x){ return x !== null; });
     var avg = v.length ? v.reduce(function(a, b){ return a + b; }, 0) / v.length : null;
     $("kcount").innerHTML = "<b>" + RES.length + "</b>개 종목" + (v.length ? " · 1달 후 평균 " + pc(avg) + " (상승 " + Math.round(v.filter(function(x){ return x > 0; }).length / v.length * 100) + "%)" : "") +
-      (LAST.kind === "nh" ? '<span class="kmkt">' + (MKT.market === "kr" ? ["KOSPI", "KOSDAQ"] : ["SPX", "IXIC"]).map(function(b){
+      (LAST.kind === "nh" ? '<span class="kmkt">' + (MKT.market === "kr" ? ["KOSPI", "KOSDAQ"] : COIN ? ["BTC"] : ["SPX", "IXIC"]).map(function(b){
         var u = mktUp(b, t); return u === null ? "" : '<span class="chip ' + (u ? "fresh" : "up") + '">' + BENCH_NM[b] + (u ? " 60일선 위" : " 60일선 아래") + "</span>"; }).join("") + "</span>" : "");
     var rows = RES.slice();
     if (SORT) rows.sort(function(a, b){ var x = val(a, SORT.k), y = val(b, SORT.k);

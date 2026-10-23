@@ -437,6 +437,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   var TURNS = 100, VIEW = 120, WARM = 119, RPAD = 6;   // 턴 수 · 화면에 보이는 봉 수 · MA120 준비 봉 · 오른쪽 여백 칸
   var MKT = window.MKT || { market: "kr", index_name: "비교 지수", index_label: "비교 지수", price_dec: 0, currency: "원",   // 시장 설정 (빌드 때 넣음)
                             cash0: 10000000, buy_fee: 0.00015, sell_fee: 0.00015, tax: 0.0015 };
+  var UNIT = MKT.market === "coin" ? "개" : "주";                         // 수량 단위 (코인 = 개)
   var CASH0 = MKT.cash0, BUY_FEE = MKT.buy_fee, SELL_FEE = MKT.sell_fee, TAX = MKT.tax, PDEC = MKT.price_dec;
   var KEY_SUFFIX = MKT.market === "kr" ? "" : "_" + MKT.market;           // 누적 기록·조건은 시장별로 따로 저장
   var HIST_KEY = "krsc_game_hist" + KEY_SUFFIX;
@@ -452,7 +453,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     trendMA: 60,         // 이 이동평균 아래이거나
     trendLook: 10,       // 이 기간 전보다 그 이동평균이 낮으면 = 하락 추세
     stopBase: 0.09,      // 손절폭 = 9% × √(종목 σ ÷ 시장 보통 σ) — 평소 변동이 시장 보통의 4배면 손절폭 2배 (18%)
-    volRef: MKT.market === "kr" ? 0.032 : 0.024,   //   시장 보통 σ = 사이트 종목 60일 일간 변동성의 중앙값
+    volRef: MKT.vol_ref || (MKT.market === "kr" ? 0.032 : 0.024),   //   시장 보통 σ = 사이트 종목 60일 일간 변동성의 중앙값
     stopMin: 0.05, stopMax: 0.18,                  //   손절폭 하한·상한
     risk: 0.02,          // 2%룰: 손절선에 걸려도 계좌의 2%만 잃는 수량
     addAtR: 1,           // 매매 계획: +1R 오르면 처음과 같은 수량을 한 번 추가 (불타기)
@@ -474,7 +475,9 @@ header .lnk,header .status{color:var(--hd-mu)}
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
   function comma(v){ return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+  var AUTODEC = function(v){ var a = Math.abs(+v); return a >= 100 ? 2 : a >= 1 ? 4 : a > 0 ? Math.min(10, Math.ceil(-Math.log10(a)) + 3) : 2; };
   function num(v, dec){
+    if (dec < 0) dec = AUTODEC(v);
     if (!dec) return comma(v);
     var p = v.toFixed(dec).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return p.join(".");
   }
@@ -550,13 +553,13 @@ header .lnk,header .status{color:var(--hd-mu)}
     { id: "bear", g: "종목", t: "20·60·120일선 역배열 (하락 추세)", x: "bull",
       f: function(P, i){ return P.ma[20][i] < P.ma[60][i] && P.ma[60][i] < P.ma[120][i]; } },
     { id: "high52", g: "종목", t: "52주 신고가 근처 (1년 고점 대비 −5% 이내)",
-      f: function(P, i){ return P.d.c[i] >= hiN(P.d.h, i, 250) * 0.95; } },
+      f: function(P, i){ return P.d.c[i] >= hiN(P.d.h, i, Math.round(250 * (MKT.bpy || 252) / 252)) * 0.95; } },
     { id: "rs", g: "종목", t: "RS 등급", inp: { def: 80, min: 1, max: 99, suf: "이상 (1~99 · 3·6·9·12개월 가중 수익률을 게임 종목 전체와 비교한 백분위)" },
       f: function(P, i){ return !!P.d.rs && P.d.rs[i] >= condVal("rs"); } },
     { id: "cap1t", g: "종목", t: MKT.market === "kr" ? "시가총액 1조 원 이상 (그 시점 기준)" : "시가총액 100억 달러 이상 (그 시점 기준)",
       f: function(P, i){ return P.d.sh > 0 && P.d.sh * P.d.c[i] >= (MKT.market === "kr" ? 1e12 : 1e10); } },
     { id: "brk252", g: "종목", t: "52주 신고가 돌파한 날 (종가가 직전 1년 최고 종가 위로 마감)",
-      f: function(P, i){ return P.d.c[i] > hiN(P.d.c, i - 1, 251); } },
+      f: function(P, i){ return P.d.c[i] > hiN(P.d.c, i - 1, (MKT.bpy || 252) - 1); } },
     { id: "brk60", g: "종목", t: "60일 신고가 돌파한 날 (종가가 직전 60일 최고 종가 위로 마감)",
       f: function(P, i){ return P.d.c[i] > hiN(P.d.c, i - 1, 59); } },
     { id: "pull", g: "종목", t: "상승 중 눌림목 (20일 고점 대비 −10% 이상, 60일선 위)",
@@ -572,6 +575,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     { id: "kbear", g: "시장 (" + MKT.index_label + ")", t: MKT.index_name + " 60·120일선 역배열 (하락장)", x: "kbull",
       f: function(P, i){ return !!P.k && P.k.ma[60][i] < P.k.ma[120][i]; } }
   ];
+  if (MKT.market === "coin") CONDS = CONDS.filter(function(c){ return c.id !== "cap1t"; });   // 코인은 시가총액 자료 없음
   var COND_KEY = "krsc_game_conds" + KEY_SUFFIX;
   var condOn = (store(function(){ return JSON.parse(localStorage.getItem(COND_KEY) || "[]"); }) || []);
   function activeConds(){ return CONDS.filter(function(c){ return condOn.indexOf(c.id) >= 0; }); }
@@ -1069,7 +1073,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       E.entries.forEach(function(e, n){
         var t = e.t, chip = e.score >= 65 ? ["g", "좋은 자리"] : e.score >= 45 ? ["n", "보통"] : ["b", "불리한 자리"];
         var upW = e.up === null ? 60 : e.up / (e.up + e.dn) * 100;
-        h += '<div class="item"><div class="ih"><b>' + (t.ls === "S" ? "숏 " : "롱 ") + (n + 1) + "</b><span>" + (t.i - G.s + 1) + "턴 · " + pxu(t.p) + " × " + comma(t.q) + "주</span>" +
+        h += '<div class="item"><div class="ih"><b>' + (t.ls === "S" ? "숏 " : "롱 ") + (n + 1) + "</b><span>" + (t.i - G.s + 1) + "턴 · " + pxu(t.p) + " × " + comma(t.q) + UNIT + "</span>" +
              '<span class="chip ' + chip[0] + '">' + chip[1] + " " + e.score + '</span><button class="see" type="button" data-f="' + e.idx + '">차트에서 보기</button></div>' +
              '<div class="rr"><i style="width:' + (100 - upW) + '%;background:var(--sup)"></i><i style="width:' + upW + '%;background:var(--res)"></i></div>' +
              '<div class="rrl"><span>지지 ' + px(e.L.sup.v) + " (" + pc(-e.dn) + ", " + esc(e.L.sup.l) + ")</span><span>" +
@@ -1179,12 +1183,12 @@ header .lnk,header .status{color:var(--hd-mu)}
   }
   function aiPrompt(){
     var d = G.d, ma = G.ma, k = G.k, rv = G.reveal || {}, dd = rv.d || [];
-    var f = function(v){ return v === null || v === undefined ? "" : (+v).toFixed(PDEC); };
+    var f = function(v){ return v === null || v === undefined ? "" : (+v).toFixed(PDEC < 0 ? AUTODEC(v) : PDEC); };
     var fk = function(v){ return v === null || v === undefined ? "" : (+v).toFixed(2); };
     var day = function(i){ return dd[i] ? ymd(dd[i]) : "D" + (i - G.s); };
     var from = Math.max(0, G.s - 59), L = [];
     L.push("# 종목 (게임이 끝나 공개됨)\n" + (rv.name || "?") + " (" + (rv.code || "") + ") · " + (rv.sector || "") + " · " +
-           (MKT.market === "kr" ? "한국 시장 · 가격 단위 원" : "미국 시장 · 가격 단위 USD"));
+           (MKT.market === "kr" ? "한국 시장 · 가격 단위 원" : MKT.market === "coin" ? "암호화폐 (바이낸스 현물, 24시간 거래 · 하루 = UTC 0시 기준) · 가격 단위 USD" : "미국 시장 · 가격 단위 USD"));
     L.push("비교 지수: " + (rv.bench || MKT.index_name));
     L.push("\n# 일봉 데이터\n게임 시작 전 60일 + 게임 " + TURNS + "턴. '턴' 열이 0인 봉이 첫 판단 때 보이던 마지막 봉이고, n이면 n번째 턴에 새로 나온 봉입니다.");
     L.push("날짜,턴,시가,고가,저가,종가,거래량,MA5,MA20,MA60,MA120,지수종가,지수MA20,지수MA60");
@@ -1197,7 +1201,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (!G.trades.length) L.push("매매 없음");
     G.trades.forEach(function(t){
       var lab = t.ls === "S" ? (t.open ? "공매도 (숏 진입)" : "환매수 (숏 청산)") : (t.open ? "매수 (롱 진입)" : "매도 (롱 청산)");
-      L.push(lab + " · " + day(t.i) + " (턴 " + (t.i - G.s) + ") · " + f(t.p) + " × " + t.q + "주" +
+      L.push(lab + " · " + day(t.i) + " (턴 " + (t.i - G.s) + ") · " + f(t.p) + " × " + t.q + UNIT + "" +
              (!t.open ? " · 이 청산분 수익률 " + sgn(t.r * 100, 2) + "%" + (t.mc ? " (증거금 부족 반대매매)" : t.auto ? " (게임 종료로 자동 청산)" : "") : ""));
     });
     var ret = G.cash / CASH0 - 1, bh = d.c[G.cur] / d.c[G.s] - 1, kr = k ? k.c[G.cur] / k.c[G.s] - 1 : null;
@@ -1231,7 +1235,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (G.qty) {
       var val = S > 0 ? G.qty * p * (1 - SELL_FEE - TAX) : G.qty * p * (1 + BUY_FEE);
       var gain = S > 0 ? val - G.cost : G.cost - val, r = S > 0 ? val / G.cost - 1 : G.cost / val - 1;
-      $("hold").innerHTML = (S > 0 ? '<b style="color:var(--up)">롱</b> ' : '<b style="color:var(--dn)">숏</b> ') + comma(G.qty) + "주 · 평단 " + px(G.avg);
+      $("hold").innerHTML = (S > 0 ? '<b style="color:var(--up)">롱</b> ' : '<b style="color:var(--dn)">숏</b> ') + comma(G.qty) + UNIT + " · 평단 " + px(G.avg);
       $("pnl").innerHTML = pctHtml(r) + ' <span style="color:var(--muted)">(' + (gain > 0 ? "+" : gain < 0 ? "-" : "") + money(Math.abs(gain)) + ')</span>';
     } else { $("hold").textContent = "없음"; $("pnl").textContent = "-"; }
     $("turn").textContent = G.turn + " / " + TURNS;
@@ -1242,7 +1246,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("bBuy").disabled = G.done || bq < 1;
     $("bSell").disabled = G.done || sq < 1;
     $("bNext").disabled = G.done;
-    var part = function(lab, q, closing){ return lab + " <b>" + comma(q) + "주</b>" + (closing ? (q === G.qty ? " (전량)" : "") : " (" + money(q * p) + ")"); };
+    var part = function(lab, q, closing){ return lab + " <b>" + comma(q) + UNIT + "</b>" + (closing ? (q === G.qty ? " (전량)" : "") : " (" + money(q * p) + ")"); };
     var info = [];
     if (bq) info.push(part(bl, bq, S < 0));
     if (sq) info.push(part(sl, sq, S > 0));
@@ -1288,14 +1292,14 @@ header .lnk,header .status{color:var(--hd-mu)}
          : gl.risk > RULE.risk * 1.25 ? '<div class="w">⚠ 손절 시 계좌 −' + (gl.risk * 100).toFixed(1) + "% (2% 넘음)</div>"
          : '<div style="color:var(--muted)">손절 시 계좌 −' + (gl.risk * 100).toFixed(1) + "%</div>";
       h += gl.hit ? '<div class="sig">● ' + ex + " 신호 — 종가가 손절선 " + (S > 0 ? "아래" : "위") + "</div>"
-         : gl.goal ? '<div class="sig" style="color:var(--ok)">● 3R 도달 — 1/3 ' + ex + " (" + comma(Math.max(1, Math.round(G.qty * RULE.takePart))) + "주) · 나머지는 손절 " + up + " 따라가기</div>"
+         : gl.goal ? '<div class="sig" style="color:var(--ok)">● 3R 도달 — 1/3 ' + ex + " (" + comma(Math.max(1, Math.round(G.qty * RULE.takePart))) + UNIT + ") · 나머지는 손절 " + up + " 따라가기</div>"
          : '<div class="ok">보유 유지 — 손절선 ' + (S > 0 ? "위" : "아래") + "</div>";
       if (P && !P.added) {
         var r1 = S > 0 ? "+1R" : "−1R";
         if (S * (price() - gl.addAt) >= 0) {
           var pv = addPreview(P.q0);
-          h += '<div class="w">▲ 불타기 신호: ' + r1 + " 도달 → " + comma(P.q0) + "주 " + (S > 0 ? "추가 매수" : "추가 공매도") + mu("(추가하면 평단 " + px(pv.avg) + " · 손절 " + px(pv.stop) + "로 " + mv + " · 손절 시 −" + (Math.max(0, pv.risk) * 100).toFixed(1) + "%)") + "</div>";
-        } else h += "<div>" + mu("불타기: " + r1 + " " + px(gl.addAt) + " 도달 시 " + comma(P.q0) + "주 추가") + "</div>";
+          h += '<div class="w">▲ 불타기 신호: ' + r1 + " 도달 → " + comma(P.q0) + UNIT + " " + (S > 0 ? "추가 매수" : "추가 공매도") + mu("(추가하면 평단 " + px(pv.avg) + " · 손절 " + px(pv.stop) + "로 " + mv + " · 손절 시 −" + (Math.max(0, pv.risk) * 100).toFixed(1) + "%)") + "</div>";
+        } else h += "<div>" + mu("불타기: " + r1 + " " + px(gl.addAt) + " 도달 시 " + comma(P.q0) + UNIT + " 추가") + "</div>";
       } else if (P) h += "<div>" + mu(P.took ? "나머지는 " + (S > 0 ? "고점" : "저점") + " 따라가기 손절로 보유 (" + (S > 0 ? "고점 −" : "저점 +") + (gl.tp * 100).toFixed(0) + "%)" : "불타기 완료 · 3R " + px(gl.target) + "에서 1/3 " + ex) + "</div>";
     }
     ws.forEach(function(x){
@@ -1308,7 +1312,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       h += "<div>" + mu("롱: 손절 " + px(p0 - r0) + " · 목표 3R " + px(p0 + RULE.targetR * r0)) + "</div>";
       if (SHORT_OK) h += "<div>" + mu("숏: 손절 " + px(p0 + r0) + " · 목표 3R " + px(p0 - RULE.targetR * r0)) + "</div>";
       var rq = Math.min(riskQty(1), Math.floor(G.cash / (p0 * (1 + BUY_FEE)))), rp = rq * p0 / asset();
-      h += rq > 0 ? "<div>2%룰 <b>" + comma(rq) + "주</b>" + mu("(자산의 " + Math.round(rp * 100) + "% · 손절 시 계좌 −2%)") + "</div>"
+      h += rq > 0 ? "<div>2%룰 <b>" + comma(rq) + UNIT + "</b>" + mu("(자산의 " + Math.round(rp * 100) + "% · 손절 시 계좌 −2%)") + "</div>"
                   : '<div style="color:var(--muted)">2%룰 수량을 살 현금이 없음</div>';
     } else if (S * (price() - G.avg) < 0) h += '<div style="color:var(--muted)">2%룰: 손실 중이라 추가 진입 안 함</div>';
     var hints = dirs.filter(function(d){ return !ws.some(function(x){ return x.d === d && x.w.some(function(y){ return y.k === "chase"; }); }); })

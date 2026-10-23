@@ -386,7 +386,8 @@ header .lnk,header .status{color:var(--hd-mu)}
 
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-  function comma(v, d){ var p = v.toFixed(d).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return p.join("."); }
+  var AUTODEC = function(v){ var a = Math.abs(+v); return a >= 100 ? 2 : a >= 1 ? 4 : a > 0 ? Math.min(10, Math.ceil(-Math.log10(a)) + 3) : 2; }   // 코인: 가격 크기에 맞춘 자릿수
+  function comma(v, d){ if (d < 0) d = AUTODEC(v); var p = v.toFixed(d).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return p.join("."); }
   function now(){ return new Date().getTime(); }
   function pct(v, suffix){
     if (v === null || v === undefined) return '<span class="na">-</span>';

@@ -12,7 +12,9 @@ on:
       timezone: "Asia/Seoul"
     - cron: "37 11 * * 2-6"         # 미국 보조: Yahoo 반영이 늦을 때 (장 마감 몇 시간 뒤까지 전날 봉이 없기도 함)
       timezone: "Asia/Seoul"
-  workflow_dispatch:                 # 수동 실행 (Actions 탭 버튼 · 웹페이지 '업데이트' 버튼) → 두 시장 모두 항상 새로 만듦
+    - cron: "17 9 * * *"            # 코인: 매일 09:17 = UTC 0시(한국 9시) 일봉 마감 직후 (주말 포함)
+      timezone: "Asia/Seoul"
+  workflow_dispatch:                 # 수동 실행 (Actions 탭 버튼 · 웹페이지 '업데이트' 버튼) → 세 시장 모두 항상 새로 만듦
 
 permissions:
   contents: write                    # gh-pages 브랜치에 결과를 올리기 위해 필요
@@ -55,6 +57,7 @@ jobs:
           cbref() { [ -f "$1" ] && head -c 300 "$1" | grep -o '"asof":"[0-9-]*"' | grep -o '[0-9-]\{10\}' || true; }
           echo "kr=$(ref prev/data/summary.js)" >> "$GITHUB_OUTPUT"
           echo "us=$(ref prev/us/data/summary.js)" >> "$GITHUB_OUTPUT"
+          echo "coin=$(ref prev/crypto/data/summary.js)" >> "$GITHUB_OUTPUT"
           echo "cb=$(cbref prev/closebet.json)" >> "$GITHUB_OUTPUT"
           echo "cbnew=$(cbref cbnew/closebet.json)" >> "$GITHUB_OUTPUT"
           echo "배포된 기준일 — 한국 $(ref prev/data/summary.js) · 미국 $(ref prev/us/data/summary.js) · 종가베팅 $(cbref prev/closebet.json) (새 데이터 $(cbref cbnew/closebet.json))"
@@ -86,31 +89,46 @@ jobs:
           PREV_REF: ${{ steps.prev.outputs.us }}
         run: python build_site.py
 
+      - name: 코인 — 데이터 수집 · 차트 생성 (바이낸스 → 크라켄)
+        id: coin
+        continue-on-error: true
+        env:
+          MARKET: coin
+          TRIGGER: ${{ github.event_name }}
+          PREV_REF: ${{ steps.prev.outputs.coin }}
+        run: python build_site.py
+
       - name: 새로 만들지 않은 시장(새 데이터 없음 · 실패)은 이전 페이지로 유지
         id: merge
         run: |
           built() { [ "$1" = "success" ] && [ "$2" != "true" ]; }   # 결과 · 건너뜀 여부
-          KR_OK=0; US_OK=0
+          KR_OK=0; US_OK=0; COIN_OK=0
           built "${{ steps.kr.outcome }}" "${{ steps.kr.outputs.skip }}" && KR_OK=1
           built "${{ steps.us.outcome }}" "${{ steps.us.outputs.skip }}" && US_OK=1
+          built "${{ steps.coin.outcome }}" "${{ steps.coin.outputs.skip }}" && COIN_OK=1
           CB_PREV="${{ steps.prev.outputs.cb }}"; CB_NEW="${{ steps.prev.outputs.cbnew }}"
           CB_FRESH=0; [ -n "$CB_NEW" ] && [[ "$CB_NEW" > "$CB_PREV" ]] && CB_FRESH=1
-          if [ $KR_OK = 0 ] && [ $US_OK = 0 ]; then
-            if [ "${{ steps.kr.outcome }}" != "success" ] && [ "${{ steps.us.outcome }}" != "success" ]; then echo "두 시장 모두 빌드 실패"; exit 1; fi
-            if [ $CB_FRESH = 0 ]; then echo "두 시장 모두 새 데이터 없음 — 기존 페이지 유지"; echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0; fi
-            echo "두 시장 차트는 새 데이터 없음 · 종가베팅 데이터만 새로 나옴 ($CB_PREV → $CB_NEW) → 이전 페이지에 새 closebet.json 만 바꿔 배포"
+          if [ $KR_OK = 0 ] && [ $US_OK = 0 ] && [ $COIN_OK = 0 ]; then
+            if [ "${{ steps.kr.outcome }}" != "success" ] && [ "${{ steps.us.outcome }}" != "success" ] && [ "${{ steps.coin.outcome }}" != "success" ]; then echo "세 시장 모두 빌드 실패"; exit 1; fi
+            if [ $CB_FRESH = 0 ]; then echo "세 시장 모두 새 데이터 없음 — 기존 페이지 유지"; echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+            echo "시장 차트는 새 데이터 없음 · 종가베팅 데이터만 새로 나옴 ($CB_PREV → $CB_NEW) → 이전 페이지에 새 closebet.json 만 바꿔 배포"
           fi
           mkdir -p site
           if [ $KR_OK = 0 ]; then
             [ -f prev/index.html ] || { echo "한국 페이지를 만들지 못했고 이전 페이지도 없음"; exit 1; }
-            find site -mindepth 1 -maxdepth 1 ! -name us -exec rm -rf {} +
-            (cd prev && find . -mindepth 1 -maxdepth 1 ! -name us ! -name .git -exec cp -r {} ../site/ \;)
+            find site -mindepth 1 -maxdepth 1 ! -name us ! -name crypto -exec rm -rf {} +
+            (cd prev && find . -mindepth 1 -maxdepth 1 ! -name us ! -name crypto ! -name .git -exec cp -r {} ../site/ \;)
             [ "${{ steps.kr.outcome }}" = "success" ] && echo "한국: 새 데이터 없음 → 이전 페이지 유지" || echo "::warning::한국 빌드 실패 → 이전 페이지 유지"
           fi
           if [ $US_OK = 0 ]; then
             rm -rf site/us
             [ -d prev/us ] && cp -r prev/us site/us
             [ "${{ steps.us.outcome }}" = "success" ] && echo "미국: 새 데이터 없음 → 이전 페이지 유지" || echo "::warning::미국 빌드 실패 → 이전 페이지 유지"
+          fi
+          if [ $COIN_OK = 0 ]; then
+            rm -rf site/crypto
+            [ -d prev/crypto ] && cp -r prev/crypto site/crypto
+            [ "${{ steps.coin.outcome }}" = "success" ] && echo "코인: 새 데이터 없음 → 이전 페이지 유지" || echo "::warning::코인 빌드 실패 → 이전 페이지 유지"
           fi
           # 종가베팅: 릴리스의 최신 closebet.json 이 사이트에 있는 것보다 새것이면 교체 (main 의 web/closebet.json 은 연구 시점 스냅숏)
           SITE_CB=$(head -c 300 site/closebet.json 2>/dev/null | grep -o '"asof":"[0-9-]*"' | grep -o '[0-9-]\{10\}' || true)
@@ -125,7 +143,7 @@ jobs:
         if: steps.merge.outputs.deploy == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REF_DATE: "kr ${{ steps.kr.outputs.ref_date }} · us ${{ steps.us.outputs.ref_date }} · cb ${{ steps.prev.outputs.cbnew }}"
+          REF_DATE: "kr ${{ steps.kr.outputs.ref_date }} · us ${{ steps.us.outputs.ref_date }} · coin ${{ steps.coin.outputs.ref_date }} · cb ${{ steps.prev.outputs.cbnew }}"
         run: |
           cd site
           git init -q -b gh-pages

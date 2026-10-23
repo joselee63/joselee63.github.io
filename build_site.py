@@ -3,6 +3,7 @@
 #   · 데이터 수신 → 지표·추세선 계산 → 차트 PNG → 웹페이지 생성
 #   · MARKET=kr (기본): stocks.py  → site/     데이터: 네이버 fchart → Yahoo Finance(폴백)
 #     MARKET=us        : stocks_us.py → site/us/  데이터: Yahoo Finance
+#     MARKET=coin      : coins.py     → site/crypto/  데이터: 바이낸스 현물 USDT 일봉 → 크라켄 USD(폴백) · UTC 0시(한국 9시) 마감 일봉만
 #   · 로컬 실행: python build_site.py  (미국: MARKET=us python build_site.py) → site/index.html 을 브라우저로 열기
 # ======================================
 import os, re, io, sys, json, time, html, shutil, importlib
@@ -42,6 +43,18 @@ MARKETS = {
                schedule="자동 업데이트 화~토 07:07 (미국장 마감 후)", source="Yahoo Finance 일봉",
                replace={"거래대금 = KRX 집계(목록이 없는 날은 종가×거래량 근사)": "거래대금 = 종가 × 거래량 (백만 달러)",
                         "시가총액 = 상장주식수 × 종가 (ETF·지수 제외)": "시가총액 = Yahoo Finance 기준 (십억 달러, ETF·지수 제외)"}),
+    "coin": dict(stocks="coins", site="crypto", tz="UTC", title="암호화폐 섹터 차트",
+                 index="BTC", index_name="비교 지수", index_label="비교 지수",   # 차트 게임·종목 검색·퀀트의 기준 = 비트코인
+                 bench_names={"BTC": "비트코인"}, rs_index="BTC",
+                 index_yahoo={},                                            # 코인은 지수 종목 없음 (BTC 는 코인이자 기준)
+                 price_dec=-1, store_dec=8,                                 # 화면 자릿수는 가격 크기에 맞춰 자동 · 저장은 1e-8 단위 정수
+                 cap_unit="-", cap_div=1, amt_unit="$M", amt_div=1e6,
+                 currency="$", cash0=100_000, buy_fee=0.001, sell_fee=0.001, tax=0.0, vol_ref=0.045,
+                 bars_per_year=365,
+                 schedule="자동 업데이트 매일 09:17 (UTC 0시 일봉 마감 후)", source="바이낸스 현물 USDT 일봉 (없으면 크라켄 USD)",
+                 replace={"거래대금 = KRX 집계(목록이 없는 날은 종가×거래량 근사)": "거래대금 = 바이낸스 USDT 거래대금 (백만 달러) · 하루 = UTC 0시(한국 9시) 기준",
+                          "시가총액 = 상장주식수 × 종가 (ETF·지수 제외)": "시가총액 = 자료 없음 (코인은 유통량 자료를 받지 않음)",
+                          "지수·ETF 섹션 제외": "'거래대금 상위 (목록 외)' 포함", "종목별 결과표": "코인별 결과표", "<span class=\"sl\">종목별 </span>": "<span class=\"sl\">코인별 </span>"}),
 }
 MK = MARKETS[MARKET]
 _st = importlib.import_module(MK["stocks"])
@@ -77,7 +90,7 @@ UP_COLOR, DOWN_COLOR = "#E5383B", "#1D63D8"
 MA_COLORS = {5: "#9B5DE5", 20: "#F4A100", 60: "#2A9D8F", 120: "#7F8C8D",
              50: "#2A9D8F", 200: "#7F8C8D", 10: "#C77DFF"}
 SUPPORT_COLOR, RESIST_COLOR = "#00A6C8", "#E0479E"
-GAME_BARS    = {"kr": 3000, "us": 4500}.get(MARKET, 1250)   # 차트 게임용 과거 일봉 수 (한국 약 12년 = 네이버 최대 · 미국 약 18년 = 금융위기 포함). 0이면 게임 데이터 안 만듦
+GAME_BARS    = {"kr": 3000, "us": 4500, "coin": 3000}.get(MARKET, 1250)   # 차트 게임용 과거 일봉 수 (한국 약 12년 = 네이버 최대 · 미국 약 18년 = 금융위기 포함). 0이면 게임 데이터 안 만듦
 QUANT_FROM   = "2017-01-01"           # 퀀트(듀얼 모멘텀·52주 신고가)용 종가 달력 시작 — 12개월 모멘텀·52주 고가 준비 1년 → 백테스트는 2018년부터
 SIM_BARS     = 1250                   # 유사 차트·종목 검색·퀀트용 시장 달력 길이 (약 5년 — 브라우저가 한 번에 받는 파일이라 짧게 유지)
 GAME_MIN     = 360                    # 이보다 짧은 종목은 게임 풀에서 제외 (지표 준비 119 + 화면 120 + 100턴 + 여유)
@@ -86,6 +99,8 @@ FETCH_BARS = max(DISPLAY_BARS + max(MA_LIST), 260, GAME_BARS) + 20
 INDEX_YAHOO = MK["index_yahoo"]
 INDEX_CODES = set(INDEX_YAHOO)
 PRICE_DEC   = MK["price_dec"]
+STORE_DEC   = MK.get("store_dec", PRICE_DEC)          # JSON 정수 저장 자릿수 (코인은 가격이 0.00001~10만이라 1e-8 단위)
+BPY         = MK.get("bars_per_year", 252)            # 1년 봉 수 (코인은 주말도 거래 → 365)
 
 
 # --- 한글 폰트 ---
@@ -253,6 +268,104 @@ def fetch_us_all(codes):
 US_NASDAQ = {"NMS", "NGM", "NCM", "NAS", "NIM"}   # Yahoo 거래소 코드 중 나스닥
 
 
+# --- 코인: 바이낸스 현물 USDT 일봉 (공개 시세 주소) → 없으면 크라켄 USD (최근 720일) ---
+#   · Volume 은 '코인 개수'로 맞춤 (USDT 거래대금 ÷ 종가) → 거래대금 = 종가 × Volume 계산이 주식과 같아짐
+#   · 진행 중인 오늘(UTC) 일봉은 버리고 마감된 일봉만 씀
+BINANCE = "https://data-api.binance.vision"
+KRAKEN = "https://api.kraken.com"
+
+
+def _coin_df(rows):
+    df = pd.DataFrame(rows, columns=["t", "Open", "High", "Low", "Close", "Quote"]).astype({"Open": float, "High": float, "Low": float, "Close": float, "Quote": float})
+    df.index = pd.DatetimeIndex(pd.to_datetime(df.pop("t"), unit="ms")).normalize()
+    df["Volume"] = (df.pop("Quote") / df["Close"]).where(df["Close"] > 0, 0)
+    df = df[df.index < pd.Timestamp(dt.datetime.now(dt.timezone.utc).date())]          # 오늘(진행 중) 봉 제외
+    return _clean_ohlcv(df)
+
+
+def fetch_binance(sym, count=FETCH_BARS):
+    rows, end = [], None
+    while len(rows) < count:
+        params = {"symbol": sym + "USDT", "interval": "1d", "limit": 1000}
+        if end is not None:
+            params["endTime"] = end
+        for attempt in range(3):
+            r = _session.get(BINANCE + "/api/v3/klines", params=params, timeout=15)
+            if r.status_code == 200:
+                break
+            if r.status_code == 400:
+                raise LookupError("바이낸스 USDT 마켓 없음")
+            time.sleep(2 * (attempt + 1))
+        else:
+            raise RuntimeError(f"바이낸스 HTTP {r.status_code}")
+        part = r.json()
+        if not part:
+            break
+        rows = [[x[0], x[1], x[2], x[3], x[4], x[7]] for x in part] + rows
+        if len(part) < 1000:
+            break
+        end = part[0][0] - 1
+        time.sleep(0.1)
+    if not rows:
+        raise LookupError("바이낸스 데이터 없음")
+    return _coin_df(rows)
+
+
+def fetch_kraken(sym):
+    pair = _st.KRAKEN_ALIAS.get(sym, sym) + "USD"
+    for attempt in range(4):
+        r = _session.get(KRAKEN + "/0/public/OHLC", params={"pair": pair, "interval": 1440}, timeout=15)
+        j = r.json() if r.status_code == 200 else {}
+        err = ";".join(j.get("error") or [])
+        if "Unknown asset pair" in err:
+            raise LookupError("크라켄 USD 마켓 없음")
+        res = j.get("result") or {}
+        key = next((k for k in res if k != "last"), None)
+        if key and res.get(key):
+            # [시각s, 시가, 고가, 저가, 종가, VWAP, 거래량, 체결수] → 거래대금 ≈ VWAP × 거래량
+            return _coin_df([[int(x[0]) * 1000, x[1], x[2], x[3], x[4], (float(x[5]) or float(x[4])) * float(x[6])] for x in res[key]])
+        time.sleep(2 * (attempt + 1))
+    raise RuntimeError("크라켄 응답 없음")
+
+
+def binance_top(n):
+    """바이낸스 USDT 마켓 24시간 거래대금 상위 n개 심볼 (스테이블·래핑 제외)"""
+    r = _session.get(BINANCE + "/api/v3/ticker/24hr", params={"type": "MINI"}, timeout=20)
+    r.raise_for_status()
+    out = []
+    for t in r.json():
+        sy = t.get("symbol", "")
+        if not sy.endswith("USDT"):
+            continue
+        base, qv = sy[:-4], float(t.get("quoteVolume") or 0)
+        if base in _st.EXCLUDE_FROM_TOP or qv <= 0 or int(t.get("count") or 0) == 0:
+            continue
+        out.append((base, qv))
+    out.sort(key=lambda x: -x[1])
+    return [b for b, _ in out[:n]]
+
+
+def fetch_coin_all(codes):
+    data, failed = {}, {}
+    def one(c):
+        errs = []
+        for fn, src in ((fetch_binance, "BINANCE"), (fetch_kraken, "KRAKEN")):
+            try:
+                df = fn(c)
+                if len(df) >= 5:
+                    return c, dict(df=df, naver_name=None, source=src), None
+            except Exception as e:
+                errs.append(str(e)[:100])
+        return c, None, " / ".join(errs)
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        for c, d, e in ex.map(one, codes):
+            if d:
+                data[c] = d
+            else:
+                failed[c] = e
+    return data, failed
+
+
 def fetch_caps_us(codes):
     """미국 시가총액(달러)·상장 거래소 — Yahoo fast_info. 실패한 종목은 비워 둠 → {코드: (시총, 거래소)}"""
     import yfinance as yf
@@ -408,7 +521,7 @@ def calc_stats(df, is_index=False):
     return {
         "종가": last,
         "1일%": pct(1), "5일%": pct(5), "20일%": pct(20),
-        "52주고가대비%": (last / df["High"].iloc[-250:].max() - 1) * 100,
+        "52주고가대비%": (last / df["High"].iloc[-round(250 * BPY / 252):].max() - 1) * 100,
         "MA20이격%": (last / ma20 - 1) * 100 if pd.notna(ma20) else np.nan,
         "거래대금": np.nan if is_index else last * float(v.iloc[-1]) / MK["amt_div"],   # 한국 억원 · 미국 백만 달러
         "거래량배수": float(v.iloc[-1]) / vavg if vavg and vavg > 0 else np.nan,
@@ -421,6 +534,10 @@ def calc_stats(df, is_index=False):
 
 # --- 차트 그리기 ---
 def _fmt_price(x, is_index):
+    if PRICE_DEC < 0:                                     # 코인: 가격 크기에 맞춰 자릿수
+        a = abs(x)
+        d = 2 if a >= 100 else 4 if a >= 1 else min(10, int(np.ceil(-np.log10(a))) + 3) if a > 0 else 2
+        return f"{x:,.{d}f}"
     return f"{x:,.2f}" if (is_index or PRICE_DEC) else f"{x:,.0f}"
 
 
@@ -628,7 +745,7 @@ def write_game_data(data, sections, build_id, listing=None, exch=None, caps=None
       · sh = 상장주식수(현재 기준) → 게임에서 '그 시점 시가총액 ≈ 주식수 × 수정종가'로 출제 조건에 사용
     """
     import base64, random
-    scale = 10 ** PRICE_DEC
+    scale = 10 ** STORE_DEC
     benches = {}
     pool = []
     for s, it in sections:
@@ -642,7 +759,7 @@ def write_game_data(data, sections, build_id, listing=None, exch=None, caps=None
     # RS 등급(1~99, IBD 방식): 그날 기준 가중 수익률(3개월 40% · 6·9·12개월 각 20%)을 게임 종목 전체와 비교한 백분위.
     # 그 시점까지의 가격만 쓰므로 게임에서 '그 시점 RS'로 출제 조건에 사용 가능. 비교 종목이 30개 미만인 날은 0.
     closes = pd.DataFrame({c: data[c]["df"]["Close"] for c, _, _ in pool})
-    sc_ = sum(w * (closes / closes.shift(n) - 1) for w, n in ((0.4, 63), (0.2, 126), (0.2, 189), (0.2, 252)))
+    sc_ = sum(w * (closes / closes.shift(round(n * BPY / 252)) - 1) for w, n in ((0.4, 63), (0.2, 126), (0.2, 189), (0.2, 252)))
     cnt = sc_.notna().sum(axis=1)
     rs_all = (sc_.rank(axis=1, pct=True) * 98 + 1).round()
     rs_all = rs_all.where(cnt >= 30, axis=0)
@@ -781,7 +898,7 @@ def write_similar_data(data, sections, build_id, listing=None, exch=None):
     if cal_src is None:
         return 0
     cal = cal_src.index[-SIM_BARS:]
-    scale = 10 ** PRICE_DEC
+    scale = 10 ** STORE_DEC
     sdir = os.path.join(SITE_DIR, "similar", "s")
     os.makedirs(sdir, exist_ok=True)
     stocks, closes, seen = [], [], set()
@@ -842,7 +959,7 @@ def write_quant_data(data, sections, build_id, listing=None, exch=None):
     if cal_src is None:
         return 0
     cal = cal_src.index[cal_src.index >= pd.Timestamp(QUANT_FROM)]
-    scale = 10 ** PRICE_DEC
+    scale = 10 ** STORE_DEC
     stocks, closes, seen = [], [], set()
     etf_codes = {c for s, it in sections if s in ETF_SECTIONS for c, _, _ in it}
     for s, it in sections:
@@ -886,6 +1003,8 @@ FLAG_SVG = {
            + "".join(f'<circle cx="{1.27 + 2.53 * x + (1.27 if y % 2 else 0):.2f}" cy="{1.08 * (y + 1):.2f}" r=".42"/>'
                      for y in range(9) for x in range(6 if y % 2 == 0 else 5))
            + '</g></svg>'),
+    "coin": ('<svg class="flag" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#F7931A"/>'
+             '<text x="12" y="17" text-anchor="middle" font-size="15" font-weight="700" fill="#fff" font-family="Arial,sans-serif">₿</text></svg>'),
 }
 
 
@@ -893,11 +1012,13 @@ def render_page(src, page):
     """web/ 의 페이지 원본 → 시장별 페이지 (제목 · 국기 · 시장 전환 · 시장 설정 window.MKT)"""
     cfg = {k: MK[k] for k in ("title", "index_name", "index_label", "price_dec", "cap_unit", "amt_unit",
                               "currency", "cash0", "buy_fee", "sell_fee", "tax", "schedule", "source")}
+    cfg["vol_ref"] = MK.get("vol_ref")
+    cfg["bpy"] = BPY
     cfg["market"] = MARKET
     cfg["rf"] = MK.get("rf", [])
     cfg["rs_index"] = MK.get("rs_index", MK["index"])          # 종목 검색 · 와인스타인 RS 기준 지수
     links = []
-    for m, label in (("kr", "한국"), ("us", "미국")):
+    for m, label in (("kr", "한국"), ("us", "미국"), ("coin", "코인")):
         here = MARKETS[MARKET]["site"]                       # 지금 페이지 위치에서 상대 경로
         there = MARKETS[m]["site"]
         href = ("../" if here else "") + (there + "/" if there else "")
@@ -934,6 +1055,15 @@ def main():
     t_start = time.time()
 
     sections = SECTIONS
+    if MARKET == "coin" and getattr(_st, "AUTO_TOP_N", 0):      # 바이낸스 거래대금 상위 중 목록에 없는 코인 → 별도 섹션
+        try:
+            have = {c for _, it in sections for c, _, _ in it}
+            extra = [(c, c, "거래대금 상위 (자동)") for c in binance_top(_st.AUTO_TOP_N) if c not in have]
+            if extra:
+                sections = list(sections) + [(_st.OUT_OF_LIST, extra)]
+                print(f"      거래대금 상위 {_st.AUTO_TOP_N} 중 목록 외: {', '.join(c for c, _, _ in extra)}")
+        except Exception as e:
+            print(f"      거래대금 상위 조회 실패 → 생략 ({e})")
     codes = list(dict.fromkeys(c for _, it in sections for c, _, _ in it))
     label = {}
     for _, it in sections:
@@ -944,6 +1074,8 @@ def main():
     data, failed = {}, {}
     if MARKET == "us":
         data, failed = fetch_us_all(codes)
+    elif MARKET == "coin":
+        data, failed = fetch_coin_all(codes)
     else:
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
             futs = {ex.submit(fetch_one, c): c for c in codes}
@@ -953,7 +1085,19 @@ def main():
                     data[c] = f.result()
                 except Exception as e:
                     failed[c] = str(e)[:200]
-    n_yahoo = sum(1 for d in data.values() if d["source"] == "YAHOO")
+    if MARKET == "coin":                                  # 목록 외 자동 추가 코인은 180일 이상 거래된 것만 (신규 상장·토큰화 주식 등 제외)
+        auto = {c for s_, it in sections if s_ == getattr(_st, "OUT_OF_LIST", None) for c, _, _ in it}
+        short = [c for c in auto if c in data and len(data[c]["df"]) < 180]
+        for c in short:
+            data.pop(c)
+        for c in auto - set(data):
+            failed.pop(c, None)
+        sections = [(s_, [x for x in it if not (s_ == getattr(_st, "OUT_OF_LIST", None) and x[0] not in data)]) for s_, it in sections]
+        sections = [(s_, it) for s_, it in sections if it]
+        codes = [c for c in codes if c in data or c not in auto]
+        if short:
+            print(f"      목록 외 중 거래 180일 미만 제외: {', '.join(short)}")
+    n_yahoo = sum(1 for d in data.values() if d["source"] in ("YAHOO", "KRAKEN"))
     print(f"      성공 {len(data)} / 실패 {len(failed)} (야후 폴백 {n_yahoo})")
     for c, e in failed.items():
         print(f"      실패: {c} {label.get(c, '')} -> {e}")
@@ -1023,6 +1167,8 @@ def main():
         listing, listing_day = fetch_listing(ref_date)
         same_day = listing_day == ref_date.strftime("%Y-%m-%d")
         print(f"      KRX 상장 목록: {listing_day or '받지 못함'}" + (" (거래대금 실제값 사용)" if same_day else ""))
+    elif MARKET == "coin":
+        pass                                              # 코인: 시가총액 자료 없음
     else:
         etf_codes = {c for s, it in sections if s in ETF_SECTIONS for c, _, _ in it}
         capx = fetch_caps_us([c for c in stats if c not in etf_codes and c not in INDEX_CODES])

@@ -737,10 +737,12 @@ header .lnk,header .status{color:var(--hd-mu)}
 (function(){
   "use strict";
   var MKT = window.MKT || { market: "kr", price_dec: 0 };
-  var US = MKT.market === "us";
-  var BENCH = US ? [["SPX", "S&P 500"], ["IXIC", "나스닥 종합"]] : [["KOSPI", "코스피"], ["KOSDAQ", "코스닥"]];
-  var PER = [[5, "1주"], [10, "2주"], [21, "1개월"], [63, "3개월"], [126, "6개월"], [252, "12개월"]];
-  var YEAR = 252;
+  var US = MKT.market === "us", COIN = MKT.market === "coin";
+  var BPY = MKT.bpy || 252;                                // 1년 봉 수 (코인 = 365일)
+  function DD(n){ return BPY === 252 ? n : Math.round(n * BPY / 252); }   // 거래일 기준 기간 → 이 시장의 봉 수
+  var BENCH = COIN ? [["BTC", "비트코인"]] : US ? [["SPX", "S&P 500"], ["IXIC", "나스닥 종합"]] : [["KOSPI", "코스피"], ["KOSDAQ", "코스닥"]];
+  var PER = [[5, "1주"], [10, "2주"], [21, "1개월"], [63, "3개월"], [126, "6개월"], [252, "12개월"]].map(function(p){ return [DD(p[0]), p[1]]; });
+  var YEAR = BPY;
   var D = [], P = [], ST = [], CODE = {}, LAST = null, HOV = -1;
 
   function $(id){ return document.getElementById(id); }
@@ -752,13 +754,14 @@ header .lnk,header .status{color:var(--hd-mu)}
   function ymd(n){ var s = String(n); return s.slice(0, 4) + "." + s.slice(4, 6) + "." + s.slice(6, 8); }
   function iso(n){ var s = String(n); return s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8); }
   function fromIso(v){ return +String(v).replace(/-/g, ""); }
-  function px(v){ var d = MKT.price_dec || 0; var p = v.toFixed(d).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return (US ? "$" : "") + p.join(".") + (US ? "" : "원"); }
+  var AUTODEC = function(v){ var a = Math.abs(+v); return a >= 100 ? 2 : a >= 1 ? 4 : a > 0 ? Math.min(10, Math.ceil(-Math.log10(a)) + 3) : 2; };
+  function px(v){ var d = MKT.price_dec || 0; if (d < 0) d = AUTODEC(v); var p = v.toFixed(d).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return (US ? "$" : "") + p.join(".") + (US ? "" : "원"); }
   function perName(n){ for (var i = 0; i < PER.length; i++) if (PER[i][0] === n) return PER[i][1]; return n + "일"; }
   function opts(sel, def, from){ $(sel).innerHTML = PER.filter(function(p){ return !from || p[0] >= from; }).map(function(p){ return '<option value="' + p[0] + '"' + (p[0] === def ? " selected" : "") + ">" + p[1] + "</option>"; }).join(""); }
 
   // ---------- 설정 ----------
-  opts("qlook", 63); opts("qmid", 126, 21); opts("qshort", 10);
-  var WP = [21, 63, 126, 252];                           // 가중 모멘텀 기간: 1·3·6·12개월
+  opts("qlook", DD(63)); opts("qmid", DD(126), DD(21)); opts("qshort", DD(10));
+  var WP = [21, 63, 126, 252].map(DD);                           // 가중 모멘텀 기간: 1·3·6·12개월
   var WPRE = { short: [40, 30, 20, 10], long: [10, 20, 30, 40], equal: [25, 25, 25, 25] };
   $("qw").innerHTML = WP.map(function(p, i){ return "<label>" + perName(p) + ' <input type="number" class="qwi" data-i="' + i + '" min="0" max="100" step="5" style="width:60px"></label>'; }).join("") +
     '<span class="lbl" id="qwsum" style="font-size:12px;color:var(--muted)"></span>';
@@ -827,7 +830,8 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (nh) $("dfac").value = $("nhsort").value;
     if (!cbs) desc();
   });
-  if (US) { $("qstrat-cb").style.display = "none"; $("qstrat-pn").style.display = "none"; }
+  if (MKT.market !== "kr") { $("qstrat-cb").style.display = "none"; $("qstrat-pn").style.display = "none"; }   // 종가베팅·패닉 낙주는 한국 전 종목 데이터 전용
+  if (BPY !== 252) ["qreb", "qabslook", "dhold"].forEach(function(id){ [].forEach.call($(id).options, function(o){ o.value = DD(+o.value); }); });   // 기간 선택값을 이 시장 봉 수로
 
   // ======================================================================
   // 종가베팅 — closebet.json (상장폐지 포함 전 종목 후보 행, tools/closebet/export_web.py)
@@ -1311,11 +1315,11 @@ header .lnk,header .status{color:var(--hd-mu)}
     var hi = HI[s][t], r, v, j;
     switch (k) {
       case "lowgain": return LO[s][t] > 0 ? p / LO[s][t] - 1 : null;
-      case "r252": return ret(s, t, 252);
-      case "r126": return ret(s, t, 126);
+      case "r252": return ret(s, t, DD(252));
+      case "r126": return ret(s, t, DD(126));
       case "mrs": v = mrsOf(s, ownBench(s))[t]; return isFinite(v) ? v : null;
-      case "r21": return ret(s, t, 21);
-      case "radj": r = ret(s, t, 126); v = sdv(s, t, 126); return r !== null && v ? r / (v * Math.sqrt(126)) : null;
+      case "r21": return ret(s, t, DD(21));
+      case "radj": r = ret(s, t, DD(126)); v = sdv(s, t, DD(126)); return r !== null && v ? r / (v * Math.sqrt(DD(126))) : null;
       case "near": return hi > 0 ? p / hi : null;
       case "freq": if (!(hi > 0)) return null; v = 0; for (j = Math.max(0, t - 62); j <= t; j++) v += NHF[s][j]; return v;
       case "fresh": if (!(hi > 0)) return null; for (j = 0; j < YEAR && t - j >= 0; j++) if (NHF[s][t - j]) return -j; return -YEAR;
@@ -1332,7 +1336,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   }
   // ---------- 와인스타인(맨스필드) 상대강도 ----------
   //   RS선 = 종목 종가 ÷ 지수 종가, MRS = (RS선 ÷ RS선의 252일 평균 − 1) × 100  (주봉 52주 평균의 일봉 근사)
-  var MRSC = {}, MRS_N = 252;
+  var MRSC = {}, MRS_N = BPY;
   function ownBench(s){ return ST[s].b && CODE[ST[s].b] !== undefined ? ST[s].b : (BENCH[0][0]); }
   function mrsOf(s, bcode){
     var key = bcode + ":" + s; if (MRSC[key]) return MRSC[key];
@@ -1763,7 +1767,7 @@ header .lnk,header .status{color:var(--hd-mu)}
           var s = x.s, sv = COMP[c.nhSort] ? Math.round(x.v * 100) : c.nhSort === "freq" ? x.v + "일" : c.nhSort === "fresh" ? -x.v + "일 전" :
                  /^(lowgain|r252|r126|r21)$/.test(c.nhSort) ? pc(x.v) : c.nhSort === "near" ? pc(x.v - 1) : x.v.toFixed(2);
           return "<tr><td>" + (i + 1) + '</td><td class="l"><b>' + esc(ST[s].n) + '</b><span class="c">' + esc(ST[s].c) + '</span></td><td class="l">' + esc(ST[s].s || "") + "</td><td>" + px(P[s][t]) +
-            "</td><td><b>" + sv + "</b></td><td>" + pc(P[s][t] / HI[s][t] - 1) + "</td><td>" + cpc(P[s][t] / LO[s][t] - 1) + "</td><td>" + cpc(ret(s, t, 252)) + "</td><td>" + cpc(ret(s, t, 21)) +
+            "</td><td><b>" + sv + "</b></td><td>" + pc(P[s][t] / HI[s][t] - 1) + "</td><td>" + cpc(P[s][t] / LO[s][t] - 1) + "</td><td>" + cpc(ret(s, t, DD(252))) + "</td><td>" + cpc(ret(s, t, DD(21))) +
             "</td><td>" + mrsCell(c, s, t) + "</td><td>" + (100 / c.top).toFixed(1) + "%</td></tr>";
         }).join("") + "</tbody>";
       $("qpnote").textContent = "오늘 리밸런싱한다면 위 종목을 각 " + (100 / c.top).toFixed(1) + "%씩 담습니다" + (pk.list.length < c.top ? " (후보가 모자라 나머지 " + Math.round((1 - pk.list.length / c.top) * 100) + "%는 현금)" : "") +
@@ -1774,13 +1778,13 @@ header .lnk,header .status{color:var(--hd-mu)}
     var head = wcols.length ? "<th>가중 점수</th>" + wcols.map(function(p){ return "<th>" + perName(p) + "</th>"; }).join("") :
                c.mode === "mom" ? "<th>" + perName(c.look) + " 수익률</th>" : "<th>" + perName(c.mid) + " (중기)</th><th>" + perName(c.short) + " (단기)</th>";
     $("qpick").innerHTML = '<thead><tr><th>순위</th><th class="l">종목</th><th class="l">섹터</th><th>현재가</th>' + head +
-      (c.absLook !== momLook(c) && wcols.indexOf(c.absLook) < 0 ? "<th>" + perName(c.absLook) + " 수익률</th>" : "") + (wcols.indexOf(21) < 0 ? "<th>1개월</th>" : "") + "<th>와인스타인 RS</th><th>비중</th></tr></thead><tbody>" +
+      (c.absLook !== momLook(c) && wcols.indexOf(c.absLook) < 0 ? "<th>" + perName(c.absLook) + " 수익률</th>" : "") + (wcols.indexOf(DD(21)) < 0 ? "<th>1개월</th>" : "") + "<th>와인스타인 RS</th><th>비중</th></tr></thead><tbody>" +
       pk.list.map(function(x, i){
         var s = x.s;
         var mc = wcols.length ? "<td><b>" + Math.round(x.m * 100) + "</b></td>" + wcols.map(function(p){ return "<td>" + cpc(ret(s, t, p)) + "</td>"; }).join("") :
                  c.mode === "mom" ? "<td>" + cpc(x.m) + "</td>" : "<td>" + cpc(x.mid) + "</td><td>" + cpc(x.sh) + "</td>";
         return "<tr><td>" + (i + 1) + '</td><td class="l"><b>' + esc(ST[s].n) + '</b><span class="c">' + esc(ST[s].c) + '</span></td><td class="l">' + esc(ST[s].s || "") + "</td><td>" + px(P[s][t]) + "</td>" + mc +
-          (c.absLook !== momLook(c) && wcols.indexOf(c.absLook) < 0 ? "<td>" + cpc(ret(s, t, c.absLook)) + "</td>" : "") + (wcols.indexOf(21) < 0 ? "<td>" + cpc(ret(s, t, 21)) + "</td>" : "") + "<td>" + mrsCell(c, s, t) + "</td><td>" + (100 / c.top).toFixed(1) + "%</td></tr>";
+          (c.absLook !== momLook(c) && wcols.indexOf(c.absLook) < 0 ? "<td>" + cpc(ret(s, t, c.absLook)) + "</td>" : "") + (wcols.indexOf(DD(21)) < 0 ? "<td>" + cpc(ret(s, t, DD(21))) + "</td>" : "") + "<td>" + mrsCell(c, s, t) + "</td><td>" + (100 / c.top).toFixed(1) + "%</td></tr>";
       }).join("") + "</tbody>";
     $("qpnote").textContent = "오늘 리밸런싱한다면 위 종목을 각 " + (100 / c.top).toFixed(1) + "%씩 담습니다" + (pk.list.length < c.top ? " (나머지 " + Math.round((1 - pk.list.length / c.top) * 100) + "%는 현금)" : "") +
       ". 과거 성과가 미래 수익을 보장하지 않으며, 투자 판단의 참고용입니다.";

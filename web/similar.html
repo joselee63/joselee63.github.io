@@ -405,7 +405,8 @@ header .lnk,header .status{color:var(--hd-mu)}
 (function(){
   "use strict";
   var MKT = window.MKT || { market: "kr", price_dec: 0, currency: "원" };
-  var PDEC = MKT.price_dec || 0, H = [5, 21, 63], HL = ["1주 후", "1달 후", "3달 후"];
+  var COIN = MKT.market === "coin";
+  var PDEC = MKT.price_dec || 0, H = COIN ? [7, 30, 91] : [5, 21, 63], HL = ["1주 후", "1달 후", "3달 후"];   // 코인은 주말도 거래 → 달력일
   var IDX = null, LOG = [], PS = [], PS2 = [], PN = [], DMAP = {};   // 종가(로그) · 누적합(구간 평균·분산을 바로 계산)
   var CB = [], CU = [], CD = [], PR = [];                           // 캔들 몸통·윗꼬리·아랫꼬리 · 캔들 크기 누적합
   var W_FLOW = 0.7, W_CANDLE = 0.3;                                 // 유사도 = 흐름 70% + 캔들 모양 30%
@@ -413,7 +414,8 @@ header .lnk,header .status{color:var(--hd-mu)}
 
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-  function num(v, d){ var p = (+v).toFixed(d || 0).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return p.join("."); }
+  var AUTODEC = function(v){ var a = Math.abs(+v); return a >= 100 ? 2 : a >= 1 ? 4 : a > 0 ? Math.min(10, Math.ceil(-Math.log10(a)) + 3) : 2; };
+  function num(v, d){ if (d < 0) d = AUTODEC(v); var p = (+v).toFixed(d || 0).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return p.join("."); }
   function ymd(n){ var s = String(n); return s.slice(0, 4) + "." + s.slice(4, 6) + "." + s.slice(6, 8); }
   function pc(x){ if (x === null || x === undefined || isNaN(x)) return '<span style="color:var(--muted)">-</span>';
     var v = Math.round(x * 1000) / 10; return '<span style="color:' + (v > 0 ? "var(--up)" : v < 0 ? "var(--dn)" : "inherit") + '">' + (v > 0 ? "+" : "") + v.toFixed(1) + "%</span>"; }
