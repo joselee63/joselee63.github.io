@@ -71,6 +71,7 @@ canvas{display:block;width:100%;touch-action:none;cursor:crosshair}
 .tbtn[hidden],.tsep[hidden]{display:none}
 #cv.drawing{cursor:crosshair}
 #cv{height:var(--ch)}
+#cv.disp{height:calc(var(--ch) + 84px)}           /* 이격도 칸(72px + 간격 12px)만큼 아래로 늘림 → 위 차트 크기는 그대로 */
 #kcv{height:calc(var(--ch) * 2 / 3)}
 .over{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:5;
   background:rgba(244,245,247,.55);backdrop-filter:blur(2px);border-radius:12px}
@@ -1383,6 +1384,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     renderGuide();
     var C = colors();
     if (G.k) drawChart(kcv, G.k, G.k.ma, C, { dec: 2, mas: IDX_MAS });
+    cv.classList.toggle("disp", !!IND.disp);
     drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, drawings: true, avg: G.qty ? G.avg : null, guide: GUIDE && !G.done ? guideLines() : null, dec: PDEC, mas: RF.length && !IND.ma ? [] : MAS, rf: RF.length && IND.rf ? RF : null, disp: IND.disp ? DISP_N : 0 });
     renderInfo(hover >= 0 ? hover : G.cur);
     placeGuide();
@@ -1407,9 +1409,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     var AX = 66, top = 16, showDates = G.done && G.reveal && G.reveal.d, xlab = showDates ? 18 : 4;
-    var plotW = W - AX - 4, vH = opt.vol ? Math.max(50, Math.round((H - top) * 0.17)) : 0, gap = opt.vol ? 12 : 0;
-    var dH = opt.disp ? Math.max(46, Math.round((H - top) * 0.15)) : 0, dgap = opt.disp ? 12 : 0;   // 이격도 칸 (거래량 아래)
-    var pH = H - top - vH - gap - dH - dgap - xlab - (opt.vol ? 0 : 8);
+    var dH = opt.disp ? 72 : 0, dgap = opt.disp ? 12 : 0, Hb = H - dH - dgap;   // 이격도 칸은 캔버스를 늘린 만큼 아래에 덧붙임 (Hb = 원래 높이)
+    var plotW = W - AX - 4, vH = opt.vol ? Math.max(50, Math.round((Hb - top) * 0.17)) : 0, gap = opt.vol ? 12 : 0;
+    var pH = Hb - top - vH - gap - xlab - (opt.vol ? 0 : 8);
     var a = Math.max(0, G.cur - VIEW + 1), b = G.cur, slots = VIEW + RPAD, sw = plotW / slots;
     var X = function(i){ return (i - a + 0.5) * sw; };
     var font = "11px -apple-system,'Malgun Gothic',sans-serif", bold = "600 " + font;
