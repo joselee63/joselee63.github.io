@@ -530,6 +530,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         <div class="qgrid">
           <div class="qf"><span class="lbl">후보 조건</span><div class="line"><select id="nhcond"><option value="near">현재가가 52주 최고가의</option><option value="since">최근 N일 안에 52주 신고가 갱신</option></select>
             <input type="number" id="nhv" value="5" min="0" max="60" style="width:56px"><span id="nhunit">% 이내</span></div></div>
+          <div class="qf" id="nhbothw"><span class="lbl">시장 필터 (교체일에 확인)</span><div class="line"><label title="무편향 검증(2016~2026): 신고가 돌파 후 60일 수익이 '둘 다 60일선 위'에서 가장 좋았음"><input type="checkbox" id="nhboth"> <span id="nhbothl">코스피·코스닥 둘 다 60일선 위일 때만 편입 (아니면 현금)</span></label></div></div>
           <div class="qf" style="grid-column:1/-1"><span class="lbl">정렬 기준 — 후보가 많을 때 상위 몇 개를 고를지 (★ 10분위 분석으로 검증된 추천)</span>
             <div class="line"><select id="nhsort" style="max-width:100%"></select></div><span class="kdesc" id="nhsortdesc"></span></div>
         </div>
@@ -836,7 +837,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (nh) $("dfac").value = $("nhsort").value;
     if (!cbs) desc();
   });
-  if (MKT.market !== "kr") { $("qstrat-cb").style.display = "none"; $("qstrat-pn").style.display = "none"; }   // 종가베팅·패닉 낙주는 한국 전 종목 데이터 전용
+  if (MKT.market !== "kr") { $("qstrat-cb").style.display = "none"; $("qstrat-pn").style.display = "none"; }
+  if (COIN) $("nhbothw").hidden = true; else if (US) $("nhbothl").textContent = "S&P 500·나스닥 둘 다 60일선 위일 때만 편입 (아니면 현금)";
+  $("nhboth").addEventListener("change", desc);   // 종가베팅·패닉 낙주는 한국 전 종목 데이터 전용
   if (BPY !== 252) ["qreb", "qabslook", "dhold"].forEach(function(id){ [].forEach.call($(id).options, function(o){ o.value = DD(+o.value); }); });   // 기간 선택값을 이 시장 봉 수로
 
   // ======================================================================
@@ -1401,7 +1404,7 @@ header .lnk,header .status{color:var(--hd-mu)}
 
   function cfg(){
     var w = [].map.call(document.querySelectorAll(".qwi"), function(x){ return Math.max(0, +x.value || 0); });
-    return { strat: STRAT, nhCond: $("nhcond").value, nhV: Math.max(0, +$("nhv").value || 0), nhSort: $("nhsort").value,
+    return { strat: STRAT, both: $("nhboth").checked, nhCond: $("nhcond").value, nhV: Math.max(0, +$("nhv").value || 0), nhSort: $("nhsort").value,
              mode: MODE, rank: $("qrank").value, w: w, look: +$("qlook").value, mid: +$("qmid").value, midPct: Math.max(1, Math.min(100, +$("qmidpct").value || 20)),
              short: +$("qshort").value, top: Math.max(1, Math.min(50, Math.round(+$("qtop").value || 10))), reb: +$("qreb").value,
              abs: $("qabs").checked, absLook: +$("qabslook").value, absMin: (+$("qabsmin").value || 0) / 100, mkt: $("qmkt").checked,
@@ -1423,6 +1426,7 @@ header .lnk,header .status{color:var(--hd-mu)}
                         : perName(c.mid) + " 수익률 상위 " + c.midPct + "% 안에서 " + perName(c.short) + " 수익률이 가장 낮은 " + c.top + "개") +
       "를 동일 비중으로 " + rb + "마다 교체" + (c.split > 1 ? " (자금 " + c.split + "묶음으로 나눠 교체일 분산)" : "");
     s += wrsText(c);
+    if (c.strat === "nh" && c.both && !COIN) s += " · " + (US ? "S&P 500·나스닥" : "코스피·코스닥") + " 둘 다 60일선 위일 때만 편입";
     if (c.mkt) s += " · 벤치마크가 12개월 마이너스면 전량 현금";
     var g = [];
     if (c.ma) g.push("지수 " + c.ma + "일선 필터");
@@ -1466,6 +1470,10 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (c.mkt && bi !== undefined) { var br = ret(bi, t, YEAR); if (br !== null && br <= 0) return { list: [], cash: true }; }
     var cand = [];
     if (c.strat === "nh") {
+      if (c.both && !COIN) {                              // 두 지수 모두 60일선 위일 때만 편입
+        var pr = BENCH.map(function(x){ return CODE[x[0]]; });
+        if (pr.some(function(ix){ if (ix === undefined) return false; var m = maAt(ix, t, 60); return m !== null && !(P[ix][t] > m); })) return { list: [], cash: true };
+      }
       var set = U.filter(function(s){
         if (!nhCand(c, s, t)) return false;
         if (!wrsPass(c, s, t)) return false;

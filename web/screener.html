@@ -445,6 +445,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         <label><input type="checkbox" id="knhvol"> 거래량 20일 평균의 2배 이상만</label>
         <label><input type="checkbox" id="knhfresh"> 신선한 신고가만 (직전 고점 후 40일 이상)</label>
         <label><input type="checkbox" id="knhmkt"> 시장 필터 (비교 지수가 60일선 위)</label>
+        <label id="knhbothw" title="무편향 검증(2016~2026): 신고가 돌파 후 60일 수익이 '둘 다 60일선 위'에서 +2.7%로 가장 좋았음 (코스닥만 +2.2%, 필터 없음 +0.8%)"><input type="checkbox" id="knhboth"> <span id="knhbothl">코스피·코스닥 둘 다 60일선 위</span></label>
         <label title="직전 40거래일 외국인+기관 순매수 ÷ 시가총액이 그날 거래대금 10억+ 전 종목 중 상위 30% — 비가격 연구 채택 필터"><input type="checkbox" id="knhflow"> 외국인·기관 수급 상위 30%만</label>
       </div>
       <div class="krow">
@@ -477,7 +478,8 @@ header .lnk,header .status{color:var(--hd-mu)}
   "use strict";
   var MKT = window.MKT || { market: "kr", price_dec: 0, rs_index: "KOSPI" };
   var COIN = MKT.market === "coin", BPY = MKT.bpy || 252;
-  if (COIN) { var rsb = document.querySelector('[data-k="rs"]'); if (rsb) rsb.remove(); }   // 코인: 와인스타인 RS 0 돌파 검색은 빼기
+  if (COIN) { var rsb = document.querySelector('[data-k="rs"]'); if (rsb) rsb.remove(); var bw = document.getElementById("knhbothw"); if (bw) bw.remove(); }
+  else if (MKT.market === "us") document.getElementById("knhbothl").textContent = "S&P 500·나스닥 둘 다 60일선 위";   // 코인: 와인스타인 RS 0 돌파 검색은 빼기
   var PDEC = MKT.price_dec || 0, RSI_N = 14, PIV = 3, SPAN_MAX = 60, SPAN_MIN = 5, VIEW_BEFORE = 120, VIEW_AFTER = 40;
   var IDX = null, D = [], WK = null, KIND = "rsi", DIR = "bull", RES = [], SORT = null, SEL = -1, LAST = null;
   // 52주 신고가 전략 — 차트 게임 매매 규칙과 같은 수치 (변동성 손절 · 2%룰 · 1R 불타기 · 3R 목표)
@@ -687,6 +689,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if ($("knhvol").checked && !(vr >= NH.volX)) return null;
     var bc = benchOf(k), mok = mktUp(bc, day);
     if ($("knhmkt").checked && mok === false) return null;
+    if ($("knhboth").checked && !COIN) { var pair = MKT.market === "kr" ? ["KOSPI", "KOSDAQ"] : ["SPX", "IXIC"]; if (mktUp(pair[0], day) === false || mktUp(pair[1], day) === false) return null; }
     var fr = D[k].fr ? D[k].fr[day] : NaN;
     if ($("knhflow").checked && !(fr >= FLOW_TOP)) return null;
     var sd = dailyVol(c, day), sp = Math.max(NH.stopMin, Math.min(NH.stopMax, isNaN(sd) ? NH.stopBase : NH.stopBase * Math.sqrt(sd / NH.volRef)));
