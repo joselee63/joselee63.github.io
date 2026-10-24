@@ -118,3 +118,8 @@ print(f"panic: 상위{TOPN} 경험 종목 {len(lead)}개")
 s = json.dumps(out, ensure_ascii=False, separators=(",", ":"))
 OUT.write_text(s, encoding="utf-8")
 print(f"rows {len(ii):,}  stocks {len(stocks):,}  grade stocks {len(gidx):,}  {len(s)/1e6:.1f}MB → {OUT}")
+
+# 실전 추적 기록 (closebet.yml 이 TRACK_OUT 을 주면 같은 데이터로 오늘 신호를 덧붙이고 결과를 채움)
+if os.environ.get("TRACK_OUT"):
+    import track
+    track.run(L, os.environ.get("TRACK_IN"), os.environ["TRACK_OUT"])

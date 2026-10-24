@@ -1163,7 +1163,7 @@ def render_page(src, page):
     for a, b in MK.get("replace", {}).items():
         out = out.replace(a, b)
     if MARKET != "kr":                                    # 수급 오실레이터는 한국 매매주체 데이터만 있음
-        out = re.sub(r'\s*<a class="tab (sup|tmp)[^"]*"[^>]*>[\s\S]*?</a>', "", out)
+        out = re.sub(r'\s*<a class="tab (sup|tmp|trk)[^"]*"[^>]*>[\s\S]*?</a>', "", out)
     return out
 
 
@@ -1350,7 +1350,7 @@ def main():
     print("[3/3] 페이지 생성")
     with open(os.path.join(SITE_DIR, "data", "summary.js"), "w", encoding="utf-8") as f:
         f.write("window.__krsc_summary && window.__krsc_summary(" + js + ");\n")
-    for page in ("index.html", "game.html", "similar.html", "screener.html", "quant.html") + (("supply.html", "temp.html") if MARKET == "kr" else ()):
+    for page in ("index.html", "game.html", "similar.html", "screener.html", "quant.html") + (("supply.html", "temp.html", "track.html") if MARKET == "kr" else ()):
         with open(os.path.join(WEB_DIR, page), encoding="utf-8") as f:
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:

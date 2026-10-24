@@ -48,7 +48,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release download closebet-data -p closebet.json -D cbnew
+        run: gh release download closebet-data -p closebet.json -p track.json -D cbnew
 
       - name: 배포된 기준일 읽기
         id: prev
@@ -137,6 +137,7 @@ jobs:
           else
             echo "::warning::종가베팅 새 데이터 없음 → 사이트의 closebet.json(${SITE_CB:-없음}) 유지"
           fi
+          [ -f cbnew/track.json ] && cp cbnew/track.json site/track.json && echo "실전 추적 기록 반영"
           echo "deploy=true" >> "$GITHUB_OUTPUT"
 
       - name: gh-pages 브랜치에 배포

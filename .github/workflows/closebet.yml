@@ -73,7 +73,10 @@ jobs:
           ALPHA_DIR: ${{ github.workspace }}/datadir
           ALPHA_CACHE: ${{ runner.temp }}/panel.pkl
           CLOSEBET_OUT: ${{ github.workspace }}/out/closebet.json
+          TRACK_IN: ${{ github.workspace }}/trackin/track.json
+          TRACK_OUT: ${{ github.workspace }}/out/track.json
         run: |
+          gh release download "$TAG" -p track.json -D trackin 2>/dev/null || echo "실전 추적 기록 없음 → 새로 시작"
           python tools/closebet/daily_data.py materialize store
           mkdir -p out
           (cd tools/closebet && python -W ignore export_web.py)
@@ -89,4 +92,4 @@ jobs:
 
       - name: closebet.json 올리기
         if: steps.chk.outputs.skip != 'true'
-        run: gh release upload "$TAG" out/closebet.json out/asof.txt --clobber
+        run: gh release upload "$TAG" out/closebet.json out/asof.txt out/track.json --clobber
