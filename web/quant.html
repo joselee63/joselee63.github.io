@@ -530,7 +530,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         <div class="qgrid">
           <div class="qf"><span class="lbl">후보 조건</span><div class="line"><select id="nhcond"><option value="near">현재가가 52주 최고가의</option><option value="since">최근 N일 안에 52주 신고가 갱신</option></select>
             <input type="number" id="nhv" value="5" min="0" max="60" style="width:56px"><span id="nhunit">% 이내</span></div></div>
-          <div class="qf" id="nhbothw"><span class="lbl">시장 필터 (교체일에 확인)</span><div class="line"><label title="무편향 검증(2016~2026): 신고가 돌파 후 60일 수익이 '둘 다 60일선 위'에서 가장 좋았음"><input type="checkbox" id="nhboth"> <span id="nhbothl">코스피·코스닥 둘 다 60일선 위일 때만 편입 (아니면 현금)</span></label></div></div>
+          <div class="qf" id="nhbothw"><span class="lbl">시장 필터 (교체일에 확인)</span><div class="line"><select id="nhreg" style="max-width:100%"><option value="step20" selected>계단20 비중 — 두 지수 중 약한 쪽이 60·90·120·180·250일선을 하나 깰 때마다 −20%</option><option value="both">둘 다 60일선 위일 때만 편입 (아니면 현금)</option><option value="none">사용 안 함</option></select></div></div>
           <div class="qf" style="grid-column:1/-1"><span class="lbl">정렬 기준 — 후보가 많을 때 상위 몇 개를 고를지 (★ 10분위 분석으로 검증된 추천)</span>
             <div class="line"><select id="nhsort" style="max-width:100%"></select></div><span class="kdesc" id="nhsortdesc"></span></div>
         </div>
@@ -604,7 +604,7 @@ header .lnk,header .status{color:var(--hd-mu)}
           <h3>필터 · 선별</h3>
           <div class="qgrid">
             <div class="qf"><span class="lbl">레짐 (시장 필터 — 꺼지면 그날은 쉼)</span><div class="line"><select id="cbreg">
-              <option value="kq20" selected>코스닥 지수 &gt; 20일선</option><option value="ks60">코스피 지수 &gt; 60일선</option><option value="old">이전 체계 — 지수 밤갭 평균 &gt; 0</option><option value="none">사용 안 함</option></select></div></div>
+              <option value="step20" selected>계단20 비중 조절 — 코스닥이 20·40·60·90·120일선을 하나 깰 때마다 −20%</option><option value="kq20">코스닥 지수 &gt; 20일선 (아래면 쉼)</option><option value="ks60">코스피 지수 &gt; 60일선</option><option value="old">이전 체계 — 지수 밤갭 평균 &gt; 0</option><option value="none">사용 안 함</option></select></div></div>
             <div class="qf"><span class="lbl">종목 랭킹(등급) — 과거 '+3% 마감 다음 날 시가' 평균 수익의 백분위</span><div class="line"><label><input type="checkbox" id="cbg" checked> 사용 ·</label><span>상위</span><input type="number" id="cbgt" min="5" max="100" step="5" value="20"><span>% 만 (S·A = 20%)</span></div></div>
             <div class="qf"><span class="lbl">등급 계산 — 해마다 1월 1일에 그 전 데이터로 다시 계산</span><div class="line"><span>신호</span><input type="number" id="cbgn" min="10" max="300" step="10" value="60"><span>건 이상 종목만 등급 부여</span></div></div>
             <div class="qf"><span class="lbl">후보가 많을 때 정렬</span><div class="line"><select id="cbsort">
@@ -838,8 +838,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (!cbs) desc();
   });
   if (MKT.market !== "kr") { $("qstrat-cb").style.display = "none"; $("qstrat-pn").style.display = "none"; }
-  if (COIN) $("nhbothw").hidden = true; else if (US) $("nhbothl").textContent = "S&P 500·나스닥 둘 다 60일선 위일 때만 편입 (아니면 현금)";
-  $("nhboth").addEventListener("change", desc);   // 종가베팅·패닉 낙주는 한국 전 종목 데이터 전용
+  if (COIN) { $("nhbothw").hidden = true; $("nhreg").value = "none"; }
+  else if (US) { $("nhreg").options[0].text = "계단20 비중 — S&P 500·나스닥 중 약한 쪽이 60·90·120·180·250일선을 하나 깰 때마다 −20%"; $("nhreg").options[1].text = "S&P 500·나스닥 둘 다 60일선 위일 때만 편입 (아니면 현금)"; }
+  $("nhreg").addEventListener("change", desc);   // 종가베팅·패닉 낙주는 한국 전 종목 데이터 전용
   if (BPY !== 252) ["qreb", "qabslook", "dhold"].forEach(function(id){ [].forEach.call($(id).options, function(o){ o.value = DD(+o.value); }); });   // 기간 선택값을 이 시장 봉 수로
 
   // ======================================================================
@@ -859,6 +860,7 @@ header .lnk,header .status{color:var(--hd-mu)}
              tv: Int32Array.from(R.tv), mc: Int32Array.from(R.mc), h: Int32Array.from(R.h), th: Int32Array.from(R.th), o: Uint8Array.from(R.o), hx: Uint8Array.from(R.hx),
              r: Float64Array.from(R.r, function(x){ return x === null ? NaN : x / 1e4; }), g: d.grade };
       CB.year = CB.dates.map(function(x){ return Math.floor(x / 10000); });
+      CB.w20 = stepW(CB.kq, [20, 40, 60, 90, 120]);         // 계단20 비중 (코스닥)
       CB.first = new Int32Array(CB.dates.length + 1).fill(n);              // 날짜별 첫 행
       for (var k = n - 1; k >= 0; k--) CB.first[CB.i[k]] = k;
       for (k = CB.dates.length - 1; k >= 0; k--) if (CB.first[k] > CB.first[k + 1]) CB.first[k] = CB.first[k + 1];
@@ -876,7 +878,7 @@ header .lnk,header .status{color:var(--hd-mu)}
              sort: $("cbsort").value, k: Math.max(1, Math.min(10, Math.round(num("cbk", 3)))), cost: num("cbcost", 0.25) / 100,
              from: fromIso($("cbfrom").value || "2018-01-02"), to: fromIso($("cbto").value || "29991231"), bench: $("cbbench").value };
   }
-  var REGN = { kq20: "코스닥 20일선 위", ks60: "코스피 60일선 위", old: "이전 체계 밤갭 레짐", none: "레짐 없음" };
+  var REGN = { step20: "계단20 비중(코스닥)", kq20: "코스닥 20일선 위", ks60: "코스피 60일선 위", old: "이전 체계 밤갭 레짐", none: "레짐 없음" };
   var SORTN = { grade: "등급순", top: "종가=고가→테마→등락률", pos: "고가권→등락률", day: "등락률순", vol: "거래량 배수순" };
   function cbRule(c){
     return [c.mc ? "시총 " + c.mc.toLocaleString() + "억↑" : "", "거래대금 " + c.tv.toLocaleString() + "억↑", "+" + c.dmin + "%↑" + (c.dx < 2850 ? "(+" + c.dx / 100 + "%↑ 제외)" : ""),
@@ -886,7 +888,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   function cbDesc(){ if (CB) $("cbdesc").textContent = cbRule(cbCfg()) + " — 데이터 " + ymd(CB.dates[0]) + " ~ " + ymd(CB.dates[CB.dates.length - 1]); }
   ["cbmc", "cbtv", "cbd", "cbdx", "cbvon", "cbv", "cbpon", "cbp", "cblt", "cbold", "cbreg", "cbg", "cbgt", "cbgn", "cbsort", "cbk", "cbcost", "cbfrom", "cbto", "cbbench"].forEach(function(id){ $(id).addEventListener("change", cbDesc); });
   var CBPRE = {
-    large: { cbmc: 5000, cbtv: 300, cbd: 3, cbdx: "2850", cbvon: false, cbpon: false, cblt: false, cbold: false, cbreg: "kq20", cbg: true, cbgt: 20, cbgn: 60, cbsort: "grade", cbk: 3 },
+    large: { cbmc: 5000, cbtv: 300, cbd: 3, cbdx: "2850", cbvon: false, cbpon: false, cblt: false, cbold: false, cbreg: "step20", cbg: true, cbgt: 20, cbgn: 60, cbsort: "grade", cbk: 3 },
     final: { cbmc: 0, cbtv: 10, cbd: 3, cbdx: "2500", cbvon: true, cbv: 2, cbpon: true, cbp: 0.7, cblt: true, cbold: true, cbreg: "kq20", cbg: false, cbsort: "top", cbk: 3 },
     base:  { cbmc: 0, cbtv: 10, cbd: 3, cbdx: "2850", cbvon: true, cbv: 2, cbpon: true, cbp: 0.7, cblt: false, cbold: true, cbreg: "ks60", cbg: false, cbsort: "pos", cbk: 3 }
   };
@@ -919,8 +921,23 @@ header .lnk,header .status{color:var(--hd-mu)}
     }
     return (CBG[minn] = out);
   }
+  function stepW(cl, mas){                               // 계단20: 종가가 아래에 있는 이평선 하나당 −20% (최저 0)
+    var n = cl.length, w = new Float64Array(n).fill(1), S = mas.map(function(){ return 0; }), C = mas.map(function(){ return 0; });
+    for (var i = 0; i < n; i++) {
+      var v = cl[i], below = 0;
+      for (var k = 0; k < mas.length; k++) {
+        var m = mas[k]; if (v !== null && isFinite(v)) { S[k] += v; C[k]++; }
+        if (i >= m) { var o = cl[i - m]; if (o !== null && isFinite(o)) { S[k] -= o; C[k]--; } }
+        if (C[k] >= m * 0.9 && v !== null && v < S[k] / C[k]) below++;
+      }
+      w[i] = Math.max(0, 1 - 0.2 * below);
+    }
+    return w;
+  }
+  function cbW(c, t){ return c.reg === "step20" ? CB.w20[t] : 1; }
   function cbCands(c, t, G){                             // t일 후보 → 정렬된 [{k(행), key[]}]
-    var out = [], RG = c.reg === "none" ? null : CB.reg[c.reg];
+    var out = [], RG = c.reg === "none" || c.reg === "step20" ? null : CB.reg[c.reg];
+    if (cbW(c, t) <= 0) return out;
     if (RG && !RG[t]) return out;
     var gy = G ? G[CB.year[t]] : null;
     if (c.grade && !gy) return out;
@@ -956,10 +973,11 @@ header .lnk,header .status{color:var(--hd-mu)}
       if (b0 === null && bx[t] !== null) b0 = bx[t];
       if (pk.length) {
         var sum = 0, ent = [];
-        pk.forEach(function(x){ var r = CB.r[x.k]; sum += r; acct += (r - c.cost) / c.k; ent.push({ k: x.k, r: r }); if (CB.hx[x.k]) nh++; if (r - c.cost <= -0.10) n10++; nst++; });
+        var wt = cbW(c, t);
+        pk.forEach(function(x){ var r = CB.r[x.k]; sum += r; acct += wt * (r - c.cost) / c.k; ent.push({ k: x.k, r: r }); if (CB.hx[x.k]) nh++; if (r - c.cost <= -0.10) n10++; nst++; });
         nights.push(sum / pk.length - c.cost);
         if (cs.length < c.k) few++;
-        logs.push({ t: t, acct: acct, ent: ent, nc: cs.length });
+        logs.push({ t: t, acct: acct, ent: ent, nc: cs.length, w: wt });
       } else cash++;
       dayAcct.push(acct);
       if (t > t0) eq.push(eq[eq.length - 1] * (1 + dayAcct[dayAcct.length - 2]));
@@ -1047,7 +1065,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     $("cblogn").textContent = R.logs.length + "밤 · 최근 순 · 종목 옆 괄호는 신호일 등락률";
     $("cblog").innerHTML = '<thead><tr><th class="l">매수일 (종가)</th><th>계좌 (그 밤)</th><th>후보 수</th><th class="l">종목 — 다음 날 시가 수익 (비용 전)</th></tr></thead><tbody>' +
       show.map(function(x){
-        return '<tr><td class="l">' + ymd(CB.dates[x.t]) + "</td><td>" + cpc(x.acct, 2) + "</td><td>" + x.nc + '</td><td class="l wrap">' +
+        return '<tr><td class="l">' + ymd(CB.dates[x.t]) + (x.w < 0.999 ? '<span class="c">비중 ' + Math.round(x.w * 100) + "%</span>" : "") + "</td><td>" + cpc(x.acct, 2) + "</td><td>" + x.nc + '</td><td class="l wrap">' +
           x.ent.map(function(e){ return '<span class="hp">' + cbName(e.k) + ' <span class="c">(+' + (CB.d[e.k] / 100).toFixed(1) + "%)</span> " + cpc(e.r, 1) + (CB.hx[e.k] ? '<span class="c">정지·상폐 청산</span>' : "") + "</span>"; }).join("") + "</td></tr>";
       }).join("") + "</tbody>";
     $("cbmore").hidden = L.length <= CBSHOW;
@@ -1055,10 +1073,12 @@ header .lnk,header .status{color:var(--hd-mu)}
   $("cbmore").addEventListener("click", function(){ CBSHOW += 500; cbLogTable(); });
   function cbCandTable(){
     var c = CBR.c, t = CB.dates.length - 1, G = c.grade || c.sort === "grade" ? cbGrades(c.gn) : null, cs = cbCands(c, t, G);
-    var RG = c.reg === "none" ? null : CB.reg[c.reg];
+    var RG = c.reg === "none" || c.reg === "step20" ? null : CB.reg[c.reg];
     var lag = Math.round((Date.now() - new Date(iso(CB.dates[t]) + "T18:00:00+09:00")) / 864e5);   // 기준일 저녁(갱신 시각) 이후 지난 날
     $("cbcandh").innerHTML = "최근 후보 — 데이터 기준일 " + ymd(CB.dates[t]) + ' <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">평일 저녁(18:40 무렵) 장 마감 데이터로 자동 갱신 · 마감 종가로 고른 것이라 15:20 판단 때와 조금 다를 수 있음' +
       (lag > 4 ? ' · <b style="color:var(--up)">갱신이 ' + lag + "일째 늦어지고 있음</b>" : "") + "</span>";
+    if (c.reg === "step20") $("cbcandh").innerHTML += ' <span class="chip ' + (CB.w20[t] >= 0.999 ? "up" : "dn") + '">계단20 비중 ' + Math.round(CB.w20[t] * 100) + "%</span>";
+    if (c.reg === "step20" && CB.w20[t] <= 0) { $("cbcand").innerHTML = '<tbody><tr><td class="l">계단20 비중 0% — 코스닥이 20·40·60·90·120일선을 모두 깬 상태라 쉬는 날</td></tr></tbody>'; return; }
     if (RG && !RG[t]) { $("cbcand").innerHTML = '<tbody><tr><td class="l">레짐 꺼짐 (' + REGN[c.reg] + " 아님) — 이날은 매수하지 않음</td></tr></tbody>"; return; }
     if (!cs.length) { $("cbcand").innerHTML = '<tbody><tr><td class="l">조건을 통과한 종목 없음</td></tr></tbody>'; return; }
     $("cbcand").innerHTML = '<thead><tr><th class="l">순위</th><th class="l">종목</th><th>등락률</th><th>고가권</th><th>거래량</th><th>거래대금(20일)</th><th>시총</th><th>등급(백분위)</th><th>테마 연속</th></tr></thead><tbody>' +
@@ -1404,7 +1424,7 @@ header .lnk,header .status{color:var(--hd-mu)}
 
   function cfg(){
     var w = [].map.call(document.querySelectorAll(".qwi"), function(x){ return Math.max(0, +x.value || 0); });
-    return { strat: STRAT, both: $("nhboth").checked, nhCond: $("nhcond").value, nhV: Math.max(0, +$("nhv").value || 0), nhSort: $("nhsort").value,
+    return { strat: STRAT, both: $("nhreg").value === "both", nhReg: $("nhreg").value, nhCond: $("nhcond").value, nhV: Math.max(0, +$("nhv").value || 0), nhSort: $("nhsort").value,
              mode: MODE, rank: $("qrank").value, w: w, look: +$("qlook").value, mid: +$("qmid").value, midPct: Math.max(1, Math.min(100, +$("qmidpct").value || 20)),
              short: +$("qshort").value, top: Math.max(1, Math.min(50, Math.round(+$("qtop").value || 10))), reb: +$("qreb").value,
              abs: $("qabs").checked, absLook: +$("qabslook").value, absMin: (+$("qabsmin").value || 0) / 100, mkt: $("qmkt").checked,
@@ -1427,6 +1447,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       "를 동일 비중으로 " + rb + "마다 교체" + (c.split > 1 ? " (자금 " + c.split + "묶음으로 나눠 교체일 분산)" : "");
     s += wrsText(c);
     if (c.strat === "nh" && c.both && !COIN) s += " · " + (US ? "S&P 500·나스닥" : "코스피·코스닥") + " 둘 다 60일선 위일 때만 편입";
+    if (c.strat === "nh" && c.nhReg === "step20" && !COIN) s += " · 계단20 비중 조절(두 지수 중 약한 쪽)";
     if (c.mkt) s += " · 벤치마크가 12개월 마이너스면 전량 현금";
     var g = [];
     if (c.ma) g.push("지수 " + c.ma + "일선 필터");
@@ -1470,6 +1491,12 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (c.mkt && bi !== undefined) { var br = ret(bi, t, YEAR); if (br !== null && br <= 0) return { list: [], cash: true }; }
     var cand = [];
     if (c.strat === "nh") {
+      var nhw = 1;
+      if (c.nhReg === "step20" && !COIN) {                // 계단20: 두 지수 중 약한 쪽 기준 비중
+        nhw = Math.min.apply(null, BENCH.map(function(x){ var ix = CODE[x[0]]; if (ix === undefined) return 1;
+          var below = 0; [60, 90, 120, 180, 250].forEach(function(n){ var m = maAt(ix, t, n); if (m !== null && P[ix][t] < m) below++; }); return Math.max(0, 1 - 0.2 * below); }));
+        if (nhw <= 0) return { list: [], cash: true };
+      }
       if (c.both && !COIN) {                              // 두 지수 모두 60일선 위일 때만 편입
         var pr = BENCH.map(function(x){ return CODE[x[0]]; });
         if (pr.some(function(ix){ if (ix === undefined) return false; var m = maAt(ix, t, 60); return m !== null && !(P[ix][t] > m); })) return { list: [], cash: true };
@@ -1481,7 +1508,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         var a = ret(s, t, c.absLook); return a !== null && a > c.absMin;
       });
       var sc = scoreSet(c.nhSort, set, t).sort(function(x, y){ return y.v - x.v; });
-      return { list: sc.slice(0, c.top), pool: sc.length };
+      return { list: sc.slice(0, c.top), pool: sc.length, w: nhw };
     }
     for (var k = 0; k < U.length; k++) {
       var s = U[k]; if (!(P[s][t] > 0)) continue;
@@ -1582,7 +1609,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       if (sched || (reentry && !cb)) {
         if (sched && cb) { cb = false; peak = V; }
         var pk = mktOn ? pick(c, U, t) : { list: [], cash: true, ma: true };
-        var expo = 1;
+        var expo = pk.w !== undefined ? pk.w : 1;          // 계단20 비중 (52주 신고가)
         if (c.vol && pk.list.length) { var bv = basketVol(pk.list, t); if (bv) expo = Math.min(1, c.vol / bv); }
         pend = { kind: "reb", sig: t, at: t + 1, list: pk.list, cash: pk.cash, ma: pk.ma, pool: pk.pool, expo: expo, why: sched ? "" : "지수 " + c.ma + "일선 회복 → 재진입" };
         continue;
@@ -1755,7 +1782,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       R.logs.slice().reverse().map(function(L){
         var hold = L.ma ? '<span class="c">지수 ' + R.c.ma + '일선 아래 — 현금 유지</span>' : L.cash ? '<span class="c">시장 하락 — 전량 현금</span>' : !L.n ? '<span class="c">조건 통과 종목 없음 — 현금</span>' :
           L.ent.map(function(e){ return '<span class="hp">' + esc(ST[e.s].n) + " " + cpc(e.r, 0) + (e.why ? '<span class="c">' + e.why + "</span>" : "") + "</span>"; }).join("") +
-          (L.expo < 0.999 ? '<span class="c">변동성 조절: 투자 ' + Math.round(L.expo * 100) + "%</span>" : "") +
+          (L.expo < 0.999 ? '<span class="c">' + (R.c.vol ? "변동성·비중 조절" : "비중 조절") + ": 투자 " + Math.round(L.expo * 100) + "%</span>" : "") +
           (L.n < R.c.top ? '<span class="c">+ 현금 ' + Math.round((1 - L.n / R.c.top) * 100) + "%</span>" : "");
         if (L.why) hold = '<span class="c">' + esc(L.why) + "</span> " + hold;
         if (L.ev) hold += '<div class="c" style="margin:2px 0 0">' + L.ev.map(esc).join(" · ") + "</div>";

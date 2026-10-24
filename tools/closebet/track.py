@@ -17,7 +17,7 @@ import requests
 START = os.environ.get("TRACK_START", "20261022")   # 연구 데이터(~2026-10-21) 이후 = 표본 외 (TRACK_START 는 시험용)
 COST = 0.0025
 META = {
-    "cb": {"name": "대형주 종가베팅 (등급)", "rule": "시총 5천억·20일 평균 거래대금 300억↑ · 당일 +3%↑(+28.5% 미만) · 코스닥 20일선 위 · 등급 상위 20% · 등급순 3종목 → 종가 매수, 다음날 시가 매도",
+    "cb": {"name": "대형주 종가베팅 (등급)", "rule": "시총 5천억·20일 평균 거래대금 300억↑ · 당일 +3%↑(+28.5% 미만) · 등급 상위 20% · 등급순 3종목 → 종가 매수, 다음날 시가 매도 · 비중 = 계단20(코스닥이 20·40·60·90·120일선을 하나 깰 때마다 −20%, 2026-10-26부터)",
            "exp": 0.0029, "win": 0.58, "unit": "밤", "src": "2018~2026 워크포워드 (상장폐지 포함) · 비용 0.25% 후"},
     "panic": {"name": "패닉 낙주", "rule": "코스피 종가 −4% 이하 → 삼성전자·SK하이닉스 종가 매수, 다음날 시가 매도",
               "exp": 0.0172, "win": 0.69, "unit": "회", "src": "2015~2026 (35회) · 비용 0.25% 후"},
@@ -53,6 +53,8 @@ def run(L, path_in, path_out):
     have = {(t["s"], t["d"]) for t in log["trades"]}
     name = lambda j: P.name.get(P.tickers[j], P.tickers[j])
     kidx = G.ix[G.ix["index_code"] == "1001"].set_index("date")["close"].reindex(dates).ffill().to_numpy()
+    kq = G.ix[G.ix["index_code"] == "2001"].set_index("date")["close"].reindex(dates).ffill()
+    w20 = np.clip(1 - 0.2 * sum((kq < kq.rolling(n).mean()).astype(int) for n in (20, 40, 60, 90, 120)), 0, 1).to_numpy()
     t0 = pos.get(START) if START in pos else int(np.searchsorted(np.array(ds), START))
     with np.errstate(invalid="ignore", divide="ignore"):
         ma20 = pd.DataFrame(P.c).rolling(20, min_periods=20).mean().to_numpy()
@@ -64,10 +66,12 @@ def run(L, path_in, path_out):
         d = ds[i]
         # 종가베팅 (대형주 등급)
         if ("cb", d) not in have:
-            m = L.SIG3[i] & L.LARGE[i] & bool(L.REG_KQ[i]) & (L.GP[i] >= 0.8 - 1e-12)
+            step = d >= "20261026"                         # 2026-10-26부터 계단20 비중 (그 전 기록은 '코스닥 20일선 위만' 규칙)
+            on = (w20[i] > 0) if step else bool(L.REG_KQ[i])
+            m = L.SIG3[i] & L.LARGE[i] & on & (L.GP[i] >= 0.8 - 1e-12)
             jj = np.nonzero(m)[0]
             jj = jj[np.argsort(-np.nan_to_num(L.GM[i, jj], nan=-9), kind="stable")][:3]
-            log["trades"].append({"s": "cb", "d": d, "reg": bool(L.REG_KQ[i]),
+            log["trades"].append({"s": "cb", "d": d, "reg": bool(on), "w": round(float(w20[i]), 2) if step else (1.0 if on else 0.0),
                                   "picks": [{"c": P.tickers[j], "n": name(j), "j": int(j), "px": float(P.c[i, j]), "day": round(float(P.day[i, j]), 4)} for j in jj]})
             new += 1
         # 패닉 낙주

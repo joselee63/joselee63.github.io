@@ -727,6 +727,14 @@ header .lnk,header .status{color:var(--hd-mu)}
     var t = LAST.t, C = cols();
     $("kressec").style.display = "";
     $("krtitle").textContent = LAST.kind === "rsi" ? (LAST.dir === "bull" ? "RSI 상승 다이버전스" : "RSI 하락 다이버전스") : LAST.kind === "rs" ? "와인스타인 RS 0 돌파" : "52주 신고가 전략";
+    if (LAST.kind === "nh" && !COIN) {                     // 계단20 권장 비중 (두 지수 중 약한 쪽, 60·90·120·180·250일선)
+      var pair = MKT.market === "kr" ? ["KOSPI", "KOSDAQ"] : ["SPX", "IXIC"], ws = pair.map(function(code){
+        if (!(code in BI)) BI[code] = IDX.stocks.findIndex(function(s){ return s.c === code; });
+        if (BI[code] < 0) return null;
+        var cc = D[BI[code]].c, below = 0; [60, 90, 120, 180, 250].forEach(function(n){ var m = sma(cc, t, n); if (!isNaN(m) && cc[t] < m) below++; });
+        return Math.max(0, 1 - 0.2 * below); });
+      if (ws[0] !== null && ws[1] !== null) $("krtitle").textContent += " · 계단20 권장 비중 " + Math.round(Math.min(ws[0], ws[1]) * 100) + "% (" + (BENCH_NM[pair[0]] || pair[0]) + " " + Math.round(ws[0] * 100) + "% · " + (BENCH_NM[pair[1]] || pair[1]) + " " + Math.round(ws[1] * 100) + "%)";
+    }
     $("krsub").textContent = ymd(IDX.dates[t]) + " 기준 스냅샷 · 종목을 누르면 오른쪽(휴대폰은 아래)에 차트가 나옵니다 · 제목을 누르면 정렬";
     var v = RES.map(function(r){ return r.ret[1]; }).filter(function(x){ return x !== null; });
     var avg = v.length ? v.reduce(function(a, b){ return a + b; }, 0) / v.length : null;
