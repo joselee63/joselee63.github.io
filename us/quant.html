@@ -1,0 +1,1959 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>퀀트 · 미국 증시 섹터 차트</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<script>window.MKT = {"title": "미국 증시 섹터 차트", "index_name": "비교 지수", "index_label": "비교 지수", "price_dec": 2, "cap_unit": "$B", "amt_unit": "$M", "currency": "$", "cash0": 100000, "buy_fee": 0.001, "sell_fee": 0.001, "tax": 0.0, "schedule": "자동 업데이트 화~토 07:07 (미국장 마감 후)", "source": "Yahoo Finance 일봉", "vol_ref": null, "bpy": 252, "market": "us", "rf": [], "rs_index": "SPX"};</script>
+<style>
+:root{
+  --bg:#f4f5f7; --fg:#1d2127; --muted:#6b7280; --line:#e2e5ea; --soft:#f1f3f5; --card:#ffffff;
+  --accent:#1f2937; --accent-fg:#ffffff; --hoverline:#c5cbd4; --grid:#eef0f3;
+  --up:#E5383B; --dn:#1D63D8; --ok:#16a34a; --warn:#d97706;
+  --ma5:#E64980; --ma10:#22A35A; --ma20:#F4A100; --ma60:#9B5DE5; --ma120:#2A9D8F; --res:#E0479E; --sup:#00A6C8; --rf:#C77700;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+  --ch:min(500px,46vh);                  /* 종목 차트 높이 (코스피 차트는 이것의 2/3) → 두 차트가 한 화면에 */
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1114; --fg:#e7e9ec; --muted:#9aa1ab; --line:#2a2f36; --soft:#1c1f24; --card:#171a1e;
+         --accent:#e7e9ec; --accent-fg:#121417; --hoverline:#4a515c; --grid:#22262c;
+         --up:#ff5a5f; --dn:#4b8dff; --ma5:#f06595; --ma10:#3ccf78; --shadow:none; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+  font-size:14px;line-height:1.45}
+a{color:inherit}
+button{font-family:inherit}
+
+/* ---------- 상단 바 · 탭 (메인 페이지와 같은 모양) ---------- */
+header{background:var(--card);border-bottom:1px solid var(--line)}
+.top{max-width:1840px;margin:0 auto;padding:11px 18px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+.top h1{font-size:18px;margin:0;letter-spacing:-.2px}
+.top h1 a{text-decoration:none}
+@media (hover:hover){ .top h1 a:hover{opacity:.7} }
+.top .meta{color:var(--muted);font-size:12.5px}
+.tabs{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--line);box-shadow:0 2px 6px rgba(16,24,40,.04)}
+.tabs .in{max-width:1840px;margin:0 auto;padding:8px 18px;display:flex;gap:8px}
+.tab{font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--muted);text-decoration:none;
+  box-shadow:0 1px 1px rgba(16,24,40,.05);transition:background .15s,color .15s,border-color .15s}
+@media (hover:hover){ .tab:not(.on):hover{color:var(--fg);border-color:var(--hoverline);background:var(--soft)} }
+.tab svg{width:15px;height:15px;flex:none}
+.tab.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.tab.game{margin-left:auto}
+
+/* ---------- 레이아웃 ---------- */
+.wrap{max-width:1840px;margin:0 auto;padding:18px 18px 60px;display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.side{display:flex;flex-direction:column;gap:12px;position:sticky;top:64px}
+.pad{padding:14px 16px}
+
+/* ---------- 차트 (위: 코스피 / 아래: 종목) ---------- */
+.chartcard{position:relative;padding:8px 6px 6px 10px}
+.info{padding:2px 8px 0;min-height:44px;font-size:12.5px;line-height:1.7;font-variant-numeric:tabular-nums}
+.info span{margin-right:10px;white-space:nowrap}
+.info .k{color:var(--muted);margin-right:3px}
+.info .ttl{font-weight:700;margin-right:12px}
+.info.kinfo{min-height:22px}
+.pane + .pane{border-top:1px solid var(--line);margin-top:4px;padding-top:6px}
+canvas{display:block;width:100%;touch-action:none;cursor:crosshair}
+.prow{display:flex;gap:6px;align-items:flex-start}
+.prow canvas{flex:1;min-width:0}
+.tools{width:34px;flex:none;display:flex;flex-direction:column;gap:6px;padding-top:6px}
+.chartcard:not(.has-tools) .tools{display:none}
+.tbtn{font:inherit;font-size:11.5px;font-weight:700;letter-spacing:-.2px;cursor:pointer;width:34px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--muted);transition:background .15s,color .15s}
+@media (hover:hover){ .tbtn:not(.on):hover{background:var(--soft);color:var(--fg)} }
+.tbtn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+#cv{height:var(--ch)}
+#kcv{height:calc(var(--ch) * 2 / 3)}
+.over{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:5;
+  background:rgba(244,245,247,.55);backdrop-filter:blur(2px);border-radius:12px}
+@media (prefers-color-scheme: dark){ .over{background:rgba(15,17,20,.55)} }
+.over.on{display:flex}
+.res{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.18);
+  padding:22px 26px;min-width:300px;max-width:92%;text-align:center}
+.res .t{font-size:12.5px;color:var(--muted);margin-bottom:4px}
+.res .nm{font-size:21px;font-weight:700;letter-spacing:-.3px}
+.res .nm small{font-size:13px;color:var(--muted);font-weight:500;margin-left:6px}
+.res .pd{font-size:12.5px;color:var(--muted);margin:3px 0 14px}
+.res .cmp{display:flex;gap:10px;justify-content:center;margin-bottom:16px}
+.res .cmp div{flex:1;background:var(--soft);border-radius:10px;padding:9px 12px}
+.res .cmp b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.res .cmp span{font-size:12px;color:var(--muted)}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);z-index:4}
+.res .btns{display:flex;gap:8px}
+.res .btns .act{flex:1}
+.act.ghost{background:var(--soft);color:var(--fg);border:1px solid var(--line)}
+
+/* ---------- 매매 평가 ---------- */
+.res.wide{width:760px;max-width:96%;max-height:calc(100% - 20px);overflow:auto}
+.ev{margin-top:16px;border-top:1px solid var(--line);padding-top:14px;text-align:left}
+.ev h4{font-size:13.5px;margin:18px 0 8px}
+.ev .gr{display:flex;gap:14px;align-items:center;margin-bottom:10px}
+.ev .grade{width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;flex:none}
+.ev .sum{font-size:13.5px;line-height:1.55}
+.ev .sum small{display:block;color:var(--muted);font-size:12px}
+.ev .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}
+.ev .stats div{background:var(--soft);border-radius:8px;padding:6px 4px;text-align:center}
+.ev .stats b{display:block;font-size:14px;font-variant-numeric:tabular-nums}
+.ev .stats span{font-size:11px;color:var(--muted)}
+.ev .item{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.ev .ih{display:flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.ev .chip{font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:9px;white-space:nowrap}
+.chip.g{background:rgba(22,163,74,.14);color:var(--ok)} .chip.b{background:rgba(229,56,59,.13);color:var(--up)} .chip.n{background:var(--soft);color:var(--muted)}
+.ev .rr{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:9px 0 3px;background:var(--soft)}
+.ev .rr i{display:block;height:100%}
+.ev .rrl{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ev ul{margin:7px 0 0;padding:0;list-style:none;font-size:12.5px;line-height:1.65}
+.ev li::before{display:inline-block;width:17px;font-weight:700}
+.ev li.g::before{content:"✓";color:var(--ok)} .ev li.b::before{content:"✕";color:var(--up)} .ev li.n::before{content:"·";color:var(--muted)}
+.ev .see{margin-left:auto;font:inherit;font-size:12px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:6px;padding:3px 9px}
+.ev .foot{font-size:11.5px;color:var(--muted);margin-top:12px}
+.evback{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:6;display:none;font:inherit;font-size:13px;font-weight:600;cursor:pointer;
+  border:0;border-radius:999px;padding:8px 16px;background:var(--accent);color:var(--accent-fg);box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.evback.on{display:block}
+@media (max-width:600px){ .ev .stats{grid-template-columns:repeat(2,1fr)} .res{padding:18px 14px} }
+
+/* ---------- 오른쪽 패널 ---------- */
+.acct .row1{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.lbl{font-size:12px;color:var(--muted)}
+.big{font-size:27px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.2}
+.mid{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;font-variant-numeric:tabular-nums}
+.kv span:first-child{color:var(--muted)}
+.turn{display:flex;align-items:center;gap:10px}
+.prog{flex:1;height:6px;border-radius:3px;background:var(--soft);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
+.turn b{font-size:13px;font-variant-numeric:tabular-nums;min-width:48px;text-align:right}
+.reset{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);
+  border-radius:7px;padding:5px 10px;white-space:nowrap}
+@media (hover:hover){ .reset:hover{background:var(--soft)} }
+.acts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.act{font:inherit;font-size:15px;font-weight:700;cursor:pointer;border:0;border-radius:9px;padding:13px 0;color:#fff;transition:filter .12s,transform .05s}
+.act:active{transform:translateY(1px)}
+.act.buy{background:var(--up)} .act.sell{background:var(--dn)} .act.next{background:var(--soft);color:var(--fg);border:1px solid var(--line)}
+@media (hover:hover){ .act:not([disabled]):hover{filter:brightness(1.08)} }
+.act[disabled]{opacity:.35;cursor:default}
+.act small{font-weight:500;opacity:.8;font-size:12px}
+.ratio{display:flex;align-items:center;gap:6px;margin-top:12px}
+.ratio .lbl{margin-right:2px}
+.rb{flex:1;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:6px;padding:6px 0}
+.rb.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.buyinfo{font-size:12.5px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums}
+.buyinfo b{color:var(--fg)}
+.keys{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:center;margin-top:12px;font-size:12px;color:var(--muted)}
+kbd{font-family:inherit;font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;margin-right:3px;background:var(--soft)}
+.msg{font-size:12.5px;color:var(--warn);min-height:18px;margin-top:6px;text-align:center}
+h3{font-size:13.5px;margin:0 0 8px}
+.log{max-height:190px;overflow:auto;font-size:12.5px;font-variant-numeric:tabular-nums}
+.log div{display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--line)}
+.log div:last-child{border-bottom:0}
+.log .s{font-weight:700;width:30px}
+.log .p{margin-left:auto}
+.empty{color:var(--muted);font-size:12.5px}
+.hist .sum{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;text-align:center}
+.hist .sum div{background:var(--soft);border-radius:8px;padding:6px 2px}
+.hist .sum b{display:block;font-size:14.5px;font-variant-numeric:tabular-nums}
+.hist .sum span{font-size:11px;color:var(--muted)}
+.hlist{font-size:12px;max-height:150px;overflow:auto;font-variant-numeric:tabular-nums}
+.hlist div{display:flex;gap:6px;padding:3px 0;border-bottom:1px solid var(--line)}
+.hlist div:last-child{border-bottom:0}
+.hlist .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{font-size:11.5px;color:var(--muted);margin:0}
+/* 출제 조건 */
+.cond-card summary{cursor:pointer;display:flex;align-items:center;gap:10px;font-size:13.5px;list-style:none}
+.cond-card summary::-webkit-details-marker{display:none}
+.cond-card summary::after{content:"▾";margin-left:auto;color:var(--muted);transition:transform .15s}
+.cond-card details[open] summary::after{transform:rotate(180deg)}
+.csum{font-size:12px;color:var(--muted)}
+.csum.on{color:var(--accent-fg);background:var(--accent);border-radius:9px;padding:1px 8px;font-weight:600}
+.cg{font-size:11.5px;color:var(--muted);font-weight:600;margin:12px 0 4px}
+.cr{display:flex;gap:7px;align-items:flex-start;font-size:13px;padding:3px 0;cursor:pointer;line-height:1.4}
+.cr input{margin:2px 0 0;flex:none;accent-color:var(--accent)}
+.condact{display:flex;align-items:center;gap:12px;margin-top:12px}
+.lnk{font-size:11.5px;color:var(--muted);cursor:pointer;text-decoration:underline;background:none;border:0;padding:0}
+
+@media (max-width:1000px){
+  :root{--ch:min(340px,40vh)}
+  .wrap{grid-template-columns:1fr;padding:10px 10px 60px;gap:10px}
+  .side{position:static}
+  .side .acts-card{order:-2} .side .turn-card{order:-1}   /* 휴대폰: 매매 버튼을 차트 바로 아래에 */
+  .tabs .in{padding:7px 10px;gap:6px}
+  .tab{flex:1;padding:8px 4px;font-size:13px;gap:5px;white-space:nowrap}
+  .tab.game{margin-left:0}
+  .info{font-size:11.5px;padding:0 4px;min-height:40px}
+  .info.kinfo{min-height:20px}
+  .top .meta{display:none}
+}
+@media (max-width:520px){ .tab svg,.tab .sl{display:none} }
+
+/* ---------- 디자인 (Apple 사이트풍: 블랙·화이트·그레이 · 둥근 카드 · 알약 탭) ---------- */
+:root{
+  --bg:#fbfbfd; --fg:#1d1d1f; --muted:#6e6e73; --line:rgba(0,0,0,.07); --soft:#f2f2f4; --card:#ffffff; --band:#f5f5f7;
+  --head:#f5f5f7; --zebra:#fafafb; --hover:#eef3fb; --hoverline:#d2d2d7; --accent:#1d1d1f; --accent-fg:#ffffff;
+  --bar:rgba(251,251,253,.82); --pill-hover:rgba(0,0,0,.05); --pill-on:#1d1d1f; --pill-on-fg:#ffffff;
+  --hd-bg:#333336; --hd-fg:#f5f5f7; --hd-mu:rgba(245,245,247,.62); --hd-tag:rgba(255,255,255,.14); --hd-btn:#f5f5f7; --hd-btn-fg:#1d1d1f;
+  --shadow:0 1px 2px rgba(0,0,0,.03),0 4px 14px rgba(0,0,0,.04);                  /* 작은 카드 (차트 타일) */
+  --card-shadow:0 1px 3px rgba(0,0,0,.06),0 10px 32px rgba(0,0,0,.08);            /* 구역 카드 — 배경과 확실히 구분 */
+  --lift:0 14px 34px rgba(0,0,0,.11),0 3px 8px rgba(0,0,0,.05);                   /* 마우스 올렸을 때 떠오름 */
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#000000; --fg:#f5f5f7; --muted:#98989d; --line:rgba(255,255,255,.09); --soft:#2c2c2e; --card:#1c1c1e; --band:#232325;
+         --head:#2c2c2e; --zebra:#202022; --hover:#26292f; --hoverline:#48484a; --accent:#f5f5f7; --accent-fg:#1d1d1f;
+         --bar:rgba(0,0,0,.72); --pill-hover:rgba(255,255,255,.08); --pill-on:#f5f5f7; --pill-on-fg:#1d1d1f; --hd-bg:#2c2c2e;
+         --shadow:none; --card-shadow:0 0 0 1px rgba(255,255,255,.05),0 10px 32px rgba(0,0,0,.55);
+         --lift:0 14px 34px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.08); }
+}
+body{font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  -webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+header{background:var(--hd-bg);color:var(--hd-fg);border-bottom:0}
+.top{padding:14px 22px}
+.top h1{font-size:19px;font-weight:700;letter-spacing:-.4px}
+header .meta,header .top .meta{color:var(--hd-mu)}
+header .meta b{color:var(--hd-fg)}
+header .tag{background:var(--hd-tag);border-color:transparent;color:var(--hd-fg)}
+header .btn{background:var(--hd-btn);color:var(--hd-btn-fg);border-radius:980px;padding:7px 16px}
+header .lnk,header .status{color:var(--hd-mu)}
+.tabs{background:var(--bar);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid var(--line);box-shadow:none}
+.tabs .in{padding:8px 22px;gap:4px}
+.tab{border:0;background:transparent;box-shadow:none;border-radius:980px;padding:7px 15px;color:var(--muted)}
+@media (hover:hover){ .tab:not(.on):hover{background:var(--pill-hover);color:var(--fg);border-color:transparent} }
+.tab.on{background:var(--pill-on);color:var(--pill-on-fg);box-shadow:none}
+.tab .n{background:var(--pill-hover);color:var(--muted)}
+.tab.on .n{background:rgba(127,127,127,.28);color:inherit}
+.tab.game{box-shadow:inset 0 0 0 1px var(--line)}
+.tab.game.on{box-shadow:none}
+.card{border-radius:18px;border:1px solid var(--line);box-shadow:var(--card-shadow)}
+.btn,.reset{border-radius:980px}
+.act{border-radius:12px}
+.rb{border-radius:980px}
+.res{border-radius:20px}
+.ev .item{border-radius:12px}
+@media (max-width:1000px){ .tabs .in{padding:7px 10px} }
+/* 국기 · 한국/미국 전환 (오른쪽 위) */
+.flag{display:block;width:24px;height:16px;border-radius:3px;box-shadow:0 0 0 .5px rgba(0,0,0,.25);flex:none}
+.top h1 a{display:inline-flex;align-items:center;gap:10px}
+.mkt{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:rgba(255,255,255,.1);margin-left:4px}
+.mkt a{display:inline-flex;align-items:center;gap:6px;padding:4px 11px 4px 8px;border-radius:999px;color:var(--hd-mu);
+  text-decoration:none;font-size:12.5px;font-weight:600;transition:background .15s,color .15s}
+.mkt a .flag{width:18px;height:12px;border-radius:2px}
+@media (hover:hover){ .mkt a:not(.on):hover{color:var(--hd-fg);background:rgba(255,255,255,.08)} }
+.mkt a.on{background:rgba(255,255,255,.94);color:#1d1d1f}
+.top .mkt{margin-left:auto}
+/* 오른쪽 탭 묶음: 유사 차트 · 차트 게임 (별도 페이지) */
+.tab.sim{margin-left:auto;text-decoration:none;box-shadow:inset 0 0 0 1px var(--line)}
+.tab.sim + .tab.game{margin-left:0}
+.tab.sim.on{box-shadow:none}
+@media (max-width:1000px){ .tab.sim{margin-left:0} }
+/* ---------- 유사 차트 찾기 ---------- */
+.swrap{max-width:1840px;margin:0 auto;padding:18px 18px 60px;display:flex;flex-direction:column;gap:18px}
+.scard{padding:0}
+.shead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:16px 20px 13px;background:var(--band);border-bottom:1px solid var(--line);border-radius:17px 17px 0 0}
+.shead h2{margin:0;font-size:17px;font-weight:700;letter-spacing:-.3px}
+.shead .sub{flex-basis:100%;margin:0;font-size:12px;color:var(--muted)}
+.sbody{padding:16px 20px 20px}
+.ctrl{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-bottom:10px}
+.ctrl input,.ctrl select{font:inherit;font-size:13px;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:7px 10px}
+.ctrl input.q{width:240px}
+.ctrl .lbl{font-size:12.5px;color:var(--muted)}
+.pill{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:6px 12px}
+.pill.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+@media (hover:hover){ .pill:not(.on):hover{background:var(--soft);color:var(--fg)} }
+.tname{font-size:15px;font-weight:700;margin:2px 0 6px}
+.tname small{font-size:12.5px;color:var(--muted);font-weight:500;margin-left:6px}
+#tc{display:block;width:100%;height:min(420px,52vh);touch-action:none;cursor:col-resize}
+.selinfo{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-top:10px;font-size:13px}
+.selinfo b{font-variant-numeric:tabular-nums}
+.selinfo .go{margin-left:auto;font:inherit;font-size:14px;font-weight:700;cursor:pointer;border:0;border-radius:999px;padding:10px 22px;background:var(--accent);color:var(--accent-fg)}
+.selinfo .go[disabled]{opacity:.4;cursor:default}
+.hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+.smsg{font-size:12.5px;color:var(--warn);min-height:18px}
+.sumrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.sumrow div{background:var(--soft);border-radius:12px;padding:10px 12px;text-align:center}
+.sumrow b{display:block;font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+.sumrow span{font-size:12px;color:var(--muted)}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.rc{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px 12px;box-shadow:var(--shadow);
+  transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s cubic-bezier(.2,.8,.2,1)}
+@media (hover:hover){ .rc:hover{transform:translateY(-3px);box-shadow:var(--lift)} }
+.rc .top1{display:flex;align-items:baseline;gap:8px}
+.rc .nm{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc .cd{font-size:12px;color:var(--muted)}
+.rc.self{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),var(--shadow)}
+.rc .me{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--soft);color:var(--fg);white-space:nowrap;flex:none}
+.rc .sim{margin-left:auto;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--accent);color:var(--accent-fg);white-space:nowrap}
+.rc .pd{font-size:12px;color:var(--muted);margin:2px 0 6px;font-variant-numeric:tabular-nums}
+.rc canvas{display:block;width:100%;height:120px}
+.rc .rets{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:6px;text-align:center;font-variant-numeric:tabular-nums}
+.rc .rets b{display:block;font-size:14px}
+.rc .rets span{font-size:11px;color:var(--muted)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:0 0 12px}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.empty{color:var(--muted);font-size:13px;padding:20px 0;text-align:center}
+@media (max-width:1000px){ .swrap{padding:10px 10px 60px;gap:10px} .shead{padding:12px 12px 10px} .sbody{padding:12px 10px 14px} .ctrl input.q{width:100%} #tc{height:min(340px,48vh)} .selinfo .go{margin-left:0;width:100%} }
+@media (max-width:600px){ .sumrow b{font-size:16px} }
+/* 오른쪽 탭 묶음 맨 앞: 종목 검색 */
+.tab.scr{margin-left:auto;text-decoration:none;box-shadow:inset 0 0 0 1px var(--line)}
+.tab.scr + .tab.sim{margin-left:0}
+.tab.scr.on{box-shadow:none}
+@media (max-width:1000px){ .tab.scr{margin-left:0} }
+/* 휴대폰: 탭이 많아 한 줄에 안 들어가면 옆으로 밀어서 보기 */
+@media (max-width:1000px){
+  .tabs .in{overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .tabs .in::-webkit-scrollbar{display:none}
+  .tab{flex:none;padding:8px 12px}
+}
+/* ---------- 종목 검색 ---------- */
+.kwrap{max-width:1840px;margin:0 auto;padding:18px 18px 60px;display:flex;flex-direction:column;gap:18px}
+.khead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:16px 20px 13px;background:var(--band);border-bottom:1px solid var(--line);border-radius:17px 17px 0 0}
+.khead h2{margin:0;font-size:17px;font-weight:700;letter-spacing:-.3px}
+.khead .sub{flex-basis:100%;margin:0;font-size:12px;color:var(--muted)}
+.kbody{padding:16px 20px 20px}
+.krow{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:12px}
+.krow .lbl{font-size:12.5px;color:var(--muted)}
+.krow input,.krow select{font:inherit;font-size:13px;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:7px 10px}
+.krow label{font-size:13px;display:inline-flex;gap:5px;align-items:center}
+.seg{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:18px;background:var(--soft)}
+.seg button{font:inherit;font-size:13px;font-weight:600;cursor:pointer;border:0;background:transparent;color:var(--muted);border-radius:999px;padding:7px 14px;white-space:nowrap}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.seg button[disabled]{opacity:.45;cursor:default}
+.opts{display:none}
+.opts.on{display:flex}
+.kgo{font:inherit;font-size:14px;font-weight:700;cursor:pointer;border:0;border-radius:999px;padding:10px 24px;background:var(--accent);color:var(--accent-fg);margin-left:auto}
+.kdesc{font-size:12px;color:var(--muted);margin:2px 0 0;line-height:1.6}
+.kres{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:18px;align-items:start}
+.klist{max-height:min(760px,80vh);overflow:auto;border:1px solid var(--line);border-radius:12px}
+.ktbl{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ktbl th,.ktbl td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);background:var(--card)}
+.ktbl th{position:sticky;top:0;z-index:1;background:var(--head);font-size:12px;font-weight:600;cursor:pointer;user-select:none}
+.ktbl th.l,.ktbl td.l{text-align:left}
+.ktbl tbody tr{cursor:pointer}
+@media (hover:hover){ .ktbl tbody tr:hover td{background:var(--hover)} }
+.ktbl tbody tr.sel td{background:var(--hover);box-shadow:inset 0 0 0 9999px rgba(0,113,227,.06)}
+.ktbl td.nm b{font-weight:700}
+.ktbl td .c{color:var(--muted);font-size:11.5px;margin-left:5px}
+.chip{font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px}
+.chip.up{background:rgba(229,56,59,.12);color:var(--up)} .chip.dn{background:rgba(29,99,216,.12);color:var(--dn)}
+.kchart{position:sticky;top:70px;border:1px solid var(--line);border-radius:14px;padding:12px 12px 8px;background:var(--card)}
+.kchart .ct{font-size:14.5px;font-weight:700;margin:0 0 2px}
+.kchart .ct small{font-size:12px;color:var(--muted);font-weight:500;margin-left:6px}
+.kchart .cs{font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.55}
+#kc{display:block;width:100%;height:min(520px,62vh);touch-action:none}
+.kcount{font-size:13px;color:var(--muted);margin:0 0 10px}
+.kcount b{color:var(--fg)}
+.kempty{color:var(--muted);font-size:13px;padding:30px 10px;text-align:center}
+@media (max-width:1000px){
+  .kwrap{padding:10px 10px 60px;gap:10px} .khead{padding:12px 12px 10px} .kbody{padding:12px 10px 14px}
+  .kres{grid-template-columns:minmax(0,1fr)} .kchart{position:static} .klist{max-height:420px} .kgo{margin-left:0;width:100%} #kc{height:min(440px,60vh)}
+}
+/* 수급 오실레이터 탭 (한국만 — 미국 페이지에서는 빌드 때 제거) */
+.tab.sup{text-decoration:none;box-shadow:inset 0 0 0 1px var(--line)}
+.tab.sup + .tab.sim{margin-left:0}
+.tab.sup.on{box-shadow:none}
+/* 퀀트 탭 */
+.tab.qnt{text-decoration:none;box-shadow:inset 0 0 0 1px var(--line)}
+.tab.qnt.on{box-shadow:none}
+/* ---------- 퀀트 백테스트 ---------- */
+.qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px 22px;margin-bottom:6px}
+.qf{display:flex;flex-direction:column;gap:6px;min-width:0}
+.qf > .lbl{font-size:12px;font-weight:600;color:var(--muted)}
+.qf .line{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:13px}
+.qf input[type=number]{width:72px}
+.qf input,.qf select{font:inherit;font-size:13px;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:6px 9px}
+.qf label{display:inline-flex;gap:5px;align-items:center}
+.qbox{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:6px 0 12px;background:var(--soft)}
+.qbox .qgrid{margin:0}
+.qbox h3{margin:0 0 10px;font-size:13px;font-weight:700}
+.qbox[hidden],.qf[hidden]{display:none}
+.cbpre{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.cbpre button{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--card);color:inherit;border-radius:999px;padding:6px 12px;cursor:pointer}
+.cbpre button:hover{border-color:var(--hoverline)}
+.cbpre button b{font-weight:700}
+.cbnote{font-size:12.5px;color:var(--muted);line-height:1.6;margin:8px 0 0}
+#cbc{width:100%;height:340px;display:block}
+.cbmore{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--card);color:inherit;border-radius:9px;padding:6px 12px;cursor:pointer;margin-top:8px}
+[hidden]{display:none !important}
+.qmetrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.qm{background:var(--soft);border-radius:12px;padding:10px 12px}
+.qm span{display:block;font-size:12px;color:var(--muted)}
+.qm b{display:block;font-size:20px;letter-spacing:-.3px;font-variant-numeric:tabular-nums;margin-top:2px}
+.qm small{display:block;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.qverdict{display:flex;gap:14px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:16px}
+.qverdict .badge{flex:none;font-size:13px;font-weight:800;padding:8px 12px;border-radius:10px;color:#fff;white-space:nowrap}
+.qverdict ul{margin:0;padding:0;list-style:none;font-size:13px;line-height:1.75}
+.qverdict li::before{display:inline-block;width:18px;font-weight:700}
+.qverdict li.g::before{content:"✓";color:var(--ok)} .qverdict li.b::before{content:"✕";color:var(--up)} .qverdict li.n::before{content:"!";color:var(--warn)}
+.qchart{border:1px solid var(--line);border-radius:14px;padding:10px 12px 8px;margin-bottom:16px}
+.qchart .qi{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;min-height:20px;font-variant-numeric:tabular-nums;align-items:center}
+.qchart .qi i{display:inline-block;width:16px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.qchart .qi .r{margin-left:auto;color:var(--muted)}
+#qc{display:block;width:100%;height:min(460px,56vh);touch-action:none;cursor:crosshair}
+.q2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.8fr);gap:16px;align-items:start}
+.q2 h3,.qpick h3{margin:0 0 8px;font-size:14px;font-weight:700}
+.qtbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;font-variant-numeric:tabular-nums}
+.qtbl th,.qtbl td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--line);background:var(--card);white-space:nowrap}
+.qtbl th{position:sticky;top:0;z-index:1;background:var(--head);font-size:12px;font-weight:600}
+.qtbl th.l,.qtbl td.l{text-align:left}
+.qtbl td.wrap{white-space:normal;line-height:1.55;min-width:260px}
+.qscroll{max-height:440px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+.qtbl .c{color:var(--muted);font-size:11.5px;margin-left:4px}
+.qtbl .hp{display:inline-block;margin:0 8px 0 0}
+.qpick{margin-top:4px}
+.qnote{font-size:12px;color:var(--muted);line-height:1.65;margin:10px 0 0}
+.qstat{font-size:13px;color:var(--muted);margin-left:auto}
+@media (max-width:1000px){ .qmetrics{grid-template-columns:repeat(2,minmax(0,1fr))} .q2{grid-template-columns:minmax(0,1fr)} #qc{height:min(380px,52vh)} .qverdict{flex-direction:column} }
+/* 10분위 분석 */
+.dhead{font-size:13.5px;margin:4px 0 10px}
+.dbars{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;align-items:end;border:1px solid var(--line);border-radius:12px;padding:10px 10px 6px}
+.dbar{text-align:center;font-variant-numeric:tabular-nums}
+.dbar .dv{font-size:12px;font-weight:700;margin-bottom:4px}
+.dbar .dcol{position:relative;height:170px;border-bottom:0}
+.dbar .dcol::after{content:"";position:absolute;left:-3px;right:-3px;top:50%;border-top:1px dashed var(--line)}
+.dbar .dcol i{position:absolute;left:12%;right:12%;border-radius:4px;opacity:.85}
+.dbar .dq{font-size:11.5px;color:var(--muted);margin-top:4px}
+@media (max-width:600px){ .dbars{gap:2px;padding:8px 4px} .dbar .dv{font-size:10px} }
+/* 연도 선택 · 월별 수익률 */
+.qyear tbody tr{cursor:pointer}
+@media (hover:hover){ .qyear tbody tr:hover td{background:var(--hover)} }
+.qyear tbody tr.sel td{background:var(--hover);box-shadow:inset 0 0 0 9999px rgba(0,113,227,.07)}
+.qyear tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--dn),inset 0 0 0 9999px rgba(0,113,227,.07);font-weight:700}
+.mchart{border:1px solid var(--line);border-radius:12px;padding:10px 10px 6px}
+.mlegend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:0 0 6px 2px}
+.mlegend i{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+.mgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px}
+.mcol{text-align:center;font-variant-numeric:tabular-nums;min-width:0}
+.mcol .mv{font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden}
+.mcol .mbv{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden}
+.mcol .mq{font-size:11.5px;color:var(--muted);margin-top:2px}
+.mbars{position:relative;height:200px;margin:4px 0}
+.mbars::after{content:"";position:absolute;left:-2px;right:-2px;top:50%;border-top:1px dashed var(--line)}
+.mbars i{position:absolute;width:38%;border-radius:3px}
+.mbars i.ms{left:10%;background:var(--dn)}
+.mbars i.mb{right:10%;background:var(--muted);opacity:.55}
+.mbars i.none{display:none}
+.mcol.empty .mq{opacity:.45}
+.qlogh{margin:18px 0 8px;font-size:14px;font-weight:700}
+@media (max-width:600px){ .mcol .mv,.mcol .mbv{font-size:9px} .mbars{height:150px} .mgrid{gap:1px} }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1><a href="./"><svg class="flag" viewBox="0 0 38 20" aria-hidden="true"><rect width="38" height="20" fill="#B22234"/><rect y="1.538" width="38" height="1.538" fill="#fff"/><rect y="4.615" width="38" height="1.538" fill="#fff"/><rect y="7.692" width="38" height="1.538" fill="#fff"/><rect y="10.769" width="38" height="1.538" fill="#fff"/><rect y="13.846" width="38" height="1.538" fill="#fff"/><rect y="16.923" width="38" height="1.538" fill="#fff"/><rect width="15.2" height="10.77" fill="#3C3B6E"/><g fill="#fff"><circle cx="1.27" cy="1.08" r=".42"/><circle cx="3.80" cy="1.08" r=".42"/><circle cx="6.33" cy="1.08" r=".42"/><circle cx="8.86" cy="1.08" r=".42"/><circle cx="11.39" cy="1.08" r=".42"/><circle cx="13.92" cy="1.08" r=".42"/><circle cx="2.54" cy="2.16" r=".42"/><circle cx="5.07" cy="2.16" r=".42"/><circle cx="7.60" cy="2.16" r=".42"/><circle cx="10.13" cy="2.16" r=".42"/><circle cx="12.66" cy="2.16" r=".42"/><circle cx="1.27" cy="3.24" r=".42"/><circle cx="3.80" cy="3.24" r=".42"/><circle cx="6.33" cy="3.24" r=".42"/><circle cx="8.86" cy="3.24" r=".42"/><circle cx="11.39" cy="3.24" r=".42"/><circle cx="13.92" cy="3.24" r=".42"/><circle cx="2.54" cy="4.32" r=".42"/><circle cx="5.07" cy="4.32" r=".42"/><circle cx="7.60" cy="4.32" r=".42"/><circle cx="10.13" cy="4.32" r=".42"/><circle cx="12.66" cy="4.32" r=".42"/><circle cx="1.27" cy="5.40" r=".42"/><circle cx="3.80" cy="5.40" r=".42"/><circle cx="6.33" cy="5.40" r=".42"/><circle cx="8.86" cy="5.40" r=".42"/><circle cx="11.39" cy="5.40" r=".42"/><circle cx="13.92" cy="5.40" r=".42"/><circle cx="2.54" cy="6.48" r=".42"/><circle cx="5.07" cy="6.48" r=".42"/><circle cx="7.60" cy="6.48" r=".42"/><circle cx="10.13" cy="6.48" r=".42"/><circle cx="12.66" cy="6.48" r=".42"/><circle cx="1.27" cy="7.56" r=".42"/><circle cx="3.80" cy="7.56" r=".42"/><circle cx="6.33" cy="7.56" r=".42"/><circle cx="8.86" cy="7.56" r=".42"/><circle cx="11.39" cy="7.56" r=".42"/><circle cx="13.92" cy="7.56" r=".42"/><circle cx="2.54" cy="8.64" r=".42"/><circle cx="5.07" cy="8.64" r=".42"/><circle cx="7.60" cy="8.64" r=".42"/><circle cx="10.13" cy="8.64" r=".42"/><circle cx="12.66" cy="8.64" r=".42"/><circle cx="1.27" cy="9.72" r=".42"/><circle cx="3.80" cy="9.72" r=".42"/><circle cx="6.33" cy="9.72" r=".42"/><circle cx="8.86" cy="9.72" r=".42"/><circle cx="11.39" cy="9.72" r=".42"/><circle cx="13.92" cy="9.72" r=".42"/></g></svg>미국 증시 섹터 차트</a></h1>
+    <span class="meta">퀀트 — 전략 백테스트 · 현재 기준 종목 추출</span>
+    <nav class="mkt" aria-label="시장 선택"><a href="../quant.html"><svg class="flag" viewBox="0 0 36 24" aria-hidden="true"><rect width="36" height="24" fill="#fff"/><g transform="rotate(33.69 18 12)"><path d="M12 12a6 6 0 0 1 12 0a3 3 0 0 0-6 0a3 3 0 0 1-6 0z" fill="#CD2E3A"/><path d="M24 12a6 6 0 0 1-12 0a3 3 0 0 0 6 0a3 3 0 0 1 6 0z" fill="#0047A0"/></g><g fill="#000"><g transform="translate(10.1 6.73) rotate(-56.31)"><rect x="-2.1" y="-1.45" width="4.2" height=".7"/><rect x="-2.1" y="-0.35" width="4.2" height=".7"/><rect x="-2.1" y="0.75" width="4.2" height=".7"/></g><g transform="translate(25.9 17.27) rotate(-56.31)"><rect x="-2.1" y="-1.45" width="1.85" height=".7"/><rect x=".25" y="-1.45" width="1.85" height=".7"/><rect x="-2.1" y="-0.35" width="1.85" height=".7"/><rect x=".25" y="-0.35" width="1.85" height=".7"/><rect x="-2.1" y="0.75" width="1.85" height=".7"/><rect x=".25" y="0.75" width="1.85" height=".7"/></g><g transform="translate(25.9 6.73) rotate(56.31)"><rect x="-2.1" y="-1.45" width="1.85" height=".7"/><rect x=".25" y="-1.45" width="1.85" height=".7"/><rect x="-2.1" y="-0.35" width="4.2" height=".7"/><rect x="-2.1" y="0.75" width="1.85" height=".7"/><rect x=".25" y="0.75" width="1.85" height=".7"/></g><g transform="translate(10.1 17.27) rotate(56.31)"><rect x="-2.1" y="-1.45" width="4.2" height=".7"/><rect x="-2.1" y="-0.35" width="1.85" height=".7"/><rect x=".25" y="-0.35" width="1.85" height=".7"/><rect x="-2.1" y="0.75" width="4.2" height=".7"/></g></g></svg><span>한국</span></a><a href="../us/quant.html" class="on" aria-current="page"><svg class="flag" viewBox="0 0 38 20" aria-hidden="true"><rect width="38" height="20" fill="#B22234"/><rect y="1.538" width="38" height="1.538" fill="#fff"/><rect y="4.615" width="38" height="1.538" fill="#fff"/><rect y="7.692" width="38" height="1.538" fill="#fff"/><rect y="10.769" width="38" height="1.538" fill="#fff"/><rect y="13.846" width="38" height="1.538" fill="#fff"/><rect y="16.923" width="38" height="1.538" fill="#fff"/><rect width="15.2" height="10.77" fill="#3C3B6E"/><g fill="#fff"><circle cx="1.27" cy="1.08" r=".42"/><circle cx="3.80" cy="1.08" r=".42"/><circle cx="6.33" cy="1.08" r=".42"/><circle cx="8.86" cy="1.08" r=".42"/><circle cx="11.39" cy="1.08" r=".42"/><circle cx="13.92" cy="1.08" r=".42"/><circle cx="2.54" cy="2.16" r=".42"/><circle cx="5.07" cy="2.16" r=".42"/><circle cx="7.60" cy="2.16" r=".42"/><circle cx="10.13" cy="2.16" r=".42"/><circle cx="12.66" cy="2.16" r=".42"/><circle cx="1.27" cy="3.24" r=".42"/><circle cx="3.80" cy="3.24" r=".42"/><circle cx="6.33" cy="3.24" r=".42"/><circle cx="8.86" cy="3.24" r=".42"/><circle cx="11.39" cy="3.24" r=".42"/><circle cx="13.92" cy="3.24" r=".42"/><circle cx="2.54" cy="4.32" r=".42"/><circle cx="5.07" cy="4.32" r=".42"/><circle cx="7.60" cy="4.32" r=".42"/><circle cx="10.13" cy="4.32" r=".42"/><circle cx="12.66" cy="4.32" r=".42"/><circle cx="1.27" cy="5.40" r=".42"/><circle cx="3.80" cy="5.40" r=".42"/><circle cx="6.33" cy="5.40" r=".42"/><circle cx="8.86" cy="5.40" r=".42"/><circle cx="11.39" cy="5.40" r=".42"/><circle cx="13.92" cy="5.40" r=".42"/><circle cx="2.54" cy="6.48" r=".42"/><circle cx="5.07" cy="6.48" r=".42"/><circle cx="7.60" cy="6.48" r=".42"/><circle cx="10.13" cy="6.48" r=".42"/><circle cx="12.66" cy="6.48" r=".42"/><circle cx="1.27" cy="7.56" r=".42"/><circle cx="3.80" cy="7.56" r=".42"/><circle cx="6.33" cy="7.56" r=".42"/><circle cx="8.86" cy="7.56" r=".42"/><circle cx="11.39" cy="7.56" r=".42"/><circle cx="13.92" cy="7.56" r=".42"/><circle cx="2.54" cy="8.64" r=".42"/><circle cx="5.07" cy="8.64" r=".42"/><circle cx="7.60" cy="8.64" r=".42"/><circle cx="10.13" cy="8.64" r=".42"/><circle cx="12.66" cy="8.64" r=".42"/><circle cx="1.27" cy="9.72" r=".42"/><circle cx="3.80" cy="9.72" r=".42"/><circle cx="6.33" cy="9.72" r=".42"/><circle cx="8.86" cy="9.72" r=".42"/><circle cx="11.39" cy="9.72" r=".42"/><circle cx="13.92" cy="9.72" r=".42"/></g></svg><span>미국</span></a><a href="../crypto/quant.html"><svg class="flag" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#F7931A"/><text x="12" y="17" text-anchor="middle" font-size="15" font-weight="700" fill="#fff" font-family="Arial,sans-serif">₿</text></svg><span>코인</span></a></nav>
+  </div>
+</header>
+<nav class="tabs" aria-label="페이지 이동">
+  <div class="in">
+    <a class="tab" href="./#sector">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 14h12M4 11V7M8 11V3M12 11V8"/></svg>
+      섹터 강도</a>
+    <a class="tab" href="./#result">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M2 10h12M6 6.5v7"/></svg>
+      <span class="sl">종목별 </span>결과표</a>
+    <a class="tab" href="./#charts">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 2v12M12 3v11M8 1.5v13"/><rect x="2.8" y="5" width="2.4" height="5" rx=".5" fill="currentColor" stroke="none"/><rect x="6.8" y="3.5" width="2.4" height="5.5" rx=".5" fill="currentColor" stroke="none"/><rect x="10.8" y="6" width="2.4" height="5" rx=".5" fill="currentColor" stroke="none"/></svg>
+      <span class="sl">섹터별 </span>차트</a>
+    <a class="tab scr" href="screener.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="4.6"/><path d="M10.5 10.5l3.6 3.6"/></svg>
+      종목 검색</a>
+    <a class="tab qnt on" href="quant.html" aria-current="page">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13.5h12"/><path d="M2.5 11l3.2-3.6 2.6 2.1L13 4.2"/><path d="M10.2 4h2.9v2.9"/></svg>
+      퀀트</a>
+    <a class="tab sim" href="similar.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 11.5c1.6-3.2 3.2-3.2 4.8 0s3.2 3.2 4.8 0 2.4-3.2 3.4-1.6"/><path d="M1.5 7c1.6-3.2 3.2-3.2 4.8 0s3.2 3.2 4.8 0 2.4-3.2 3.4-1.6" stroke-dasharray="1.4 1.8"/></svg>
+      유사 차트</a>
+    <a class="tab game" href="game.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4" width="13" height="8.5" rx="3"/><path d="M5 6.8v3M3.5 8.3h3"/><circle cx="10.6" cy="7.3" r=".6" fill="currentColor"/><circle cx="12" cy="9.3" r=".6" fill="currentColor"/></svg>
+      차트 게임</a>
+  </div>
+</nav>
+<div class="kwrap">
+  <section class="card">
+    <div class="khead">
+      <h2>퀀트 전략 백테스트</h2>
+      <p class="sub">전략과 조건을 정해 과거 성과를 검증하고, 오늘 기준으로 그 전략이 고르는 종목을 추출합니다 · 대상: 이 사이트의 섹터 차트 종목</p>
+    </div>
+    <div class="kbody">
+      <div class="krow">
+        <span class="lbl">전략</span>
+        <div class="seg" id="qstrat">
+          <button type="button" class="on" data-s="dual">듀얼 모멘텀</button>
+          <button type="button" data-s="nh">52주 신고가</button>
+          <button type="button" data-s="cb" id="qstrat-cb">종가베팅</button>
+          <button type="button" data-s="panic" id="qstrat-pn">패닉 낙주</button>
+          <button type="button" disabled title="준비 중">밸류 (준비 중)</button>
+          <button type="button" disabled title="준비 중">저변동성 (준비 중)</button>
+        </div>
+      </div>
+      <div class="krow" id="row-mode">
+        <span class="lbl">상대 모멘텀 방식</span>
+        <div class="seg" id="qmode">
+          <button type="button" class="on" data-m="mom">기본 — 모멘텀 상위</button>
+          <button type="button" data-m="pull">눌림목 — 중기 상위 · 단기 하위</button>
+        </div>
+      </div>
+
+      <div class="qbox" id="box-mom">
+        <h3>상대 모멘텀 — 기간 수익률이 높은 순서로 매수</h3>
+        <div class="qgrid">
+          <div class="qf"><span class="lbl">랭킹 기준</span><div class="line"><select id="qrank">
+            <option value="single">단일 기간</option><option value="short">가중 모멘텀 — 단기 중시</option>
+            <option value="long">가중 모멘텀 — 장기 중시</option><option value="equal">가중 모멘텀 — 균등</option></select></div></div>
+          <div class="qf" id="f-single"><span class="lbl">모멘텀 기간</span><div class="line"><select id="qlook"></select></div></div>
+          <div class="qf" id="f-w" hidden style="grid-column:1/-1"><span class="lbl">기간별 가중치 (%) — 기간마다 수익률 순위를 매긴 뒤 가중 평균한 점수로 랭킹</span><div class="line" id="qw"></div></div>
+        </div>
+      </div>
+      <div class="qbox" id="box-pull" hidden>
+        <h3>눌림목 — 중기 모멘텀 상위권 중에서 단기 수익률이 가장 낮은 종목부터 매수</h3>
+        <div class="qgrid">
+          <div class="qf"><span class="lbl">중기 모멘텀</span><div class="line"><select id="qmid"></select><span>수익률 상위</span><input type="number" id="qmidpct" min="5" max="100" step="5" value="20"><span>%</span></div></div>
+          <div class="qf"><span class="lbl">단기 모멘텀 (낮은 순)</span><div class="line"><select id="qshort"></select></div></div>
+        </div>
+      </div>
+
+      <div class="qbox" id="box-nh" hidden>
+        <h3>52주 신고가 — 52주 최고가(종가 기준) 근처에 있는 종목 중에서 정렬 기준 상위부터 매수</h3>
+        <div class="qgrid">
+          <div class="qf"><span class="lbl">후보 조건</span><div class="line"><select id="nhcond"><option value="near">현재가가 52주 최고가의</option><option value="since">최근 N일 안에 52주 신고가 갱신</option></select>
+            <input type="number" id="nhv" value="5" min="0" max="60" style="width:56px"><span id="nhunit">% 이내</span></div></div>
+          <div class="qf" id="nhbothw"><span class="lbl">시장 필터 (교체일에 확인)</span><div class="line"><select id="nhreg" style="max-width:100%"><option value="step20" selected>계단20 비중 — 두 지수 중 약한 쪽이 60·90·120·180·250일선을 하나 깰 때마다 −20%</option><option value="both">둘 다 60일선 위일 때만 편입 (아니면 현금)</option><option value="none">사용 안 함</option></select></div></div>
+          <div class="qf" style="grid-column:1/-1"><span class="lbl">정렬 기준 — 후보가 많을 때 상위 몇 개를 고를지 (★ 10분위 분석으로 검증된 추천)</span>
+            <div class="line"><select id="nhsort" style="max-width:100%"></select></div><span class="kdesc" id="nhsortdesc"></span></div>
+        </div>
+      </div>
+      <div class="qbox" id="box-wrs">
+        <h3>와인스타인 상대강도 필터 (맨스필드 RS) — RS = (종목 ÷ 지수) ÷ 그 비율의 52주(252일) 평균 − 1, ×100 · 0 위 = 시장 대비 강세 국면 (스탠 와인스타인 2단계 조건)</h3>
+        <div class="qgrid">
+          <div class="qf"><span class="lbl">0선 돌파</span><div class="line"><label><input type="checkbox" id="wz"> 최근</label><input type="number" id="wzn" min="1" max="60" value="5" style="width:56px"><span>거래일 안에 RS가 0선을 아래→위로 돌파 (1 = 그날 돌파)</span></div></div>
+          <div class="qf"><span class="lbl">RS 값</span><div class="line"><label><input type="checkbox" id="wv"> RS가</label><input type="number" id="wvx" step="1" value="0" style="width:64px"><select id="wvop">
+            <option value="ge">이상</option><option value="le">이하</option><option value="cross">을 위로 돌파</option></select><span id="wvnw" hidden>· 최근<input type="number" id="wvn" min="1" max="60" value="5" style="width:56px;margin:0 4px">거래일 안에</span></div></div>
+          <div class="qf"><span class="lbl">비교 지수</span><div class="line"><select id="wrsb"><option value="own" selected>종목이 속한 시장 지수 (코스피·코스닥 / S&amp;P·나스닥)</option><option value="bench">위 '벤치마크'로 고른 지수</option></select></div></div>
+        </div>
+      </div>
+      <div id="box-pn" hidden>
+        <p class="cbnote" style="margin:0 0 10px">지수가 크게 빠진 날(패닉) <b>종가에 시가총액 최상위 대형주</b>를 사서 반등에 파는 전략입니다.
+          지수 폭락일엔 공포 매도로 대형 주도주까지 과하게 밀리는 경우가 많다는 아이디어이며, 상장폐지 포함 전 종목 일봉(2015~)과
+          그날 기준(전날 시가총액) 순위로 계산합니다. 1년에 몇 번 안 오는 기회라 '그날 망설이지 않도록' 규칙을 미리 정해 두는 용도입니다.</p>
+        <div class="cbpre" id="pnpre">
+          <button type="button" data-p="base"><b>검증 기본</b> (코스피 −4% · 삼전·하닉 · 다음날 시가)</button>
+          <button type="button" data-p="c1"><b>하루 보유</b> (코스피 −4% · 다음날 종가)</button>
+          <button type="button" data-p="two"><b>이틀 연속 급락</b> (전날·오늘 모두 −3%)</button>
+        </div>
+        <div class="qbox">
+          <h3>신호 — 그날 장 마감 직전(15:20)에 판단</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">기준 지수</span><div class="line"><select id="pnidx"><option value="ks" selected>코스피</option><option value="kq">코스닥</option></select></div></div>
+            <div class="qf"><span class="lbl">하락 조건</span><div class="line"><select id="pnsig"><option value="close" selected>당일 등락률(종가)이</option><option value="low">장중 저점이 (전날 종가 대비)</option></select>
+              <input type="number" id="pnth" step="0.5" max="-1" value="-4" style="width:64px"><span>% 이하</span></div></div>
+            <div class="qf"><span class="lbl">연속 하락</span><div class="line"><label><input type="checkbox" id="pncon"> 전날도 지수가</label><input type="number" id="pnth2" step="0.5" max="-0.5" value="-3" style="width:64px"><span>% 이하였을 때만</span></div></div>
+          </div>
+        </div>
+        <div class="qbox">
+          <h3>매수 · 매도</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">살 종목 (그날 종가)</span><div class="line"><select id="pntgt">
+              <option value="two" selected>삼성전자 + SK하이닉스</option><option value="1">시가총액 1위</option><option value="3">시가총액 상위 3</option><option value="5">시가총액 상위 5</option><option value="10">시가총액 상위 10</option><option value="20">시가총액 상위 20</option></select></div></div>
+            <div class="qf"><span class="lbl">파는 때</span><div class="line"><select id="pnexit">
+              <option value="o1" selected>다음날 시가</option><option value="c1">다음날 종가</option><option value="c2">2일 뒤 종가</option><option value="c3">3일 뒤 종가</option><option value="c5">5일 뒤 종가</option></select></div></div>
+            <div class="qf"><span class="lbl">손절 (보유 중 장중)</span><div class="line"><label><input type="checkbox" id="pnstop"> 매수가 대비</label><input type="number" id="pnsp" min="0.5" max="30" step="0.5" value="4" style="width:60px"><span>% 빠지면 그 가격에 매도 (시가가 더 낮으면 시가)</span></div></div>
+            <div class="qf"><span class="lbl">한 번에 넣는 비중</span><div class="line"><input type="number" id="pnw" min="1" max="100" step="5" value="30"><span>% (계좌 대비 · 종목끼리 똑같이 나눔 · 겹치면 합계 100%까지)</span></div></div>
+            <div class="qf"><span class="lbl">매매 비용 (왕복)</span><div class="line"><input type="number" id="pncost" min="0" max="2" step="0.05" value="0.25"><span>%</span></div></div>
+            <div class="qf"><span class="lbl">백테스트 기간</span><div class="line"><input type="date" id="pnfrom" value="2015-03-02"><span>~</span><input type="date" id="pnto"></div></div>
+          </div>
+        </div>
+        <div class="krow" style="margin-top:12px">
+          <p class="kdesc" id="pndesc" style="flex:1;min-width:260px;margin:0"></p>
+          <button class="kgo" id="pngo" type="button">백테스트 실행</button>
+        </div>
+      </div>
+      <div id="box-cb" hidden>
+        <p class="cbnote" style="margin:0 0 10px">종가 무렵(15:20) 조건에 맞는 종목을 사서 <b>다음 날 시가(동시호가)에 전량 매도</b>하는 하룻밤 전략입니다.
+          대상은 이 사이트 종목이 아니라 <b>상장폐지 종목까지 포함한 코스피·코스닥 전 종목</b>(2015~)이라 생존 편향이 없고, 연구 보고서(docs/closing-bet-research.md)와 같은 데이터·같은 계산입니다.
+          거래정지는 재개 후 첫 시가, 상장폐지는 마지막 종가로 청산해 손실을 그대로 반영합니다.</p>
+        <div class="cbpre" id="cbpre">
+          <button type="button" data-p="large"><b>대형주 · 등급</b> (연구 추천: 시총 5천억·거래대금 300억)</button>
+          <button type="button" data-p="final"><b>전 종목 개선 규칙</b> (종가=고가→테마→등락률)</button>
+          <button type="button" data-p="base"><b>기준선</b> (+3%·거래량 2배·고가권·코스피 60일선)</button>
+        </div>
+        <div class="qbox">
+          <h3>종목 조건 — 매수일(신호일) 기준으로 그때 알 수 있는 값만 사용</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">시가총액 (신호 전날)</span><div class="line"><input type="number" id="cbmc" min="0" step="500" value="5000" style="width:90px"><span>억 원 이상</span></div></div>
+            <div class="qf"><span class="lbl">20일 평균 거래대금</span><div class="line"><input type="number" id="cbtv" min="10" step="10" value="300" style="width:90px"><span>억 원 이상 (최소 10억)</span></div></div>
+            <div class="qf"><span class="lbl">당일 상승률</span><div class="line"><input type="number" id="cbd" min="3" max="25" step="0.5" value="3"><span>% 이상 ·</span><select id="cbdx"><option value="2850" selected>상한가 잠김만 제외 (+28.5% 미만)</option><option value="2500">+25% 이상 제외</option><option value="2000">+20% 이상 제외</option></select></div></div>
+            <div class="qf"><span class="lbl">거래량 (20일 평균 대비)</span><div class="line"><label><input type="checkbox" id="cbvon"> 사용</label><input type="number" id="cbv" min="1" max="20" step="0.5" value="2"><span>배 이상</span></div></div>
+            <div class="qf"><span class="lbl">고가권 마감 (저가 0 ~ 고가 1)</span><div class="line"><label><input type="checkbox" id="cbpon"> 사용</label><input type="number" id="cbp" min="0" max="1" step="0.05" value="0.7"><span>이상</span></div></div>
+            <div class="qf"><span class="lbl">기타 제외</span><div class="line"><label title="장중 +28.5% 이상(상한가 근처)까지 갔다가 밀린 종목"><input type="checkbox" id="cblt"> 상한가 터치 후 풀린 종목</label><label><input type="checkbox" id="cbold"> 상장 1년 미만</label></div></div>
+          </div>
+        </div>
+        <div class="qbox">
+          <h3>필터 · 선별</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">레짐 (시장 필터 — 꺼지면 그날은 쉼)</span><div class="line"><select id="cbreg">
+              <option value="step20" selected>계단20 비중 조절 — 코스닥이 20·40·60·90·120일선을 하나 깰 때마다 −20%</option><option value="kq20">코스닥 지수 &gt; 20일선 (아래면 쉼)</option><option value="ks60">코스피 지수 &gt; 60일선</option><option value="old">이전 체계 — 지수 밤갭 평균 &gt; 0</option><option value="none">사용 안 함</option></select></div></div>
+            <div class="qf"><span class="lbl">종목 랭킹(등급) — 과거 '+3% 마감 다음 날 시가' 평균 수익의 백분위</span><div class="line"><label><input type="checkbox" id="cbg" checked> 사용 ·</label><span>상위</span><input type="number" id="cbgt" min="5" max="100" step="5" value="20"><span>% 만 (S·A = 20%)</span></div></div>
+            <div class="qf"><span class="lbl">등급 계산 — 해마다 1월 1일에 그 전 데이터로 다시 계산</span><div class="line"><span>신호</span><input type="number" id="cbgn" min="10" max="300" step="10" value="60"><span>건 이상 종목만 등급 부여</span></div></div>
+            <div class="qf"><span class="lbl">후보가 많을 때 정렬</span><div class="line"><select id="cbsort">
+              <option value="grade" selected>등급 높은 순</option><option value="top">종가=고가 → 테마 연속일 → 등락률</option><option value="pos">고가권 → 등락률</option><option value="day">등락률 큰 순</option><option value="vol">거래량 배수 큰 순</option></select></div></div>
+            <div class="qf"><span class="lbl">하루 매수 종목 수</span><div class="line"><input type="number" id="cbk" min="1" max="10" value="3"><span>개 · 각 1/N 비중 (후보가 적으면 남는 몫은 현금)</span></div></div>
+            <div class="qf"><span class="lbl">매매 비용 (왕복 · 수수료+세금+슬리피지)</span><div class="line"><input type="number" id="cbcost" min="0" max="2" step="0.05" value="0.25"><span>%</span></div></div>
+            <div class="qf"><span class="lbl">백테스트 기간</span><div class="line"><input type="date" id="cbfrom" value="2018-01-02"><span>~</span><input type="date" id="cbto"></div></div>
+            <div class="qf"><span class="lbl">벤치마크</span><div class="line"><select id="cbbench"><option value="kq">코스닥</option><option value="ks">코스피</option></select></div></div>
+          </div>
+        </div>
+        <div class="krow" style="margin-top:12px">
+          <p class="kdesc" id="cbdesc" style="flex:1;min-width:260px;margin:0"></p>
+          <button class="kgo" id="cbgo" type="button">백테스트 실행</button>
+        </div>
+      </div>
+      <div class="qgrid" id="q-common">
+        <div class="qf"><span class="lbl">보유 종목 수</span><div class="line"><input type="number" id="qtop" min="1" max="50" value="10"><span>개 · 동일 비중</span></div></div>
+        <div class="qf"><span class="lbl">리밸런싱 주기</span><div class="line"><select id="qreb">
+          <option value="5">1주</option><option value="10">2주</option><option value="21" selected>1개월</option><option value="63">3개월</option><option value="126">6개월</option></select>
+          <select id="qsplit" title="자금을 여러 묶음으로 나눠 리밸런싱 날짜를 엇갈리게 — 날짜 운의 영향을 줄임">
+            <option value="1">한 번에</option><option value="2">2묶음 분할</option><option value="3">3묶음 분할</option><option value="4" selected>4묶음 분할</option><option value="5">5묶음 분할</option></select></div></div>
+        <div class="qf"><span class="lbl">절대 모멘텀 (종목)</span><div class="line"><label><input type="checkbox" id="qabs" checked></label><select id="qabslook">
+          <option value="126">6개월</option><option value="252" selected>12개월</option></select><span>수익률</span><input type="number" id="qabsmin" step="1" value="0" style="width:56px"><span>% 이하 제외</span></div></div>
+        <div class="qf"><span class="lbl">벤치마크</span><div class="line"><select id="qbench"></select></div></div>
+        <div class="qf"><span class="lbl">매매 비용 (편도 · 수수료+세금+슬리피지)</span><div class="line"><input type="number" id="qcost" min="0" max="3" step="0.05"><span>%</span></div></div>
+        <div class="qf"><span class="lbl">백테스트 기간</span><div class="line"><input type="date" id="qfrom"><span>~</span><input type="date" id="qto"></div></div>
+        <div class="qf"><span class="lbl">대상</span><div class="line"><label><input type="checkbox" id="qetf"> ETF 포함</label></div></div>
+      </div>
+      <div class="qbox" id="box-guard">
+        <h3>계좌 보호 장치 — 낙폭(MDD)을 줄이는 규칙 (여러 개 함께 쓸 수 있음 · 신호는 종가로 확인하고 다음 거래일 종가에 매매)</h3>
+        <div class="qgrid">
+          <div class="qf"><span class="lbl">시장 추세 필터 (매일 확인)</span><div class="line"><label><input type="checkbox" id="gma"> 벤치마크가</label><select id="gman">
+            <option value="60">60일</option><option value="120" selected>120일</option><option value="200">200일</option></select><span>이동평균 아래면 전량 현금 · 2% 위로 회복하면 다시 매수</span></div></div>
+          <div class="qf"><span class="lbl">시장 절대 모멘텀 (리밸런싱 때 확인)</span><div class="line"><label><input type="checkbox" id="qmkt"> 벤치마크 12개월 수익률이 0 이하면 전량 현금</label></div></div>
+          <div class="qf"><span class="lbl">종목 손절</span><div class="line"><label><input type="checkbox" id="gstop"> 매수가 대비</label><input type="number" id="gstopv" value="10" min="1" max="50" style="width:56px"><span>% 하락하면 그 종목 매도 → 다음 리밸런싱까지 현금</span></div></div>
+          <div class="qf"><span class="lbl">트레일링 스탑</span><div class="line"><label><input type="checkbox" id="gtrail"> 보유 중 고점 대비</label><input type="number" id="gtrailv" value="15" min="1" max="60" style="width:56px"><span>% 하락하면 그 종목 매도</span></div></div>
+          <div class="qf"><span class="lbl">계좌 손절 (서킷 브레이커)</span><div class="line"><label><input type="checkbox" id="gdd"> 전략 자산이 고점 대비</label><input type="number" id="gddv" value="20" min="3" max="60" style="width:56px"><span>% 빠지면 전량 현금 → 다음 리밸런싱에 재진입</span></div></div>
+          <div class="qf"><span class="lbl">변동성 조절</span><div class="line"><label><input type="checkbox" id="gvol"> 목표 변동성 연</label><input type="number" id="gvolv" value="25" min="5" max="80" style="width:56px"><span>% — 담을 종목들의 최근 60일 변동성이 높으면 비중을 줄이고 나머지는 현금</span></div></div>
+        </div>
+      </div>
+      <div class="krow" id="row-go" style="margin-top:12px">
+        <p class="kdesc" id="qdesc" style="flex:1;min-width:260px;margin:0"></p>
+        <button class="kgo" id="qgo" type="button">백테스트 실행</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="qres" style="display:none">
+    <div class="khead"><h2>백테스트 결과</h2><p class="sub" id="qrsub"></p></div>
+    <div class="kbody">
+      <div class="qverdict" id="qverdict"></div>
+      <div class="qmetrics" id="qmetrics"></div>
+      <div class="qchart">
+        <div class="qi" id="qinfo"></div>
+        <canvas id="qc" aria-label="전략과 벤치마크 누적 수익률 · 낙폭 차트"></canvas>
+      </div>
+      <div class="q2">
+        <div><h3>연도별 수익률 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">연도를 누르면 월별 수익률</span></h3><div class="qscroll"><table class="qtbl qyear" id="qyear"></table></div></div>
+        <div><h3 id="qmtitle">월별 수익률</h3><div class="mchart" id="qmonth"></div></div>
+      </div>
+      <h3 class="qlogh">리밸런싱 내역 <span class="c" id="qlogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
+      <div class="qscroll"><table class="qtbl" id="qlog"></table></div>
+    </div>
+  </section>
+
+  <section class="card" id="pnres" hidden>
+    <div class="khead"><h2>패닉 낙주 백테스트 결과</h2><p class="sub" id="pnrsub"></p></div>
+    <div class="kbody">
+      <div class="qverdict" id="pnverdict"></div>
+      <div class="qmetrics" id="pnmetrics"></div>
+      <div class="qchart">
+        <div class="qi" id="pninfo"></div>
+        <canvas id="pnc" aria-label="패닉 낙주 계좌와 지수 누적 수익률 · 낙폭 차트" style="width:100%;height:340px;display:block"></canvas>
+      </div>
+      <div class="q2">
+        <div><h3>연도별 수익률 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">연도를 누르면 월별 수익률</span></h3><div class="qscroll"><table class="qtbl qyear" id="pnyear"></table></div></div>
+        <div><h3 id="pnmtitle">월별 수익률</h3><div class="mchart" id="pnmonth"></div></div>
+      </div>
+      <h3 class="qlogh" id="pnnowh">오늘 상태</h3>
+      <div id="pnnow" class="cbnote" style="margin-top:0"></div>
+      <h3 class="qlogh">신호 내역 <span class="c" id="pnlogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
+      <div class="qscroll"><table class="qtbl" id="pnlog"></table></div>
+      <p class="qnote">· 시가총액 순위는 신호 전날 기준(그때 알 수 있던 값) · 거래정지로 매도일 가격이 없으면 그 뒤 첫 거래일 가격 · 같은 날 여러 종목은 비중을 똑같이 나눔<br>
+      · 검증(2015~2026, 비용 전): 코스피 −4% 이하로 마감한 날 삼전·하닉 종가 매수 → 다음날 시가 평균 +1.97% · 승률 73% (아무 날이나 사면 +0.15% · 51%). 2026년을 빼도 −4%↓ 8일 평균 +2.67%. 최악은 다음날 시가 −10.9%</p>
+    </div>
+  </section>
+
+  <section class="card" id="cbres" hidden>
+    <div class="khead"><h2>종가베팅 백테스트 결과</h2><p class="sub" id="cbrsub"></p></div>
+    <div class="kbody">
+      <div class="qverdict" id="cbverdict"></div>
+      <div class="qmetrics" id="cbmetrics"></div>
+      <div class="qchart">
+        <div class="qi" id="cbinfo"></div>
+        <canvas id="cbc" aria-label="종가베팅 계좌와 지수 누적 수익률 · 낙폭 차트"></canvas>
+      </div>
+      <div class="q2">
+        <div><h3>연도별 수익률 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">연도를 누르면 월별 수익률</span></h3><div class="qscroll"><table class="qtbl qyear" id="cbyear"></table></div></div>
+        <div><h3 id="cbmtitle">월별 수익률</h3><div class="mchart" id="cbmonth"></div></div>
+      </div>
+      <h3 class="qlogh">매매 내역 <span class="c" id="cblogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
+      <div class="qscroll"><table class="qtbl" id="cblog"></table></div>
+      <button type="button" class="cbmore" id="cbmore" hidden>더 보기</button>
+      <h3 class="qlogh" id="cbcandh">최근 후보</h3>
+      <div class="qscroll"><table class="qtbl" id="cbcand"></table></div>
+      <p class="qnote" id="cbnote"></p>
+    </div>
+  </section>
+
+  <section class="card" id="qdecsec" style="display:none">
+    <div class="khead"><h2>10분위 분석 — 정렬 기준 검증</h2>
+      <p class="sub">기간마다 전체 종목을 기준값 순으로 10개 묶음(D1 낮음 ~ D10 높음)으로 나누고 다음 기간 수익률(전체 평균 대비)을 평균 · 좋은 기준이면 D1 → D10 으로 갈수록 올라갑니다 · 기간은 위 백테스트 기간</p></div>
+    <div class="kbody">
+      <div class="krow">
+        <span class="lbl">정렬 기준</span><select id="dfac" style="max-width:100%"></select>
+        <span class="lbl">보유 기간</span><select id="dhold"><option value="5">1주</option><option value="10">2주</option><option value="21" selected>1개월</option><option value="63">3개월</option></select>
+        <button class="pill" id="dall" type="button">모든 기준 비교</button>
+        <button class="kgo" id="dgo" type="button">분석</button>
+      </div>
+      <div id="dout"></div>
+      <div id="dallout"></div>
+      <p class="qnote">· 상-하: D10 − D1 평균 수익률 차이 · t값: 그 차이가 우연이 아닐 정도(2 이상이면 의미 있음) · 단조성: 분위 순서와 수익률 순서의 일치도(+1 = 완벽히 계단식) · 승률: D10이 D1보다 높았던 기간 비율<br>
+      · 후보 안 상위10−하위10: 52주 고가 5% 이내 후보들만 놓고 이 기준으로 상위 10개와 하위 10개의 수익률 차이 — 신고가 전략에서 실제로 쓰이는 상황</p>
+    </div>
+  </section>
+
+  <section class="card" id="qpicksec" style="display:none">
+    <div class="khead"><h2 id="qptitle">현재 기준 종목 추출</h2><p class="sub" id="qpsub"></p></div>
+    <div class="kbody qpick">
+      <div class="qscroll" style="max-height:none"><table class="qtbl" id="qpick"></table></div>
+      <p class="qnote" id="qpnote"></p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var MKT = window.MKT || { market: "kr", price_dec: 0 };
+  var US = MKT.market === "us", COIN = MKT.market === "coin";
+  var BPY = MKT.bpy || 252;                                // 1년 봉 수 (코인 = 365일)
+  function DD(n){ return BPY === 252 ? n : Math.round(n * BPY / 252); }   // 거래일 기준 기간 → 이 시장의 봉 수
+  var BENCH = COIN ? [["BTC", "비트코인"]] : US ? [["SPX", "S&P 500"], ["IXIC", "나스닥 종합"]] : [["KOSPI", "코스피"], ["KOSDAQ", "코스닥"]];
+  var PER = [[5, "1주"], [10, "2주"], [21, "1개월"], [63, "3개월"], [126, "6개월"], [252, "12개월"]].map(function(p){ return [DD(p[0]), p[1]]; });
+  var YEAR = BPY;
+  var D = [], P = [], ST = [], CODE = {}, LAST = null, HOV = -1;
+
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function pc(v, d){ if (v === null || v === undefined || !isFinite(v)) return "-"; d = d === undefined ? 1 : d; var x = (v * 100).toFixed(d); return (v > 0 ? "+" : "") + x + "%"; }
+  function col(v){ return v > 0 ? "var(--up)" : v < 0 ? "var(--dn)" : "inherit"; }
+  function cpc(v, d){ return '<span style="color:' + col(v) + '">' + pc(v, d) + "</span>"; }
+  function ymd(n){ var s = String(n); return s.slice(0, 4) + "." + s.slice(4, 6) + "." + s.slice(6, 8); }
+  function iso(n){ var s = String(n); return s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8); }
+  function fromIso(v){ return +String(v).replace(/-/g, ""); }
+  var AUTODEC = function(v){ var a = Math.abs(+v); return a >= 100 ? 2 : a >= 1 ? 4 : a > 0 ? Math.min(10, Math.ceil(-Math.log10(a)) + 3) : 2; };
+  function px(v){ var d = MKT.price_dec || 0; if (d < 0) d = AUTODEC(v); var p = v.toFixed(d).split("."); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ","); return (US ? "$" : "") + p.join(".") + (US ? "" : "원"); }
+  function perName(n){ for (var i = 0; i < PER.length; i++) if (PER[i][0] === n) return PER[i][1]; return n + "일"; }
+  function opts(sel, def, from){ $(sel).innerHTML = PER.filter(function(p){ return !from || p[0] >= from; }).map(function(p){ return '<option value="' + p[0] + '"' + (p[0] === def ? " selected" : "") + ">" + p[1] + "</option>"; }).join(""); }
+
+  // ---------- 설정 ----------
+  opts("qlook", DD(63)); opts("qmid", DD(126), DD(21)); opts("qshort", DD(10));
+  var WP = [21, 63, 126, 252].map(DD);                           // 가중 모멘텀 기간: 1·3·6·12개월
+  var WPRE = { short: [40, 30, 20, 10], long: [10, 20, 30, 40], equal: [25, 25, 25, 25] };
+  $("qw").innerHTML = WP.map(function(p, i){ return "<label>" + perName(p) + ' <input type="number" class="qwi" data-i="' + i + '" min="0" max="100" step="5" style="width:60px"></label>'; }).join("") +
+    '<span class="lbl" id="qwsum" style="font-size:12px;color:var(--muted)"></span>';
+  function setW(pre){ [].forEach.call(document.querySelectorAll(".qwi"), function(x, i){ x.value = WPRE[pre][i]; }); }
+  setW("short");
+  $("qrank").addEventListener("change", function(){
+    var v = this.value; $("f-single").hidden = v !== "single"; $("f-w").hidden = v === "single";
+    if (v !== "single") setW(v);
+    desc();
+  });
+  $("qw").addEventListener("change", desc);
+  $("qshort").innerHTML = PER.slice(0, 3).map(function(p){ return '<option value="' + p[0] + '"' + (p[0] === 10 ? " selected" : "") + ">" + p[1] + "</option>"; }).join("");
+  $("qbench").innerHTML = BENCH.map(function(b){ return '<option value="' + b[0] + '">' + b[1] + "</option>"; }).join("");
+  $("qcost").value = US ? "0.05" : "0.2";
+  var MODE = "mom";
+  $("qmode").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if (!b) return;
+    MODE = b.getAttribute("data-m");
+    [].forEach.call(this.children, function(x){ x.classList.toggle("on", x === b); });
+    $("box-mom").hidden = MODE !== "mom"; $("box-pull").hidden = MODE !== "pull";
+    desc();
+  });
+  ["wz", "wzn", "wv", "wvx", "wvop", "wvn", "wrsb"].forEach(function(id){ $(id).addEventListener("change", function(){ $("wvnw").hidden = $("wvop").value !== "cross"; desc(); }); });
+  ["qlook", "qmid", "qmidpct", "qshort", "qtop", "qreb", "qabs", "qabslook", "qabsmin", "qmkt", "qbench", "qcost", "qsplit", "gma", "gman", "gstop", "gstopv", "gtrail", "gtrailv", "gdd", "gddv", "gvol", "gvolv"].forEach(function(id){ $(id).addEventListener("change", desc); });
+
+  // ---------- 52주 신고가 · 정렬 기준 ----------
+  var STRAT = "dual";
+  var FAC = [
+    ["lowgain", "★ 52주 저가 대비 상승률", "1년 최저가에서 얼마나 올라왔나 — 한국·미국 모두 가장 강하고 일관된 기준"],
+    ["compB", "★ 복합 B: 저가 대비 + 12개월 + 위험조정 모멘텀", "세 기준의 순위 평균 — 분위 수익률이 가장 고르게 계단식으로 올라감 (한국 단조성 0.98~0.99)"],
+    ["r252", "★ 12개월 수익률", "1년 수익률 — 신고가 후보 안에서 한국·미국 모두 상위 10개가 꾸준히 강함"],
+    ["compA", "★ 복합 A: 저가 대비 + 12개월 + 6개월", "세 기준의 순위 평균 — 신고가 후보 안 상위/하위 차이가 가장 큼 (한국 3개월 보유)"],
+    ["mrs", "와인스타인 RS (맨스필드, 52주)", "지수 대비 상대 주가가 1년 평균보다 얼마나 높은가 — 0 위면 시장보다 강한 국면 (비교 지수: 종목이 속한 시장)"],
+    ["r126", "6개월 수익률", "6개월 수익률 — 대체로 유효하나 12개월보다 약함"],
+    ["radj", "위험조정 모멘텀 (6개월 수익률 ÷ 변동성)", "덜 출렁이며 오른 종목 — 한국 전체 분위는 유효, 후보 안에서는 약함"],
+    ["r21", "최근 1개월 수익률", "단기 강세 — 한국 후보 안에서는 강하나 미국 전체에선 들쭉날쭉"],
+    ["fresh", "신선도 (신고가를 최근에 낸 순)", "마지막 52주 신고가 이후 경과일이 짧은 순 — 약함"],
+    ["freq", "신고가 빈도 (최근 63일 중 신고가 일수)", "신고가를 자주 낸 순 — 약함"],
+    ["near", "52주 고가 근접도 (현재가 ÷ 52주 고가)", "고가에 가까운 순 — 후보가 이미 고가 근처라 후보 안에서는 거의 효과 없음"],
+    ["trend", "추세 품질 (126일 회귀 R²)", "곧게 오른 순 — 효과 거의 없음"],
+    ["lowvol", "저변동성 (60일)", "역방향 — 분석 기간엔 변동성 낮은 종목일수록 수익이 낮았음"],
+    ["calm", "덜 과열 (50일선 이격 작은 순)", "역방향 — 이격이 큰(강한) 종목이 오히려 더 올랐음"],
+    ["tight", "횡보 압축 (20일 변동폭 작은 순)", "역방향 — 변동폭이 작은 종목일수록 수익이 낮았음"]
+  ];
+  var FACN = {}; FAC.forEach(function(f){ FACN[f[0]] = f; });
+  var facOpts = FAC.map(function(f){ return '<option value="' + f[0] + '">' + f[1] + "</option>"; }).join("");
+  $("nhsort").innerHTML = facOpts; $("dfac").innerHTML = facOpts;
+  function sortDesc(){ $("nhsortdesc").textContent = FACN[$("nhsort").value][2]; }
+  sortDesc();
+  $("nhsort").addEventListener("change", function(){ sortDesc(); $("dfac").value = this.value; desc(); });
+  $("nhcond").addEventListener("change", function(){
+    var since = this.value === "since"; $("nhunit").textContent = since ? "일 이내" : "% 이내"; $("nhv").value = since ? 20 : 5; desc();
+  });
+  $("nhv").addEventListener("change", desc);
+  $("qstrat").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if (!b || b.disabled) return;
+    STRAT = b.getAttribute("data-s");
+    [].forEach.call(this.children, function(x){ x.classList.toggle("on", x === b); });
+    var nh = STRAT === "nh", pns = STRAT === "panic", cbs = STRAT === "cb" || pns;
+    $("row-mode").style.display = nh || cbs ? "none" : "";
+    $("box-mom").hidden = nh || cbs || MODE !== "mom"; $("box-pull").hidden = nh || cbs || MODE !== "pull"; $("box-nh").hidden = !nh;
+    $("box-cb").hidden = STRAT !== "cb"; $("box-pn").hidden = !pns; $("box-wrs").hidden = cbs; $("q-common").hidden = cbs; $("box-guard").hidden = cbs; $("row-go").hidden = cbs;
+    $("cbres").hidden = STRAT !== "cb" || !CBR; $("pnres").hidden = !pns || !PNR;
+    ["qres", "qdecsec", "qpicksec"].forEach(function(id){ if (cbs) { if ($(id).style.display !== "none") $(id).setAttribute("data-was", "1"); $(id).style.display = "none"; } else if ($(id).getAttribute("data-was")) { $(id).style.display = ""; $(id).removeAttribute("data-was"); } });
+    if (cbs) cbLoad();
+    if (nh) $("dfac").value = $("nhsort").value;
+    if (!cbs) desc();
+  });
+  if (MKT.market !== "kr") { $("qstrat-cb").style.display = "none"; $("qstrat-pn").style.display = "none"; }
+  if (COIN) { $("nhbothw").hidden = true; $("nhreg").value = "none"; }
+  else if (US) { $("nhreg").options[0].text = "계단20 비중 — S&P 500·나스닥 중 약한 쪽이 60·90·120·180·250일선을 하나 깰 때마다 −20%"; $("nhreg").options[1].text = "S&P 500·나스닥 둘 다 60일선 위일 때만 편입 (아니면 현금)"; }
+  $("nhreg").addEventListener("change", desc);   // 종가베팅·패닉 낙주는 한국 전 종목 데이터 전용
+  if (BPY !== 252) ["qreb", "qabslook", "dhold"].forEach(function(id){ [].forEach.call($(id).options, function(o){ o.value = DD(+o.value); }); });   // 기간 선택값을 이 시장 봉 수로
+
+  // ======================================================================
+  // 종가베팅 — closebet.json (상장폐지 포함 전 종목 후보 행, tools/closebet/export_web.py)
+  //   매수: 신호일 종가 · 매도: 다음 날 시가 (정지 → 재개 후 첫 시가, 상폐 → 마지막 종가)
+  //   계좌: 하루 N슬롯 각 1/N, 남는 슬롯은 현금 · 밤 수익 = Σ(수익 − 비용)/N
+  // ======================================================================
+  var CB = null, CBR = null, CBLOADING = false, CBHOV = -1, CBLOG = true, CBSHOW = 200, CBG = {};
+  function cbLoad(){
+    if (CB || CBLOADING) return;
+    CBLOADING = true; $("cbgo").disabled = true; $("pngo").disabled = true; $("pndesc").textContent = "데이터를 불러오는 중… (약 6MB)";
+    $("cbdesc").textContent = "전 종목 데이터를 불러오는 중… (약 5MB)";
+    fetch("closebet.json", { cache: "no-cache" }).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); }).then(function(d){
+      var R = d.rows, n = R.i.length;
+      CB = { asof: d.asof, dates: d.dates.map(Number), st: d.stocks, reg: d.reg, kq: d.kq, ks: d.ks, n: n,
+             i: Int32Array.from(R.i), j: Int32Array.from(R.j), d: Int32Array.from(R.d), p: Int32Array.from(R.p), v: Int32Array.from(R.v),
+             tv: Int32Array.from(R.tv), mc: Int32Array.from(R.mc), h: Int32Array.from(R.h), th: Int32Array.from(R.th), o: Uint8Array.from(R.o), hx: Uint8Array.from(R.hx),
+             r: Float64Array.from(R.r, function(x){ return x === null ? NaN : x / 1e4; }), g: d.grade };
+      CB.year = CB.dates.map(function(x){ return Math.floor(x / 10000); });
+      CB.w20 = stepW(CB.kq, [20, 40, 60, 90, 120]);         // 계단20 비중 (코스닥)
+      CB.first = new Int32Array(CB.dates.length + 1).fill(n);              // 날짜별 첫 행
+      for (var k = n - 1; k >= 0; k--) CB.first[CB.i[k]] = k;
+      for (k = CB.dates.length - 1; k >= 0; k--) if (CB.first[k] > CB.first[k + 1]) CB.first[k] = CB.first[k + 1];
+      $("cbto").value = iso(CB.dates[CB.dates.length - 1]);
+      $("cbfrom").min = iso(CB.dates[0]); $("cbto").max = iso(CB.dates[CB.dates.length - 1]);
+      CB.pn = d.panic || null;
+      CBLOADING = false; $("cbgo").disabled = false; cbDesc(); pnInit();
+    }).catch(function(e){ CBLOADING = false; $("cbdesc").textContent = "데이터를 불러오지 못했습니다 (" + e.message + "). 새로고침해 보세요."; });
+  }
+  function cbCfg(){
+    var num = function(id, d){ var v = parseFloat($(id).value); return isFinite(v) ? v : d; };
+    return { mc: Math.max(0, num("cbmc", 0)), tv: Math.max(10, num("cbtv", 10)), dmin: Math.max(3, num("cbd", 3)), dx: +$("cbdx").value,
+             von: $("cbvon").checked, vmin: num("cbv", 2), pon: $("cbpon").checked, pmin: num("cbp", 0.7), lt: $("cblt").checked, old: $("cbold").checked,
+             reg: $("cbreg").value, grade: $("cbg").checked, gtop: Math.min(100, Math.max(1, num("cbgt", 20))), gn: Math.max(1, Math.round(num("cbgn", 60))),
+             sort: $("cbsort").value, k: Math.max(1, Math.min(10, Math.round(num("cbk", 3)))), cost: num("cbcost", 0.25) / 100,
+             from: fromIso($("cbfrom").value || "2018-01-02"), to: fromIso($("cbto").value || "29991231"), bench: $("cbbench").value };
+  }
+  var REGN = { step20: "계단20 비중(코스닥)", kq20: "코스닥 20일선 위", ks60: "코스피 60일선 위", old: "이전 체계 밤갭 레짐", none: "레짐 없음" };
+  var SORTN = { grade: "등급순", top: "종가=고가→테마→등락률", pos: "고가권→등락률", day: "등락률순", vol: "거래량 배수순" };
+  function cbRule(c){
+    return [c.mc ? "시총 " + c.mc.toLocaleString() + "억↑" : "", "거래대금 " + c.tv.toLocaleString() + "억↑", "+" + c.dmin + "%↑" + (c.dx < 2850 ? "(+" + c.dx / 100 + "%↑ 제외)" : ""),
+            c.von ? "거래량 " + c.vmin + "배↑" : "", c.pon ? "고가권 " + c.pmin + "↑" : "", c.lt ? "상한가 터치 제외" : "", c.old ? "상장 1년↑" : "",
+            REGN[c.reg], c.grade ? "등급 상위 " + c.gtop + "%" : "", SORTN[c.sort] + " " + c.k + "개", "비용 " + (c.cost * 100).toFixed(2) + "%"].filter(Boolean).join(" · ");
+  }
+  function cbDesc(){ if (CB) $("cbdesc").textContent = cbRule(cbCfg()) + " — 데이터 " + ymd(CB.dates[0]) + " ~ " + ymd(CB.dates[CB.dates.length - 1]); }
+  ["cbmc", "cbtv", "cbd", "cbdx", "cbvon", "cbv", "cbpon", "cbp", "cblt", "cbold", "cbreg", "cbg", "cbgt", "cbgn", "cbsort", "cbk", "cbcost", "cbfrom", "cbto", "cbbench"].forEach(function(id){ $(id).addEventListener("change", cbDesc); });
+  var CBPRE = {
+    large: { cbmc: 5000, cbtv: 300, cbd: 3, cbdx: "2850", cbvon: false, cbpon: false, cblt: false, cbold: false, cbreg: "step20", cbg: true, cbgt: 20, cbgn: 60, cbsort: "grade", cbk: 3 },
+    final: { cbmc: 0, cbtv: 10, cbd: 3, cbdx: "2500", cbvon: true, cbv: 2, cbpon: true, cbp: 0.7, cblt: true, cbold: true, cbreg: "kq20", cbg: false, cbsort: "top", cbk: 3 },
+    base:  { cbmc: 0, cbtv: 10, cbd: 3, cbdx: "2850", cbvon: true, cbv: 2, cbpon: true, cbp: 0.7, cblt: false, cbold: true, cbreg: "ks60", cbg: false, cbsort: "pos", cbk: 3 }
+  };
+  $("cbpre").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-p]"); if (!b) return;
+    var P0 = CBPRE[b.getAttribute("data-p")];
+    Object.keys(P0).forEach(function(id){ var el = $(id); if (el.type === "checkbox") el.checked = P0[id]; else el.value = P0[id]; });
+    $("cbcost").value = 0.25; $("cbfrom").value = "2018-01-02"; if (CB) $("cbto").value = iso(CB.dates[CB.dates.length - 1]);
+    cbDesc(); if (CB) cbRun();
+  });
+
+  function cbGrades(minn){                               // {연도: {gm: Float64Array(종목), gp: Float64Array}} — 연 1회 워크포워드
+    if (CBG[minn]) return CBG[minn];
+    var g = CB.g, NS = CB.st.length, ny = g.n[0].length, out = {};
+    var cn = new Float64Array(NS), cs = new Float64Array(NS);
+    for (var y = 1; y < ny; y++) {                       // y년 등급 = y0 ~ (y-1)년 신호
+      var gm = new Float64Array(NS).fill(NaN), vals = [];
+      for (var a = 0; a < g.j.length; a++) {
+        var j = g.j[a]; cn[j] += g.n[a][y - 1]; cs[j] += g.s[a][y - 1];
+        if (cn[j] >= minn && g.u[a][y]) { gm[j] = cs[j] / cn[j] / 1e4; vals.push(j); }
+      }
+      vals.sort(function(p, q){ return gm[p] - gm[q]; });
+      var gp = new Float64Array(NS).fill(NaN), m = vals.length;
+      for (var s0 = 0; s0 < m;) {                        // 동점은 평균 순위 (pandas rank pct)
+        var e = s0; while (e + 1 < m && gm[vals[e + 1]] === gm[vals[s0]]) e++;
+        var rk = (s0 + e) / 2 + 1; for (var q = s0; q <= e; q++) gp[vals[q]] = rk / m;
+        s0 = e + 1;
+      }
+      out[g.y0 + y] = { gm: gm, gp: gp, m: m };
+    }
+    return (CBG[minn] = out);
+  }
+  function stepW(cl, mas){                               // 계단20: 종가가 아래에 있는 이평선 하나당 −20% (최저 0)
+    var n = cl.length, w = new Float64Array(n).fill(1), S = mas.map(function(){ return 0; }), C = mas.map(function(){ return 0; });
+    for (var i = 0; i < n; i++) {
+      var v = cl[i], below = 0;
+      for (var k = 0; k < mas.length; k++) {
+        var m = mas[k]; if (v !== null && isFinite(v)) { S[k] += v; C[k]++; }
+        if (i >= m) { var o = cl[i - m]; if (o !== null && isFinite(o)) { S[k] -= o; C[k]--; } }
+        if (C[k] >= m * 0.9 && v !== null && v < S[k] / C[k]) below++;
+      }
+      w[i] = Math.max(0, 1 - 0.2 * below);
+    }
+    return w;
+  }
+  function cbW(c, t){ return c.reg === "step20" ? CB.w20[t] : 1; }
+  function cbCands(c, t, G){                             // t일 후보 → 정렬된 [{k(행), key[]}]
+    var out = [], RG = c.reg === "none" || c.reg === "step20" ? null : CB.reg[c.reg];
+    if (cbW(c, t) <= 0) return out;
+    if (RG && !RG[t]) return out;
+    var gy = G ? G[CB.year[t]] : null;
+    if (c.grade && !gy) return out;
+    var dmin = Math.round(c.dmin * 100), vmin = Math.round(c.vmin * 100), pmin = Math.round(c.pmin * 1000), gt = 1 - c.gtop / 100 - 1e-12;
+    for (var k = CB.first[t], e = CB.first[t + 1]; k < e; k++) {
+      if (CB.d[k] < dmin || CB.d[k] >= c.dx || CB.tv[k] < c.tv || (c.mc > 0 && !(CB.mc[k] >= c.mc))) continue;
+      if (c.von && CB.v[k] < vmin) continue;
+      if (c.pon && CB.p[k] < pmin) continue;
+      if (c.lt && CB.h[k] >= 2850) continue;
+      if (c.old && !CB.o[k]) continue;
+      var gm = gy ? gy.gm[CB.j[k]] : NaN, gp = gy ? gy.gp[CB.j[k]] : NaN;
+      if (c.grade && !(gp >= gt)) continue;
+      var key = c.sort === "grade" ? [isFinite(gm) ? gm : -1e9] : c.sort === "top" ? [CB.p[k] >= 999 ? 1 : 0, CB.th[k], CB.d[k]] :
+                c.sort === "pos" ? [CB.p[k], CB.d[k]] : c.sort === "day" ? [CB.d[k]] : [CB.v[k]];
+      out.push({ k: k, key: key, gm: gm, gp: gp });
+    }
+    out.sort(function(a, b){ for (var z = 0; z < a.key.length; z++) if (a.key[z] !== b.key[z]) return b.key[z] - a.key[z]; return 0; });
+    return out;
+  }
+  function cbRun(){
+    if (!CB) return;
+    var c = cbCfg(), T = CB.dates.length;
+    var t0 = 0; while (t0 < T && CB.dates[t0] < c.from) t0++;
+    var t1 = T - 1; while (t1 > 0 && CB.dates[t1] > c.to) t1--;
+    t1 = Math.min(t1, T - 2);                            // 마지막 날은 다음 시가가 없음
+    if (t1 - t0 < 60) { $("cbdesc").textContent = "기간이 너무 짧습니다."; return; }
+    var G = c.grade || c.sort === "grade" ? cbGrades(c.gn) : null;
+    if (c.grade) { var gy0 = CB.g.y0 + 1; if (CB.year[t0] < gy0) { while (t0 < T && CB.year[t0] < gy0) t0++; } }
+    var bx = CB[c.bench], b0 = null;
+    var eq = [1], bq = [], logs = [], nights = [], dayAcct = [], few = 0, nh = 0, n10 = 0, nst = 0, cash = 0;
+    for (var t = t0; t <= t1; t++) {
+      var cs = cbCands(c, t, G), pk = cs.slice(0, c.k), acct = 0;
+      if (b0 === null && bx[t] !== null) b0 = bx[t];
+      if (pk.length) {
+        var sum = 0, ent = [];
+        var wt = cbW(c, t);
+        pk.forEach(function(x){ var r = CB.r[x.k]; sum += r; acct += wt * (r - c.cost) / c.k; ent.push({ k: x.k, r: r }); if (CB.hx[x.k]) nh++; if (r - c.cost <= -0.10) n10++; nst++; });
+        nights.push(sum / pk.length - c.cost);
+        if (cs.length < c.k) few++;
+        logs.push({ t: t, acct: acct, ent: ent, nc: cs.length, w: wt });
+      } else cash++;
+      dayAcct.push(acct);
+      if (t > t0) eq.push(eq[eq.length - 1] * (1 + dayAcct[dayAcct.length - 2]));
+      bq.push(b0 && bx[t] !== null ? bx[t] / b0 : NaN);
+    }
+    // eq[i] = i번째 날 장 마감 직후(그날 산 종목은 아직 보유) 자산 → 마지막 밤까지 반영
+    eq.push(eq[eq.length - 1] * (1 + dayAcct[dayAcct.length - 1]));
+    var dts = CB.dates.slice(t0, t1 + 2); bq.push(bx[t1 + 1] !== null && b0 ? bx[t1 + 1] / b0 : bq[bq.length - 1]);
+    CBR = { c: c, t0: t0, t1: t1, eq: eq, bq: bq, dts: dts, logs: logs, nights: nights, few: few, nh: nh, n10: n10, nst: nst, cash: cash, days: t1 - t0 + 1 };
+    CBHOV = -1; CBSHOW = 200;
+    cbRender();
+  }
+  function cbStats(s){
+    var n = s.length, dr = [], peak = s[0], mdd = 0, pki = 0, f = 0, to = 0;
+    for (var i = 1; i < n; i++) if (isFinite(s[i]) && isFinite(s[i - 1])) dr.push(s[i] / s[i - 1] - 1);
+    for (i = 0; i < n; i++) { if (!isFinite(s[i])) continue; if (s[i] > peak) { peak = s[i]; pki = i; } var dd = s[i] / peak - 1; if (dd < mdd) { mdd = dd; f = pki; to = i; } }
+    var m = avgOf(dr), sd = Math.sqrt(dr.reduce(function(a, b){ return a + (b - m) * (b - m); }, 0) / Math.max(1, dr.length - 1));
+    var last = s[n - 1], yrs = (n - 1) / 250;
+    return { tot: last / s[0] - 1, cagr: Math.pow(last / s[0], 1 / yrs) - 1, mdd: mdd, f: f, to: to, sharpe: sd ? m / sd * Math.sqrt(250) : null, yrs: yrs };
+  }
+  function cbRender(){
+    var R = CBR, c = R.c, S = cbStats(R.eq), B = cbStats(R.bq), N = R.nights;
+    var bname = c.bench === "kq" ? "코스닥" : "코스피";
+    $("cbres").hidden = false;
+    $("cbrsub").textContent = ymd(R.dts[0]) + " ~ " + ymd(R.dts[R.dts.length - 1]) + " · " + S.yrs.toFixed(1) + "년 · " + cbRule(c);
+    var m = function(lbl, v, sub){ return '<div class="qm"><span>' + lbl + "</span><b>" + v + "</b>" + (sub ? "<small>" + sub + "</small>" : "") + "</div>"; };
+    var mean = N.length ? avgOf(N) : NaN, win = N.filter(function(x){ return x > 0; }).length, worst = N.length ? Math.min.apply(null, N) : NaN;
+    var sorted = N.slice().sort(function(a, b){ return a - b; }), p1 = sorted.length ? sorted[Math.floor(sorted.length * 0.01)] : NaN;
+    var half = Math.floor(N.length / 2), h1 = avgOf(N.slice(0, half) || [0]), h2 = avgOf(N.slice(half) || [0]);
+    // 연도별
+    var Y = {}, yk = [];
+    R.logs.forEach(function(L){ var y = Math.floor(CB.dates[L.t] / 10000); if (!Y[y]) { Y[y] = { n: 0, s: 0, w: 0 }; yk.push(y); } });
+    var ni = 0; R.logs.forEach(function(L){ var y = Math.floor(CB.dates[L.t] / 10000), v = N[ni++]; Y[y].n++; Y[y].s += v; if (v > 0) Y[y].w++; });
+    var yr = periodYears(R);
+    var ypos = yr.filter(function(y){ return Y[y.k] && Y[y.k].s > 0; }).length;
+    var tst = N.length > 2 ? tstat(N) : 0;
+    $("cbmetrics").innerHTML =
+      m("밤당 평균 (비용 후)", cpc(mean, 2), "선택 종목 평균 · t값 " + tst.toFixed(1)) +
+      m("승률 (밤)", Math.round(win / Math.max(1, N.length) * 100) + "%", win + " / " + N.length + "밤") +
+      m("누적 수익률 (계좌)", cpc(S.tot, 0), bname + " " + pc(B.tot, 0)) +
+      m("연평균 (CAGR)", cpc(S.cagr), bname + " " + pc(B.cagr)) +
+      m("최대 낙폭 (MDD)", '<span style="color:var(--dn)">' + pc(S.mdd) + "</span>", bname + " " + pc(B.mdd)) +
+      m("샤프 지수", S.sharpe === null ? "-" : S.sharpe.toFixed(2), bname + " " + (B.sharpe === null ? "-" : B.sharpe.toFixed(2))) +
+      m("매매한 날", Math.round(N.length / R.days * 100) + "%", "연 " + Math.round(N.length / S.yrs) + "일 · 후보 " + c.k + "개 미만 " + Math.round(R.few / Math.max(1, N.length) * 100) + "%") +
+      m("최악의 밤 (선택 평균)", cpc(worst, 1), "하위 1% " + pc(p1, 1)) +
+      m("앞 절반 / 뒤 절반", '<span style="white-space:nowrap">' + cpc(h1, 2) + " / " + cpc(h2, 2) + "</span>", "밤당 평균 (매매한 밤을 반으로 나눠)") +
+      m("거래정지·상폐 청산", R.nh + "건", "−10% 이하 손실 " + R.n10 + "건 / " + R.nst + "종목·밤");
+    // 판정
+    var items = [], score = 0;
+    items.push([mean > 0.001 ? "g" : mean > 0 ? "n" : "b", "밤당 평균 " + pc(mean, 2) + " (비용 " + (c.cost * 100).toFixed(2) + "% 뺀 뒤) · t값 " + tst.toFixed(1) + (tst >= 3 ? " — 우연으로 보기 어려움" : tst >= 2 ? " — 의미 있는 수준" : " — 우연일 수 있음")]);
+    score += mean > 0.001 && tst >= 2 ? 2 : mean > 0 ? 0 : -2;
+    items.push([ypos * 3 >= yr.length * 2 ? "g" : "b", "플러스였던 해 " + ypos + " / " + yr.length + "년 · 앞 절반 " + pc(h1, 2) + " · 뒤 절반 " + pc(h2, 2)]); score += ypos * 3 >= yr.length * 2 && h1 > 0 && h2 > 0 ? 1 : -1;
+    items.push([S.mdd > -0.25 ? "g" : S.mdd > -0.4 ? "n" : "b", "최대 낙폭 " + pc(S.mdd) + " (" + ymd(R.dts[S.f]) + " → " + ymd(R.dts[S.to]) + ") · 최악의 밤 " + pc(worst)]); score += S.mdd > -0.25 ? 1 : S.mdd > -0.4 ? 0 : -1;
+    if (N.length < 200) items.push(["n", "매매한 밤이 " + N.length + "번뿐 — 표본이 적어 결과가 흔들릴 수 있음"]);
+    if (c.dx >= 2850 && !c.lt) items.push(["n", "상한가 근처(+25~28.5%)에서 산 종목은 다음 날 평균 손실 — '+25% 이상 제외'나 '상한가 터치 후 풀린 종목 제외'로 비교해 보세요"]);
+    items.push(["n", "상장폐지 포함 전 종목·그때 알 수 있던 값만 쓴 결과라 생존 편향은 없습니다. 다만 다음 날 시가 체결가가 동시호가 가격과 다를 수 있고(슬리피지), 거래대금이 작은 종목은 큰 금액을 넣기 어렵습니다"]);
+    var v = score >= 3 ? ["유효", "var(--ok)"] : score >= 1 ? ["보통", "var(--warn)"] : ["약함", "var(--up)"];
+    $("cbverdict").innerHTML = '<div class="badge" style="background:' + v[1] + '">' + v[0] + "</div><ul>" + items.map(function(x){ return '<li class="' + x[0] + '">' + esc(x[1]) + "</li>"; }).join("") + "</ul>";
+    // 연도표
+    $("cbyear").innerHTML = '<thead><tr><th class="l">연도</th><th>계좌</th><th>' + bname + "</th><th>매매일</th><th>밤당 평균</th><th>승률</th></tr></thead><tbody>" +
+      yr.map(function(y, i){ var a = Y[y.k] || { n: 0, s: 0, w: 0 };
+        return '<tr data-y="' + y.k + '"><td class="l">' + y.k + (y.part ? '<span class="c">일부</span>' : "") + "</td><td>" + cpc(y.s) + "</td><td>" + cpc(y.b) + "</td><td>" + a.n + "</td><td>" + (a.n ? cpc(a.s / a.n, 2) : "-") + "</td><td>" + (a.n ? Math.round(a.w / a.n * 100) + "%" : "-") + "</td></tr>"; }).join("") + "</tbody>";
+    R.M = periodYears(R, 100); R.bname = bname;
+    var keepY = yr.filter(function(y){ return y.k === CBSELY; })[0];
+    cbMonthChart(keepY ? CBSELY : yr[yr.length - 1].k);
+    cbLogTable();
+    cbCandTable();
+    cbDraw();
+  }
+  var CBSELY = null;
+  $("cbyear").addEventListener("click", function(e){ var tr = e.target.closest("tr[data-y]"); if (tr) cbMonthChart(+tr.getAttribute("data-y")); });
+  function cbMonthChart(y){ if (!CBR || !CBR.M) return; CBSELY = y; renderMonths(CBR, y, "cbyear", "cbmtitle", "cbmonth"); }
+  function periodYears(R, div){                          // 연도별(div 10000) · 월별(div 100) 계좌 · 지수 수익
+    div = div || 10000;
+    var out = [], ps = R.eq[0], pb = R.bq[0], n = R.dts.length;
+    for (var i = 0; i < n; i++) {
+      var y = Math.floor(R.dts[i] / div), end = i === n - 1 || Math.floor(R.dts[i + 1] / div) !== y;
+      if (end) { out.push({ k: y, s: R.eq[i] / ps - 1, b: isFinite(R.bq[i]) && isFinite(pb) ? R.bq[i] / pb - 1 : NaN, part: !out.length || i === n - 1 }); ps = R.eq[i]; pb = R.bq[i]; }
+    }
+    return out;
+  }
+  function cbName(k){ var s = CB.st[CB.j[k]]; return esc(s.n) + (s.x ? '<span class="c">상폐</span>' : ""); }
+  function cbLogTable(){
+    var R = CBR, L = R.logs.slice().reverse(), show = L.slice(0, CBSHOW);
+    $("cblogn").textContent = R.logs.length + "밤 · 최근 순 · 종목 옆 괄호는 신호일 등락률";
+    $("cblog").innerHTML = '<thead><tr><th class="l">매수일 (종가)</th><th>계좌 (그 밤)</th><th>후보 수</th><th class="l">종목 — 다음 날 시가 수익 (비용 전)</th></tr></thead><tbody>' +
+      show.map(function(x){
+        return '<tr><td class="l">' + ymd(CB.dates[x.t]) + (x.w < 0.999 ? '<span class="c">비중 ' + Math.round(x.w * 100) + "%</span>" : "") + "</td><td>" + cpc(x.acct, 2) + "</td><td>" + x.nc + '</td><td class="l wrap">' +
+          x.ent.map(function(e){ return '<span class="hp">' + cbName(e.k) + ' <span class="c">(+' + (CB.d[e.k] / 100).toFixed(1) + "%)</span> " + cpc(e.r, 1) + (CB.hx[e.k] ? '<span class="c">정지·상폐 청산</span>' : "") + "</span>"; }).join("") + "</td></tr>";
+      }).join("") + "</tbody>";
+    $("cbmore").hidden = L.length <= CBSHOW;
+  }
+  $("cbmore").addEventListener("click", function(){ CBSHOW += 500; cbLogTable(); });
+  function cbCandTable(){
+    var c = CBR.c, t = CB.dates.length - 1, G = c.grade || c.sort === "grade" ? cbGrades(c.gn) : null, cs = cbCands(c, t, G);
+    var RG = c.reg === "none" || c.reg === "step20" ? null : CB.reg[c.reg];
+    var lag = Math.round((Date.now() - new Date(iso(CB.dates[t]) + "T18:00:00+09:00")) / 864e5);   // 기준일 저녁(갱신 시각) 이후 지난 날
+    $("cbcandh").innerHTML = "최근 후보 — 데이터 기준일 " + ymd(CB.dates[t]) + ' <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">평일 저녁(18:40 무렵) 장 마감 데이터로 자동 갱신 · 마감 종가로 고른 것이라 15:20 판단 때와 조금 다를 수 있음' +
+      (lag > 4 ? ' · <b style="color:var(--up)">갱신이 ' + lag + "일째 늦어지고 있음</b>" : "") + "</span>";
+    if (c.reg === "step20") $("cbcandh").innerHTML += ' <span class="chip ' + (CB.w20[t] >= 0.999 ? "up" : "dn") + '">계단20 비중 ' + Math.round(CB.w20[t] * 100) + "%</span>";
+    if (c.reg === "step20" && CB.w20[t] <= 0) { $("cbcand").innerHTML = '<tbody><tr><td class="l">계단20 비중 0% — 코스닥이 20·40·60·90·120일선을 모두 깬 상태라 쉬는 날</td></tr></tbody>'; return; }
+    if (RG && !RG[t]) { $("cbcand").innerHTML = '<tbody><tr><td class="l">레짐 꺼짐 (' + REGN[c.reg] + " 아님) — 이날은 매수하지 않음</td></tr></tbody>"; return; }
+    if (!cs.length) { $("cbcand").innerHTML = '<tbody><tr><td class="l">조건을 통과한 종목 없음</td></tr></tbody>'; return; }
+    $("cbcand").innerHTML = '<thead><tr><th class="l">순위</th><th class="l">종목</th><th>등락률</th><th>고가권</th><th>거래량</th><th>거래대금(20일)</th><th>시총</th><th>등급(백분위)</th><th>테마 연속</th></tr></thead><tbody>' +
+      cs.slice(0, 20).map(function(x, i){ var k = x.k, s = CB.st[CB.j[k]];
+        return "<tr" + (i < c.k ? ' style="font-weight:700"' : "") + '><td class="l">' + (i + 1) + (i < c.k ? ' <span class="chip up">매수</span>' : "") + '</td><td class="l">' + esc(s.n) + ' <span class="c">' + s.c + " · " + (s.m === "Q" ? "코스닥" : "코스피") + "</span></td><td>" + cpc(CB.d[k] / 1e4, 1) + "</td><td>" + (CB.p[k] / 1000).toFixed(2) + "</td><td>" + (CB.v[k] / 100).toFixed(1) + "배</td><td>" +
+          CB.tv[k].toLocaleString() + "억</td><td>" + (CB.mc[k] >= 0 ? CB.mc[k].toLocaleString() + "억" : "-") + "</td><td>" + (isFinite(x.gp) ? "상위 " + Math.max(1, Math.round((1 - x.gp) * 100)) + "%" : "-") + "</td><td>" + (CB.th[k] || "-") + "</td></tr>"; }).join("") + "</tbody>";
+    $("cbnote").innerHTML = "· 등급: 그해 1월 1일까지 '+3% 마감 다음 날 시가' 평균 수익을 거래대금 10억+ 종목끼리 비교한 백분위 (신호 " + c.gn + "건 이상) · 테마 연속: 주가가 비슷하게 움직이는 종목 10개 중 3개 이상이 +3% 오른 날이 며칠째 이어지는지<br>" +
+      "· 연구 결과(2018~2026, 비용 0.25%): 대형주 등급 규칙 밤당 +0.29% · 승률 58% · MDD −18% / 전 종목 개선 규칙 +0.47% / 기준선 +0.18%";
+  }
+  $("cbgo").addEventListener("click", cbRun);
+  function cbDraw(){ eqDraw({ R: CBR, sec: "cbres", cv: "cbc", info: "cbinfo", name: "종가베팅 계좌", hov: CBHOV, log: CBLOG, logId: "cblogax", setLog: function(v){ CBLOG = v; cbDraw(); } }); }
+  function eqDraw(o){                                   // 계좌·지수 누적 수익 + 낙폭 (o: R, sec, cv, info, name, hov, log, logId, setLog)
+    var R = o.R; if (!R || $(o.sec).hidden) return;
+    var cv = $(o.cv), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+    if (!W) return;
+    cv.width = W * dpr; cv.height = H * dpr;
+    var g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    var L = 8, Rr = 62, T = 8, H1 = Math.round((H - 30) * 0.7), G2 = 14, H2 = H - 30 - H1 - G2, n = R.eq.length;
+    var cS = css("--up"), cB = css("--muted"), grid = css("--grid") || css("--line"), mu = css("--muted");
+    var x = function(i){ return L + (W - L - Rr) * i / Math.max(1, n - 1); };
+    var vals = R.eq.concat(R.bq.filter(isFinite)), lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var tf = o.log ? Math.log : function(v){ return v; };
+    var a = tf(lo), b = tf(hi); if (a === b) { a -= 0.01; b += 0.01; }
+    var pad = (b - a) * 0.06; a -= pad; b += pad;
+    var y = function(v){ return T + H1 * (1 - (tf(v) - a) / (b - a)); };
+    g.font = "11px " + getComputedStyle(document.body).fontFamily; g.textBaseline = "middle";
+    for (var k = 0; k <= 4; k++) {
+      var vv = o.log ? Math.exp(a + (b - a) * k / 4) : a + (b - a) * k / 4, yy = y(vv);
+      g.strokeStyle = grid; g.lineWidth = 1; g.beginPath(); g.moveTo(L, yy); g.lineTo(W - Rr, yy); g.stroke();
+      g.fillStyle = mu; g.fillText(pc(vv - 1, 0), W - Rr + 6, yy);
+    }
+    g.textBaseline = "top";
+    for (var i = 1; i < n; i++) if (Math.floor(R.dts[i] / 10000) !== Math.floor(R.dts[i - 1] / 10000)) {
+      g.strokeStyle = grid; g.beginPath(); g.moveTo(x(i), T); g.lineTo(x(i), H - 18); g.stroke();
+      g.fillStyle = mu; g.fillText(String(Math.floor(R.dts[i] / 10000)), x(i) + 3, H - 15);
+    }
+    var line = function(arr, c, w){ g.strokeStyle = c; g.lineWidth = w; g.beginPath(); var st = false; for (var i = 0; i < n; i++) { if (!isFinite(arr[i])) continue; var X = x(i), Y = y(arr[i]); st ? g.lineTo(X, Y) : g.moveTo(X, Y); st = true; } g.stroke(); };
+    line(R.bq, cB, 1.4); line(R.eq, cS, 2);
+    var top2 = T + H1 + G2, dd = function(arr){ var pk = -Infinity; return arr.map(function(v){ if (!isFinite(v)) return NaN; if (v > pk) pk = v; return v / pk - 1; }); };
+    var dS = dd(R.eq), dB = dd(R.bq), mn = Math.min(Math.min.apply(null, dS), Math.min.apply(null, dB.filter(isFinite)), -0.01);
+    var y2 = function(v){ return top2 + H2 * (v / mn); };
+    g.strokeStyle = grid; g.beginPath(); g.moveTo(L, top2); g.lineTo(W - Rr, top2); g.stroke();
+    g.textBaseline = "middle"; g.fillStyle = mu; g.fillText("0%", W - Rr + 6, top2); g.fillText(pc(mn, 0), W - Rr + 6, top2 + H2);
+    g.fillStyle = cS; g.globalAlpha = 0.18; g.beginPath(); g.moveTo(x(0), top2);
+    for (i = 0; i < n; i++) g.lineTo(x(i), y2(dS[i])); g.lineTo(x(n - 1), top2); g.closePath(); g.fill(); g.globalAlpha = 1;
+    g.strokeStyle = cB; g.lineWidth = 1; g.beginPath(); var st = false; for (i = 0; i < n; i++) { if (!isFinite(dB[i])) continue; st ? g.lineTo(x(i), y2(dB[i])) : g.moveTo(x(i), y2(dB[i])); st = true; } g.stroke();
+    g.fillStyle = mu; g.textBaseline = "top"; g.fillText("낙폭", L + 2, top2 + 3);
+    var h = o.hov >= 0 && o.hov < n ? o.hov : n - 1;
+    if (o.hov >= 0 && o.hov < n) { g.strokeStyle = mu; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(x(o.hov), T); g.lineTo(x(o.hov), top2 + H2); g.stroke(); g.setLineDash([]); }
+    var bname = R.c.bench === "kq" ? "코스닥" : "코스피";
+    $(o.info).innerHTML = "<span><b>" + ymd(R.dts[h]) + "</b></span>" +
+      '<span><i style="background:' + cS + '"></i>' + esc(o.name) + ' ' + cpc(R.eq[h] - 1, 0) + ' <span style="color:var(--muted)">낙폭 ' + pc(dS[h]) + "</span></span>" +
+      '<span><i style="background:' + cB + '"></i>' + bname + " " + cpc(R.bq[h] - 1, 0) + ' <span style="color:var(--muted)">낙폭 ' + pc(dB[h]) + "</span></span>" +
+      '<label class="r"><input type="checkbox" id="' + o.logId + '"' + (o.log ? " checked" : "") + "> 로그 축</label>";
+    $(o.logId).addEventListener("change", function(){ o.setLog(this.checked); });
+  }
+  $("cbc").addEventListener("mousemove", function(e){
+    if (!CBR) return; var r = this.getBoundingClientRect(), n = CBR.eq.length;
+    CBHOV = Math.max(0, Math.min(n - 1, Math.round((e.clientX - r.left - 8) / (r.width - 70) * (n - 1)))); cbDraw();
+  });
+  $("cbc").addEventListener("mouseleave", function(){ CBHOV = -1; cbDraw(); });
+  window.addEventListener("resize", cbDraw);
+
+  // ======================================================================
+  // 패닉 낙주 — closebet.json 의 panic (지수 일봉 + 시총 상위 20 경험 종목 일봉·순위)
+  //   신호일 종가 매수 → 다음날 시가 / N일 뒤 종가 매도 (선택: 장중 손절) · 계좌: 신호마다 비중 w 를 종목끼리 나눔, 열린 포지션 합계 ≤ 100%
+  // ======================================================================
+  var PNR = null, PNHOV = -1, PNLOG = false, PNSELY = null;
+  function pnInit(){
+    if (!CB) return;
+    $("pngo").disabled = !CB.pn;
+    $("pnto").value = iso(CB.dates[CB.dates.length - 1]); $("pnto").max = iso(CB.dates[CB.dates.length - 1]); $("pnfrom").min = iso(CB.dates[0]);
+    pnDesc();
+    if (!CB.pn) $("pndesc").textContent = "이 데이터에는 아직 패닉 낙주용 자료가 없습니다 (다음 갱신 뒤 사용 가능).";
+  }
+  function pnCfg(){
+    var num = function(id, d){ var v = parseFloat($(id).value); return isFinite(v) ? v : d; };
+    return { idx: $("pnidx").value, sig: $("pnsig").value, th: Math.min(-0.5, num("pnth", -4)) / 100, con: $("pncon").checked, th2: Math.min(-0.5, num("pnth2", -3)) / 100,
+             tgt: $("pntgt").value, exit: $("pnexit").value, stop: $("pnstop").checked ? Math.max(0.5, num("pnsp", 4)) / 100 : 0,
+             w: Math.min(100, Math.max(1, num("pnw", 30))) / 100, cost: num("pncost", 0.25) / 100,
+             from: fromIso($("pnfrom").value || "2015-01-01"), to: fromIso($("pnto").value || "29991231") };
+  }
+  var PNEX = { o1: "다음날 시가", c1: "다음날 종가", c2: "2일 뒤 종가", c3: "3일 뒤 종가", c5: "5일 뒤 종가" };
+  function pnRule(c){
+    return (c.idx === "ks" ? "코스피" : "코스닥") + (c.sig === "close" ? " 종가 " : " 장중 저점 ") + (c.th * 100) + "% 이하" + (c.con ? " · 전날도 " + (c.th2 * 100) + "% 이하" : "") +
+      " → " + (c.tgt === "two" ? "삼성전자·SK하이닉스" : "시총 상위 " + c.tgt) + " 종가 매수 → " + PNEX[c.exit] + " 매도" + (c.stop ? " · 손절 −" + (c.stop * 100) + "%" : "") +
+      " · 비중 " + Math.round(c.w * 100) + "% · 비용 " + (c.cost * 100).toFixed(2) + "%";
+  }
+  function pnDesc(){ if (CB && CB.pn) $("pndesc").textContent = pnRule(pnCfg()) + " — 데이터 " + ymd(CB.dates[0]) + " ~ " + ymd(CB.dates[CB.dates.length - 1]); }
+  ["pnidx", "pnsig", "pnth", "pncon", "pnth2", "pntgt", "pnexit", "pnstop", "pnsp", "pnw", "pncost", "pnfrom", "pnto"].forEach(function(id){ $(id).addEventListener("change", pnDesc); });
+  var PNPRE = {
+    base: { pnidx: "ks", pnsig: "close", pnth: -4, pncon: false, pntgt: "two", pnexit: "o1", pnstop: false },
+    c1:   { pnidx: "ks", pnsig: "close", pnth: -4, pncon: false, pntgt: "two", pnexit: "c1", pnstop: false },
+    two:  { pnidx: "ks", pnsig: "close", pnth: -3, pncon: true, pnth2: -3, pntgt: "two", pnexit: "o1", pnstop: false }
+  };
+  $("pnpre").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-p]"); if (!b) return;
+    var P0 = PNPRE[b.getAttribute("data-p")];
+    Object.keys(P0).forEach(function(id){ var el = $(id); if (el.type === "checkbox") el.checked = P0[id]; else el.value = P0[id]; });
+    $("pnw").value = 30; $("pncost").value = 0.25; $("pnfrom").value = "2015-03-02"; if (CB) $("pnto").value = iso(CB.dates[CB.dates.length - 1]);
+    pnDesc(); if (CB && CB.pn) pnRun();
+  });
+  function pnSignal(c, t){                               // t일이 신호일인가 + 그날 지수 등락
+    var I = CB.pn[c.idx], pc0 = I.close[t - 1], pc1 = t >= 2 ? I.close[t - 2] : null;
+    if (!(pc0 > 0) || I.close[t] === null) return null;
+    var day = I.close[t] / pc0 - 1, low = I.low[t] !== null ? I.low[t] / pc0 - 1 : day;
+    var hit = (c.sig === "close" ? day : low) <= c.th + 1e-12;
+    if (hit && c.con) hit = pc1 > 0 && pc0 / pc1 - 1 <= c.th2 + 1e-12;
+    return { hit: hit, day: day, low: low };
+  }
+  function pnTargets(c, t){
+    var S = CB.pn.stocks, out = [];
+    for (var k = 0; k < S.length; k++) {
+      var x = S[k]; if (!(x.c2[t] > 0)) continue;
+      if (c.tgt === "two" ? (x.c === "005930" || x.c === "000660") : (x.rk[t] > 0 && x.rk[t] <= +c.tgt)) out.push(k);
+    }
+    if (c.tgt !== "two") out.sort(function(a, b){ return S[a].rk[t] - S[b].rk[t]; });
+    return out;
+  }
+  function pnExit(c, k, t){                              // → { i: 매도일, px, r(비용 전), stop }
+    var x = CB.pn.stocks[k], T = CB.dates.length, e = x.c2[t], H = c.exit === "o1" ? 1 : +c.exit.slice(1);
+    var nxt = function(d){ while (d < T && !(x.o[d] > 0 && x.c2[d] > 0)) d++; return d < T ? d : -1; };
+    var d = t, n = 0, sp = c.stop ? e * (1 - c.stop) : 0;
+    while (n < H) { d = nxt(d + 1); if (d < 0) return null; n++;
+      if (sp && x.o[d] <= sp) return { i: d, px: x.o[d], r: x.o[d] / e - 1, stop: true };
+      if (c.exit === "o1") return { i: d, px: x.o[d], r: x.o[d] / e - 1 };
+      if (sp && x.l[d] > 0 && x.l[d] <= sp) return { i: d, px: sp, r: -c.stop, stop: true };
+    }
+    return { i: d, px: x.c2[d], r: x.c2[d] / e - 1 };
+  }
+  function pnRun(){
+    if (!CB || !CB.pn) return;
+    var c = pnCfg(), T = CB.dates.length, I = CB.pn[c.idx];
+    var t0 = 1; while (t0 < T && CB.dates[t0] < c.from) t0++;
+    var t1 = T - 1; while (t1 > 0 && CB.dates[t1] > c.to) t1--;
+    if (t1 - t0 < 60) { $("pndesc").textContent = "기간이 너무 짧습니다."; return; }
+    var cash = 1, open = [], eq = [], bq = [], ev = [], trades = [], b0 = null, nst = 0;
+    var settle = function(d){ open = open.filter(function(p){ if (p.i <= d) { cash += p.amt * (p.r - c.cost); return false; } return true; }); };
+    for (var t = t0; t <= t1; t++) {
+      settle(t);
+      if (b0 === null && I.close[t] !== null) b0 = I.close[t];
+      var sg = pnSignal(c, t);
+      if (sg && sg.hit && t < T - 1) {
+        var tg = pnTargets(c, t), ex = [], used = open.reduce(function(a, p){ return a + p.amt; }, 0);
+        var budget = Math.max(0, Math.min(c.w * cash, cash - used));
+        tg.forEach(function(k){ var r = pnExit(c, k, t); if (r) ex.push({ k: k, x: r }); });
+        if (ex.length) {
+          var amt = budget / ex.length;
+          ex.forEach(function(e){ open.push({ i: e.x.i, amt: amt, r: e.x.r }); trades.push(e.x.r - c.cost); if (e.x.stop) nst++; });
+          ev.push({ t: t, day: sg.day, low: sg.low, ex: ex, avg: ex.reduce(function(a, e){ return a + e.x.r; }, 0) / ex.length - c.cost, w: budget });
+        }
+      }
+      var mtm = open.reduce(function(a, p){ return a + (p.i <= t ? p.amt * (p.r - c.cost) : 0); }, 0);
+      eq.push(cash + mtm);
+      bq.push(b0 && I.close[t] !== null ? I.close[t] / b0 : NaN);
+    }
+    settle(T);
+    PNR = { c: c, t0: t0, t1: t1, eq: eq, bq: bq, dts: CB.dates.slice(t0, t1 + 1), ev: ev, trades: trades, nst: nst, bench: c.idx };
+    PNHOV = -1; pnRender();
+  }
+  function pnRender(){
+    var R = PNR, c = R.c, S = cbStats(R.eq), B = cbStats(R.bq), N = R.ev.map(function(e){ return e.avg; }), Tr = R.trades;
+    var bname = c.idx === "ks" ? "코스피" : "코스닥";
+    $("pnres").hidden = false;
+    $("pnrsub").textContent = ymd(R.dts[0]) + " ~ " + ymd(R.dts[R.dts.length - 1]) + " · " + S.yrs.toFixed(1) + "년 · " + pnRule(c);
+    var m = function(lbl, v, sub){ return '<div class="qm"><span>' + lbl + "</span><b>" + v + "</b>" + (sub ? "<small>" + sub + "</small>" : "") + "</div>"; };
+    var mean = Tr.length ? avgOf(Tr) : NaN, win = Tr.filter(function(x){ return x > 0; }).length, worst = Tr.length ? Math.min.apply(null, Tr) : NaN;
+    var best = Tr.length ? Math.max.apply(null, Tr) : NaN, tst = Tr.length > 2 ? tstat(Tr) : 0;
+    var srt = Tr.slice().sort(function(a, b){ return a - b; }), p10 = srt.length ? srt[Math.floor(srt.length * 0.1)] : NaN;
+    var half = Math.floor(N.length / 2), h1 = half ? avgOf(N.slice(0, half)) : NaN, h2 = N.length - half ? avgOf(N.slice(half)) : NaN;
+    $("pnmetrics").innerHTML =
+      m("매매당 평균 (비용 후)", cpc(mean, 2), "종목 1건 기준 · t값 " + tst.toFixed(1)) +
+      m("승률", Tr.length ? Math.round(win / Tr.length * 100) + "%" : "-", win + " / " + Tr.length + "건") +
+      m("신호 횟수", R.ev.length + "번", "연 " + (R.ev.length / Math.max(0.1, S.yrs)).toFixed(1) + "번") +
+      m("누적 수익률 (계좌)", cpc(S.tot, 1), bname + " " + pc(B.tot, 0)) +
+      m("연평균 (CAGR)", cpc(S.cagr), bname + " " + pc(B.cagr)) +
+      m("최대 낙폭 (MDD)", '<span style="color:var(--dn)">' + pc(S.mdd) + "</span>", bname + " " + pc(B.mdd)) +
+      m("최악 / 최고 (1건)", cpc(worst, 1) + ' <small style="display:inline">/</small> ' + cpc(best, 1), "하위 10% " + pc(p10, 1)) +
+      m("앞 절반 / 뒤 절반", '<span style="white-space:nowrap">' + cpc(h1, 2) + " / " + cpc(h2, 2) + "</span>", "신호별 평균 (신호를 반으로 나눠)") +
+      m("손절 발동", c.stop ? R.nst + "건" : "사용 안 함", c.stop ? "−" + (c.stop * 100) + "% 도달" : "");
+    var items = [], score = 0;
+    items.push([mean > 0.003 ? "g" : mean > 0 ? "n" : "b", "매매당 평균 " + pc(mean, 2) + " (비용 뺀 뒤) · t값 " + tst.toFixed(1) + (tst >= 3 ? " — 우연으로 보기 어려움" : tst >= 2 ? " — 의미 있는 수준" : " — 우연일 수 있음")]);
+    score += mean > 0.003 && tst >= 2 ? 2 : mean > 0 ? 0 : -2;
+    items.push([h1 > 0 && h2 > 0 ? "g" : "b", "앞 절반 신호 " + pc(h1, 2) + " · 뒤 절반 " + pc(h2, 2) + (h1 > 0 && h2 > 0 ? " — 기간이 바뀌어도 유지" : " — 한쪽 기간에 쏠림")]); score += h1 > 0 && h2 > 0 ? 1 : -1;
+    if (R.ev.length < 20) items.push(["n", "신호가 " + R.ev.length + "번뿐 — 표본이 작아 결과가 크게 흔들릴 수 있음 (조건을 조금 느슨하게 해서도 확인해 보세요)"]);
+    items.push(["n", "최악의 1건 " + pc(worst, 1) + " — 폭락이 이어지는 날(2020년 3월, 2026년 6월 서킷브레이커 등)엔 다음날 더 빠질 수 있어 비중을 계좌 일부로 제한하세요"]);
+    items.push(["n", "계좌 수익이 작아 보이는 이유: 신호가 1년에 몇 번뿐이고 그때도 계좌의 " + Math.round(c.w * 100) + "%만 넣기 때문 — 나머지 기간의 자금은 다른 전략에 쓰는 '보조 규칙'으로 보세요"]);
+    if (c.stop) items.push(["n", "검증상 장중 손절은 성과를 오히려 깎았습니다 (−4% 하루 보유: 손절 없음 +2.39% → 손절 −5% +2.11%) — 폭락 다음날 장중 흔들기에 털리기 쉬움. 대신 비중을 작게"]);
+    items.push(["n", "상장폐지 포함·그때 기준 시총 순위로 계산해 생존 편향은 없습니다. 다만 2026년에 급락일이 몰려 있어(전체의 절반 이상) 최근 장세의 영향이 큽니다"]);
+    var v = score >= 3 ? ["유효", "var(--ok)"] : score >= 1 ? ["보통", "var(--warn)"] : ["약함", "var(--up)"];
+    $("pnverdict").innerHTML = '<div class="badge" style="background:' + v[1] + '">' + v[0] + "</div><ul>" + items.map(function(x){ return '<li class="' + x[0] + '">' + esc(x[1]) + "</li>"; }).join("") + "</ul>";
+    // 연도표 · 월별
+    var yr = periodYears(R), Y = {};
+    R.ev.forEach(function(e){ var y = Math.floor(CB.dates[e.t] / 10000); if (!Y[y]) Y[y] = { n: 0, s: 0, w: 0 }; Y[y].n++; Y[y].s += e.avg; if (e.avg > 0) Y[y].w++; });
+    $("pnyear").innerHTML = '<thead><tr><th class="l">연도</th><th>계좌</th><th>' + bname + "</th><th>신호</th><th>신호당 평균</th></tr></thead><tbody>" +
+      yr.map(function(y){ var a = Y[y.k] || { n: 0, s: 0 };
+        return '<tr data-y="' + y.k + '"><td class="l">' + y.k + (y.part ? '<span class="c">일부</span>' : "") + "</td><td>" + cpc(y.s) + "</td><td>" + cpc(y.b) + "</td><td>" + a.n + "</td><td>" + (a.n ? cpc(a.s / a.n, 2) : "-") + "</td></tr>"; }).join("") + "</tbody>";
+    R.M = periodYears(R, 100); R.bname = bname;
+    var keepY = yr.filter(function(y){ return y.k === PNSELY; })[0];
+    pnMonth(keepY ? PNSELY : yr[yr.length - 1].k);
+    // 신호 내역
+    $("pnlogn").textContent = R.ev.length + "번 · 최근 순 · 괄호는 매도 시점";
+    $("pnlog").innerHTML = '<thead><tr><th class="l">신호일 (종가 매수)</th><th>지수</th><th>신호 평균</th><th class="l">종목 — 수익 (비용 전)</th></tr></thead><tbody>' +
+      R.ev.slice().reverse().map(function(e){
+        return '<tr><td class="l">' + ymd(CB.dates[e.t]) + "</td><td>" + cpc(e.day, 1) + (c.sig === "low" ? '<span class="c">저점 ' + pc(e.low, 1) + "</span>" : "") + "</td><td>" + cpc(e.avg, 2) + '</td><td class="l wrap">' +
+          e.ex.map(function(x){ var s0 = CB.pn.stocks[x.k]; return '<span class="hp">' + esc(s0.n) + " " + cpc(x.x.r, 1) + '<span class="c">' + (x.x.stop ? "손절 " : "") + ymd(CB.dates[x.x.i]).slice(5) + "</span></span>"; }).join("") + "</td></tr>";
+      }).join("") + "</tbody>";
+    pnNow();
+    pnDraw();
+  }
+  function pnNow(){                                      // 데이터 마지막 날이 신호일인가
+    var c = PNR.c, t = CB.dates.length - 1, sg = pnSignal(c, t), I = CB.pn[c.idx], nm = c.idx === "ks" ? "코스피" : "코스닥";
+    $("pnnowh").textContent = "오늘 상태 — " + ymd(CB.dates[t]) + " 종가 기준";
+    if (!sg) { $("pnnow").textContent = "지수 데이터가 없습니다."; return; }
+    var tg = pnTargets(c, t).map(function(k){ var x = CB.pn.stocks[k]; return esc(x.n) + " " + px(x.c2[t]); }).join(" · ");
+    var gap = (c.th - (c.sig === "close" ? sg.day : sg.low)) * 100;
+    $("pnnow").innerHTML = sg.hit ? '<b style="color:var(--up)">● 신호 발생</b> — ' + nm + " " + pc(sg.day, 2) + (c.sig === "low" ? " (장중 저점 " + pc(sg.low, 2) + ")" : "") + " · 규칙대로라면 종가에 매수: " + tg
+      : "신호 없음 — " + nm + " " + pc(sg.day, 2) + (c.sig === "low" ? " (장중 저점 " + pc(sg.low, 2) + ")" : "") + " · 조건(" + (c.th * 100) + "%)까지 " + Math.abs(gap).toFixed(1) + "%p 남음" +
+        "<br>장중에 조건에 닿으면 15:20 전후로 다시 확인하세요. 대상: " + tg;
+  }
+  $("pnyear").addEventListener("click", function(e){ var tr = e.target.closest("tr[data-y]"); if (tr) pnMonth(+tr.getAttribute("data-y")); });
+  function pnMonth(y){ if (!PNR || !PNR.M) return; PNSELY = y; renderMonths(PNR, y, "pnyear", "pnmtitle", "pnmonth"); }
+  function pnDraw(){ eqDraw({ R: PNR, sec: "pnres", cv: "pnc", info: "pninfo", name: "패닉 낙주 계좌", hov: PNHOV, log: PNLOG, logId: "pnlogax", setLog: function(v){ PNLOG = v; pnDraw(); } }); }
+  $("pngo").addEventListener("click", pnRun);
+  $("pnc").addEventListener("mousemove", function(e){
+    if (!PNR) return; var r = this.getBoundingClientRect(), n = PNR.eq.length;
+    PNHOV = Math.max(0, Math.min(n - 1, Math.round((e.clientX - r.left - 8) / (r.width - 70) * (n - 1)))); pnDraw();
+  });
+  $("pnc").addEventListener("mouseleave", function(){ PNHOV = -1; pnDraw(); });
+  window.addEventListener("resize", pnDraw);
+
+  var HI = [], LO = [], NHF = [], LS = [], LQ = [], LN = [], CS = [], CN = [];
+  function prepFactors(){                                // 52주 최고·최저(종가) · 신고가 표시 · 수익률 누적합 (한 번만 계산)
+    var T = D.length;
+    for (var s = 0; s < P.length; s++) {
+      var p = P[s], hi = new Float64Array(T), lo = new Float64Array(T), f = new Uint8Array(T);
+      var ls = new Float64Array(T + 1), lq = new Float64Array(T + 1), ln = new Float64Array(T + 1), cs = new Float64Array(T + 1), cn = new Float64Array(T + 1);
+      hi.fill(NaN); lo.fill(NaN);
+      var first = 0; while (first < T && !(p[first] > 0)) first++;
+      var qh = [], qhh = 0, ql = [], qlh = 0;
+      for (var t = 0; t < T; t++) {
+        var v = p[t], ok = v > 0, r = ok && t > 0 && p[t - 1] > 0 ? Math.log(v / p[t - 1]) : null;
+        ls[t + 1] = ls[t] + (r === null ? 0 : r); lq[t + 1] = lq[t] + (r === null ? 0 : r * r); ln[t + 1] = ln[t] + (r === null ? 0 : 1);
+        cs[t + 1] = cs[t] + (ok ? v : 0); cn[t + 1] = cn[t] + (ok ? 1 : 0);
+        if (!ok) continue;
+        while (qh.length > qhh && p[qh[qh.length - 1]] <= v) qh.pop(); qh.push(t);
+        while (ql.length > qlh && p[ql[ql.length - 1]] >= v) ql.pop(); ql.push(t);
+        while (qh[qhh] <= t - YEAR) qhh++;
+        while (ql[qlh] <= t - YEAR) qlh++;
+        if (t - YEAR + 1 >= first) { hi[t] = p[qh[qhh]]; lo[t] = p[ql[qlh]]; if (v >= hi[t]) f[t] = 1; }
+      }
+      HI.push(hi); LO.push(lo); NHF.push(f); LS.push(ls); LQ.push(lq); LN.push(ln); CS.push(cs); CN.push(cn);
+    }
+  }
+  function sdv(s, t, w){                                 // t일까지 w일 일간 로그수익률 표준편차
+    if (t - w + 1 < 0) return null;
+    var n = LN[s][t + 1] - LN[s][t + 1 - w]; if (n < w * 0.9) return null;
+    var m = (LS[s][t + 1] - LS[s][t + 1 - w]) / n, q = (LQ[s][t + 1] - LQ[s][t + 1 - w]) / n;
+    return Math.sqrt(Math.max(0, q - m * m) * n / Math.max(1, n - 1));
+  }
+  function fval(k, s, t){
+    var p = P[s][t]; if (!(p > 0)) return null;
+    var hi = HI[s][t], r, v, j;
+    switch (k) {
+      case "lowgain": return LO[s][t] > 0 ? p / LO[s][t] - 1 : null;
+      case "r252": return ret(s, t, DD(252));
+      case "r126": return ret(s, t, DD(126));
+      case "mrs": v = mrsOf(s, ownBench(s))[t]; return isFinite(v) ? v : null;
+      case "r21": return ret(s, t, DD(21));
+      case "radj": r = ret(s, t, DD(126)); v = sdv(s, t, DD(126)); return r !== null && v ? r / (v * Math.sqrt(DD(126))) : null;
+      case "near": return hi > 0 ? p / hi : null;
+      case "freq": if (!(hi > 0)) return null; v = 0; for (j = Math.max(0, t - 62); j <= t; j++) v += NHF[s][j]; return v;
+      case "fresh": if (!(hi > 0)) return null; for (j = 0; j < YEAR && t - j >= 0; j++) if (NHF[s][t - j]) return -j; return -YEAR;
+      case "lowvol": v = sdv(s, t, 60); return v ? -v : null;
+      case "calm": if (t < 49 || CN[s][t + 1] - CN[s][t - 49] < 50) return null; return -(p / ((CS[s][t + 1] - CS[s][t - 49]) / 50) - 1);
+      case "tight": if (t < 19) return null; var mx = -Infinity, mn = Infinity;
+        for (j = t - 19; j <= t; j++) { var x = P[s][j]; if (!(x > 0)) return null; if (x > mx) mx = x; if (x < mn) mn = x; } return -(mx / mn - 1);
+      case "trend": if (t < 125) return null; var sx = 0, sy = 0, sxx = 0, sxy = 0, syy = 0;
+        for (j = 0; j < 126; j++) { var y = P[s][t - 125 + j]; if (!(y > 0)) return null; y = Math.log(y); sx += j; sy += y; sxx += j * j; sxy += j * y; syy += y * y; }
+        var cov = sxy - sx * sy / 126, vx = sxx - sx * sx / 126, vy = syy - sy * sy / 126;
+        return vy > 0 ? (cov * cov / (vx * vy)) * (cov > 0 ? 1 : -1) : null;
+    }
+    return null;
+  }
+  // ---------- 와인스타인(맨스필드) 상대강도 ----------
+  //   RS선 = 종목 종가 ÷ 지수 종가, MRS = (RS선 ÷ RS선의 252일 평균 − 1) × 100  (주봉 52주 평균의 일봉 근사)
+  var MRSC = {}, MRS_N = BPY;
+  function ownBench(s){ return ST[s].b && CODE[ST[s].b] !== undefined ? ST[s].b : (BENCH[0][0]); }
+  function mrsOf(s, bcode){
+    var key = bcode + ":" + s; if (MRSC[key]) return MRSC[key];
+    var T = D.length, out = new Float64Array(T).fill(NaN), bi = CODE[bcode];
+    if (bi === undefined) return (MRSC[key] = out);
+    var r = new Float64Array(T), sum = 0, cnt = 0;
+    for (var t = 0; t < T; t++) {
+      var a = P[s][t], b = P[bi][t];
+      r[t] = a > 0 && b > 0 ? a / b : NaN;
+      if (isFinite(r[t])) { sum += r[t]; cnt++; }
+      if (t >= MRS_N && isFinite(r[t - MRS_N])) { sum -= r[t - MRS_N]; cnt--; }
+      if (t >= MRS_N - 1 && cnt >= MRS_N * 0.95 && isFinite(r[t])) out[t] = (r[t] / (sum / cnt) - 1) * 100;
+    }
+    return (MRSC[key] = out);
+  }
+  function mrsCross(m, t, x, n){                         // 최근 n거래일(t 포함) 안에 x 를 아래→위로 넘은 날이 있나
+    for (var j = t; j > t - n && j >= 1; j--) if (isFinite(m[j]) && isFinite(m[j - 1]) && m[j - 1] <= x && m[j] > x) return true;
+    return false;
+  }
+  function wrsBench(c, s){ return c.wrsB === "own" ? ownBench(s) : c.bench; }
+  function wrsPass(c, s, t){
+    if (!c.wz && !c.wv) return true;
+    var m = mrsOf(s, wrsBench(c, s)), v = m[t];
+    if (!isFinite(v)) return false;
+    if (c.wz && !mrsCross(m, t, 0, c.wzN)) return false;
+    if (c.wv) {
+      if (c.wvOp === "ge" && !(v >= c.wvX)) return false;
+      if (c.wvOp === "le" && !(v <= c.wvX)) return false;
+      if (c.wvOp === "cross" && !mrsCross(m, t, c.wvX, c.wvN)) return false;
+    }
+    return true;
+  }
+  function wrsText(c){
+    var g = [];
+    if (c.wz) g.push("최근 " + c.wzN + "거래일 안 RS 0선 돌파");
+    if (c.wv) g.push("RS " + c.wvX + (c.wvOp === "ge" ? " 이상" : c.wvOp === "le" ? " 이하" : " 상향 돌파(최근 " + c.wvN + "거래일)"));
+    return g.length ? " · 와인스타인 RS: " + g.join(", ") + (c.wrsB === "own" ? "" : " (비교: 벤치마크)") : "";
+  }
+
+  var COMP = { compA: ["lowgain", "r252", "r126"], compB: ["lowgain", "r252", "radj"] };
+  function scoreSet(k, set, t){                          // [{s, v}] — 복합 기준은 묶음 안 순위(0~1) 평균
+    var out = [];
+    if (!COMP[k]) { set.forEach(function(s){ var v = fval(k, s, t); if (v !== null && isFinite(v)) out.push({ s: s, v: v }); }); return out; }
+    var parts = COMP[k];
+    set.forEach(function(s){ var vs = parts.map(function(q){ return fval(q, s, t); }); if (vs.every(function(v){ return v !== null && isFinite(v); })) out.push({ s: s, vs: vs, v: 0 }); });
+    var n = out.length;
+    parts.forEach(function(q, i){ out.slice().sort(function(a, b){ return a.vs[i] - b.vs[i]; }).forEach(function(x, r){ x.v += (n > 1 ? r / (n - 1) : 1) / parts.length; }); });
+    return out;
+  }
+  function nhCand(c, s, t){
+    var hi = HI[s][t], p = P[s][t]; if (!(hi > 0) || !(p > 0)) return false;
+    if (c.nhCond === "near") return p >= hi * (1 - c.nhV / 100);
+    for (var j = 0; j <= c.nhV && t - j >= 0; j++) if (NHF[s][t - j]) return true;
+    return false;
+  }
+
+  function cfg(){
+    var w = [].map.call(document.querySelectorAll(".qwi"), function(x){ return Math.max(0, +x.value || 0); });
+    return { strat: STRAT, both: $("nhreg").value === "both", nhReg: $("nhreg").value, nhCond: $("nhcond").value, nhV: Math.max(0, +$("nhv").value || 0), nhSort: $("nhsort").value,
+             mode: MODE, rank: $("qrank").value, w: w, look: +$("qlook").value, mid: +$("qmid").value, midPct: Math.max(1, Math.min(100, +$("qmidpct").value || 20)),
+             short: +$("qshort").value, top: Math.max(1, Math.min(50, Math.round(+$("qtop").value || 10))), reb: +$("qreb").value,
+             abs: $("qabs").checked, absLook: +$("qabslook").value, absMin: (+$("qabsmin").value || 0) / 100, mkt: $("qmkt").checked,
+             ma: $("gma").checked ? +$("gman").value : 0, stop: $("gstop").checked ? (+$("gstopv").value || 10) / 100 : 0,
+             trail: $("gtrail").checked ? (+$("gtrailv").value || 15) / 100 : 0, dd: $("gdd").checked ? (+$("gddv").value || 20) / 100 : 0,
+             vol: $("gvol").checked ? (+$("gvolv").value || 25) / 100 : 0,
+             split: +$("qsplit").value,
+             wz: $("wz").checked, wzN: Math.max(1, Math.round(+$("wzn").value || 5)), wv: $("wv").checked, wvOp: $("wvop").value,
+             wvX: isFinite(parseFloat($("wvx").value)) ? parseFloat($("wvx").value) : 0, wvN: Math.max(1, Math.round(+$("wvn").value || 5)), wrsB: $("wrsb").value,
+             bench: $("qbench").value, cost: Math.max(0, +$("qcost").value || 0) / 100, etf: $("qetf").checked,
+             from: fromIso($("qfrom").value), to: fromIso($("qto").value) };
+  }
+  function ruleText(c){
+    var rb = $("qreb").options[$("qreb").selectedIndex].text;
+    var s = (c.abs ? "지난 " + perName(c.absLook) + " 수익률 " + (c.absMin * 100) + "% 이하 종목은 제외하고, " : "") +
+      (c.strat === "nh" ? (c.nhCond === "near" ? "52주 최고가의 " + c.nhV + "% 이내" : "최근 " + c.nhV + "일 안에 52주 신고가를 낸") + " 종목 중 " +
+                          FACN[c.nhSort][1].replace("★ ", "") + " 상위 " + c.top + "개" :
+       c.mode === "mom" ? (c.rank === "single" ? perName(c.look) + " 수익률" : "가중 모멘텀(" + wText(c) + ")") + " 상위 " + c.top + "개"
+                        : perName(c.mid) + " 수익률 상위 " + c.midPct + "% 안에서 " + perName(c.short) + " 수익률이 가장 낮은 " + c.top + "개") +
+      "를 동일 비중으로 " + rb + "마다 교체" + (c.split > 1 ? " (자금 " + c.split + "묶음으로 나눠 교체일 분산)" : "");
+    s += wrsText(c);
+    if (c.strat === "nh" && c.both && !COIN) s += " · " + (US ? "S&P 500·나스닥" : "코스피·코스닥") + " 둘 다 60일선 위일 때만 편입";
+    if (c.strat === "nh" && c.nhReg === "step20" && !COIN) s += " · 계단20 비중 조절(두 지수 중 약한 쪽)";
+    if (c.mkt) s += " · 벤치마크가 12개월 마이너스면 전량 현금";
+    var g = [];
+    if (c.ma) g.push("지수 " + c.ma + "일선 필터");
+    if (c.stop) g.push("종목 손절 -" + Math.round(c.stop * 100) + "%");
+    if (c.trail) g.push("트레일링 -" + Math.round(c.trail * 100) + "%");
+    if (c.dd) g.push("계좌 손절 -" + Math.round(c.dd * 100) + "%");
+    if (c.vol) g.push("목표 변동성 " + Math.round(c.vol * 100) + "%");
+    if (g.length) s += " · 보호: " + g.join(", ");
+    return s;
+  }
+  function wText(c){ return WP.map(function(p, i){ return c.w[i] ? perName(p) + " " + c.w[i] : ""; }).filter(Boolean).join(" · "); }
+  function wLook(c){ var L = 0; WP.forEach(function(p, i){ if (c.w[i] > 0) L = Math.max(L, p); }); return L; }
+  function momLook(c){ return c.rank === "single" ? c.look : wLook(c); }
+  function desc(){
+    var c0 = cfg(); if ($("qwsum")) { var sm = c0.w.reduce(function(a, b){ return a + b; }, 0); $("qwsum").textContent = "합계 " + sm + (sm !== 100 ? " (비율로 자동 환산)" : ""); } $("qdesc").textContent = ruleText(cfg()) + ". 신호는 리밸런싱일 종가로 계산하고 다음 거래일 종가에 매매합니다. 조건을 통과한 종목이 모자라면 남는 비중은 현금으로 둡니다."; }
+
+  // ---------- 데이터 ----------
+  // 퀀트 전용 장기 종가(2017~, 백테스트는 2018년부터) · 없으면 유사 차트용 5년 데이터로
+  fetch("quant/index.json?t=" + Date.now(), { cache: "no-cache" }).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+    .catch(function(){ return fetch("similar/index.json?t=" + Date.now(), { cache: "no-cache" }).then(function(r){ return r.json(); }); }).then(function(d){
+    var sc = d.scale || 1;
+    D = d.dates; ST = d.stocks;
+    P = d.close.map(function(a){ var f = new Float64Array(a.length); for (var i = 0; i < a.length; i++) f[i] = a[i] === null ? NaN : a[i] / sc; return f; });
+    ST.forEach(function(s, i){ CODE[s.c] = i; });
+    var minFrom = D[Math.min(D.length - 1, YEAR)];
+    $("qfrom").min = iso(D[0]); $("qto").min = iso(D[0]); $("qfrom").max = $("qto").max = iso(D[D.length - 1]);
+    $("qfrom").value = iso(minFrom); $("qto").value = iso(D[D.length - 1]);
+    var nStock = ST.filter(function(s){ return !s.e; }).length;
+    prepFactors();
+    $("qdesc").textContent = "";
+    desc();
+    $("qdesc").textContent += " (데이터 " + ymd(D[0]) + " ~ " + ymd(D[D.length - 1]) + " · 개별 종목 " + nStock + "개)";
+    if (STRAT !== "cb") run();
+  }, function(){ $("qdesc").textContent = "데이터를 불러오지 못했습니다. 새로고침해 주세요."; });
+
+  // ---------- 전략 ----------
+  function ret(s, t, L){ if (t - L < 0) return null; var a = P[s][t - L], b = P[s][t]; return a > 0 && b > 0 ? b / a - 1 : null; }
+  function universe(c){ var u = []; for (var s = 0; s < ST.length; s++) if (!ST[s].i && (c.etf || !ST[s].e)) u.push(s); return u; }
+  function pick(c, U, t){                                // t일 종가 기준 매수 대상 (순서 = 순위)
+    var bi = CODE[c.bench];
+    if (c.mkt && bi !== undefined) { var br = ret(bi, t, YEAR); if (br !== null && br <= 0) return { list: [], cash: true }; }
+    var cand = [];
+    if (c.strat === "nh") {
+      var nhw = 1;
+      if (c.nhReg === "step20" && !COIN) {                // 계단20: 두 지수 중 약한 쪽 기준 비중
+        nhw = Math.min.apply(null, BENCH.map(function(x){ var ix = CODE[x[0]]; if (ix === undefined) return 1;
+          var below = 0; [60, 90, 120, 180, 250].forEach(function(n){ var m = maAt(ix, t, n); if (m !== null && P[ix][t] < m) below++; }); return Math.max(0, 1 - 0.2 * below); }));
+        if (nhw <= 0) return { list: [], cash: true };
+      }
+      if (c.both && !COIN) {                              // 두 지수 모두 60일선 위일 때만 편입
+        var pr = BENCH.map(function(x){ return CODE[x[0]]; });
+        if (pr.some(function(ix){ if (ix === undefined) return false; var m = maAt(ix, t, 60); return m !== null && !(P[ix][t] > m); })) return { list: [], cash: true };
+      }
+      var set = U.filter(function(s){
+        if (!nhCand(c, s, t)) return false;
+        if (!wrsPass(c, s, t)) return false;
+        if (!c.abs) return true;
+        var a = ret(s, t, c.absLook); return a !== null && a > c.absMin;
+      });
+      var sc = scoreSet(c.nhSort, set, t).sort(function(x, y){ return y.v - x.v; });
+      return { list: sc.slice(0, c.top), pool: sc.length, w: nhw };
+    }
+    for (var k = 0; k < U.length; k++) {
+      var s = U[k]; if (!(P[s][t] > 0)) continue;
+      if ((c.wz || c.wv) && !wrsPass(c, s, t)) continue;
+      var a = c.abs ? ret(s, t, c.absLook) : null;
+      if (c.abs && (a === null || a <= c.absMin)) continue;
+      if (c.mode === "mom" && c.rank === "single") { var m = ret(s, t, c.look); if (m !== null) cand.push({ s: s, m: m, a: a }); }
+      else if (c.mode === "mom") {
+        var rs = [], ok = true;
+        for (var j = 0; j < WP.length; j++) { var r = c.w[j] > 0 ? ret(s, t, WP[j]) : 0; if (r === null) { ok = false; break; } rs.push(r); }
+        if (ok) cand.push({ s: s, rs: rs, a: a });
+      }
+      else { var mi = ret(s, t, c.mid), sh = ret(s, t, c.short); if (mi !== null && sh !== null) cand.push({ s: s, mid: mi, sh: sh, a: a }); }
+    }
+    if (c.mode === "mom" && c.rank !== "single") {        // 기간별 백분위 순위(0~1)를 가중 평균
+      var tw = c.w.reduce(function(a, b){ return a + b; }, 0) || 1, n = cand.length;
+      cand.forEach(function(x){ x.m = 0; });
+      for (var j2 = 0; j2 < WP.length; j2++) {
+        if (!(c.w[j2] > 0)) continue;
+        var ord = cand.slice().sort(function(x, y){ return x.rs[j2] - y.rs[j2]; });
+        ord.forEach(function(x, r){ x.m += (n > 1 ? r / (n - 1) : 1) * c.w[j2] / tw; });
+      }
+    }
+    if (c.mode === "mom") cand.sort(function(x, y){ return y.m - x.m; });
+    else {
+      cand.sort(function(x, y){ return y.mid - x.mid; });
+      cand = cand.slice(0, Math.max(c.top, Math.ceil(cand.length * c.midPct / 100)));
+      cand.sort(function(x, y){ return x.sh - y.sh; });
+    }
+    return { list: cand.slice(0, c.top), pool: cand.length };
+  }
+
+  function maAt(i, t, n){ if (t - n + 1 < 0) return null; var sm = 0; for (var k = t - n + 1; k <= t; k++) { if (!(P[i][k] > 0)) return null; sm += P[i][k]; } return sm / n; }
+  function basketVol(list, t){                           // 동일 비중 바스켓의 최근 60일 연 변동성
+    var n = 60; if (t - n < 0 || !list.length) return null;
+    var r = [];
+    for (var k = t - n + 1; k <= t; k++) {
+      var sm = 0, m = 0;
+      list.forEach(function(x){ var a = P[x.s][k - 1], b = P[x.s][k]; if (a > 0 && b > 0) { sm += b / a - 1; m++; } });
+      if (m) r.push(sm / m);
+    }
+    var mean = r.reduce(function(a, b){ return a + b; }, 0) / r.length;
+    return Math.sqrt(r.reduce(function(a, b){ return a + (b - mean) * (b - mean); }, 0) / Math.max(1, r.length - 1)) * Math.sqrt(YEAR);
+  }
+
+  function backtest(c, phase){
+    phase = phase || 0;
+    var U = universe(c), warm = Math.max(c.abs ? c.absLook : 0, c.strat === "nh" ? YEAR : c.mode === "mom" ? momLook(c) : c.mid, c.mkt ? YEAR : 0, c.ma || 0, c.vol ? 61 : 0);
+    var t0 = 0; while (t0 < D.length - 1 && (D[t0] < c.from || t0 < warm)) t0++;
+    var t1 = D.length - 1; while (t1 > t0 && D[t1] > c.to) t1--;
+    if (t1 - t0 < 10) return null;
+    var bi = CODE[c.bench], V = 1, cash = 1, q = {}, info = {}, eq = [], bq = [], inv = [], logs = [], pend = null, cur = null;
+    var costSum = 0, turnSum = 0, nReb = 0, peak = 1, cb = false, mktOn = true, ev = { ma: 0, stop: 0, trail: 0, dd: 0 };
+    var mktOk = function(t, band){ if (!c.ma || bi === undefined) return true; var m = maAt(bi, t, c.ma); return m === null || P[bi][t] >= m * (band || 1); };
+    var trade = function(V, turn){ var fee = V * c.cost * turn; costSum += fee / V; return V - fee; };
+    var event = function(t, txt){ if (cur) (cur.ev = cur.ev || []).push(ymd(D[t]).slice(5) + " " + txt); };
+    mktOn = mktOk(t0);
+    for (var t = t0; t <= t1; t++) {
+      var hv = 0, s; for (s in q) hv += q[s] * P[s][t];
+      V = cash + hv;
+      if (pend && t === pend.at) {
+        if (pend.kind === "reb") {                          // 교체: 새 목표 비중
+          var w = {}, k, turn = 0, wn = pend.expo / c.top;
+          for (s in q) w[s] = -(q[s] * P[s][t] / V);
+          pend.list.forEach(function(x){ w[x.s] = (w[x.s] || 0) + wn; });
+          for (k in w) turn += Math.abs(w[k]);
+          V = trade(V, turn); turnSum += turn; nReb++;
+          if (cur) closeLog(cur, t, V);
+          q = {}; info = {}; cash = V * (1 - wn * pend.list.length);
+          var ent = [];
+          pend.list.forEach(function(x){ q[x.s] = V * wn / P[x.s][t]; info[x.s] = { p: P[x.s][t], hi: P[x.s][t] }; ent.push({ s: x.s, p: P[x.s][t] }); });
+          cur = { sig: pend.sig, at: t, v0: V, b0: bi !== undefined ? P[bi][t] : NaN, ent: ent, cash: pend.cash, n: pend.list.length, turn: turn,
+                  pool: pend.pool, why: pend.why, expo: pend.expo };
+          logs.push(cur);
+        } else {                                            // 일부·전량 매도
+          var sold = pend.kind === "all" ? Object.keys(q) : pend.sells, tv = 0;
+          sold.forEach(function(s){ if (!q[s]) return; var v = q[s] * P[s][t]; tv += v;
+            if (cur) cur.ent.forEach(function(e){ if (+e.s === +s && e.out === undefined) { e.out = t; e.r = P[s][t] / e.p - 1; e.why = pend.whys ? pend.whys[s] : pend.why; } });
+            delete q[s]; delete info[s]; });
+          var fee = tv * c.cost; cash += tv - fee; V -= fee; costSum += fee / (V + fee);
+          event(t, pend.txt);
+        }
+        pend = null;
+      }
+      if (V > peak) peak = V;
+      eq.push(V); bq.push(bi !== undefined ? P[bi][t] / P[bi][t0] : NaN); inv.push(V > 0 ? 1 - cash / V : 0);
+      if (t >= t1) continue;
+      // ---- 오늘 종가로 내일 할 일 정하기 (우선순위: 전량 현금 > 교체 > 개별 매도) ----
+      var held = Object.keys(q).length > 0, sched = t === t0 || (t - t0 - phase > 0 && (t - t0 - phase) % c.reb === 0), now = mktOk(t, mktOn ? 1 : 1.02);   // 재진입은 이동평균 +2% 위에서 (들락날락 방지)
+      if (c.dd && !cb && held && V / peak - 1 <= -c.dd) {
+        cb = true; ev.dd++; pend = { kind: "all", at: t + 1, why: "계좌 손절", txt: "계좌 손절 (고점 대비 " + pc(V / peak - 1) + ") → 전량 현금" }; mktOn = now; continue;
+      }
+      if (mktOn && !now) {
+        mktOn = false; if (held) { ev.ma++; pend = { kind: "all", at: t + 1, why: "시장 필터", txt: "지수 " + c.ma + "일선 이탈 → 전량 현금" }; continue; }
+      }
+      var reentry = !mktOn && now;
+      if (reentry) mktOn = true;
+      if (sched || (reentry && !cb)) {
+        if (sched && cb) { cb = false; peak = V; }
+        var pk = mktOn ? pick(c, U, t) : { list: [], cash: true, ma: true };
+        var expo = pk.w !== undefined ? pk.w : 1;          // 계단20 비중 (52주 신고가)
+        if (c.vol && pk.list.length) { var bv = basketVol(pk.list, t); if (bv) expo = Math.min(1, c.vol / bv); }
+        pend = { kind: "reb", sig: t, at: t + 1, list: pk.list, cash: pk.cash, ma: pk.ma, pool: pk.pool, expo: expo, why: sched ? "" : "지수 " + c.ma + "일선 회복 → 재진입" };
+        continue;
+      }
+      if ((c.stop || c.trail) && held) {
+        var sells = [], whys = {};
+        for (s in q) {
+          var f = info[s], p = P[s][t]; if (p > f.hi) f.hi = p;
+          if (c.stop && p / f.p - 1 <= -c.stop) { sells.push(s); whys[s] = "손절"; ev.stop++; }
+          else if (c.trail && p / f.hi - 1 <= -c.trail) { sells.push(s); whys[s] = "트레일링"; ev.trail++; }
+        }
+        if (sells.length) pend = { kind: "some", sells: sells, whys: whys, at: t + 1,
+          txt: sells.map(function(s){ return ST[s].n + " " + whys[s]; }).join(", ") };
+      }
+    }
+    if (cur) closeLog(cur, t1, V, true);
+    function closeLog(L, t, v, open){
+      L.end = t; L.open = !!open; L.r = v / L.v0 - 1; L.br = bi !== undefined ? P[bi][t] / L.b0 - 1 : null;
+      L.ent.forEach(function(e){ if (e.out === undefined) e.r = P[e.s][t] / e.p - 1; });
+    }
+    var invAvg = inv.reduce(function(a, b){ return a + b; }, 0) / inv.length;
+    return { c: c, t0: t0, t1: t1, eq: eq, bq: bq, inv: inv, invAvg: invAvg, logs: logs, ev: ev, cost: costSum, turn: nReb ? turnSum / nReb : 0 };
+  }
+
+  function runSplit(c){                                  // 자금을 K묶음으로 나눠 교체일을 reb/K 일씩 엇갈리게 → 묶음 평균
+    var K = Math.max(1, Math.min(c.split || 1, c.reb));
+    if (K === 1) return backtest(c, 0);
+    var rs = [];
+    for (var k = 0; k < K; k++) { var r = backtest(c, Math.round(k * c.reb / K)); if (!r) return null; r.logs.forEach(function(L){ L.tr = k + 1; }); rs.push(r); }
+    var n = rs[0].eq.length, eq = [], inv = [];
+    for (var i = 0; i < n; i++) {
+      var e = 0, iv = 0;
+      rs.forEach(function(r){ e += r.eq[i]; iv += r.inv[i] * r.eq[i]; });
+      eq.push(e / K); inv.push(e ? iv / e : 0);
+    }
+    var ev = { ma: 0, stop: 0, trail: 0, dd: 0 }, logs = [];
+    rs.forEach(function(r){ for (var x in ev) ev[x] += r.ev[x]; logs = logs.concat(r.logs); });
+    logs.sort(function(a, b){ return a.at - b.at || a.tr - b.tr; });
+    return { c: c, t0: rs[0].t0, t1: rs[0].t1, eq: eq, bq: rs[0].bq, inv: inv, invAvg: avgOf(inv), logs: logs, ev: ev, K: K,
+             cost: avgOf(rs.map(function(r){ return r.cost; })), turn: avgOf(rs.map(function(r){ return r.turn; })) };
+  }
+  function timingLuck(c){                                // 같은 기간 · 교체일만 하루씩 바꿔 본 결과 범위 (한 번에 교체 기준)
+    var steps = Math.min(c.reb, 21), out = [];
+    for (var k = 0; k < steps; k++) { var r = backtest(c, Math.round(k * c.reb / steps)); if (r) out.push(r); }
+    var tot = out.map(function(r){ return r.eq[r.eq.length - 1] - 1; }).sort(function(a, b){ return a - b; });
+    var mdd = out.map(function(r){ return stats(r.eq, r.t0).mdd; }).sort(function(a, b){ return a - b; });
+    return { n: tot.length, min: tot[0], max: tot[tot.length - 1], med: tot[Math.floor(tot.length / 2)], all: tot, mddW: mdd[0], mddB: mdd[mdd.length - 1] };
+  }
+
+  // ---------- 성과 지표 ----------
+  function stats(s, t0){
+    var n = s.length, dr = [], peak = s[0], mdd = 0, pk = 0, pki = 0, tr = 0, tri = 0;
+    for (var i = 1; i < n; i++) dr.push(s[i] / s[i - 1] - 1);
+    for (i = 0; i < n; i++) { if (s[i] > peak) { peak = s[i]; pki = i; } var dd = s[i] / peak - 1; if (dd < mdd) { mdd = dd; pk = pki; tri = i; } }
+    var mean = dr.reduce(function(a, b){ return a + b; }, 0) / dr.length;
+    var sd = Math.sqrt(dr.reduce(function(a, b){ return a + (b - mean) * (b - mean); }, 0) / Math.max(1, dr.length - 1));
+    var yrs = (n - 1) / YEAR, tot = s[n - 1] / s[0] - 1;
+    return { tot: tot, cagr: Math.pow(s[n - 1] / s[0], 1 / yrs) - 1, vol: sd * Math.sqrt(YEAR), sharpe: sd ? mean / sd * Math.sqrt(YEAR) : null,
+             mdd: mdd, mddFrom: D[t0 + pk], mddTo: D[t0 + tri], yrs: yrs };
+  }
+  function periodRets(R, key){                          // 연도별 · 월별 수익률 (전략, 벤치마크)
+    var out = [], prevS = R.eq[0], prevB = R.bq[0], last = null;
+    for (var i = 0; i < R.eq.length; i++) {
+      var d = D[R.t0 + i], k = key(d), endOf = i === R.eq.length - 1 || key(D[R.t0 + i + 1]) !== k;
+      if (endOf) { out.push({ k: k, s: R.eq[i] / prevS - 1, b: R.bq[i] / prevB - 1, part: last === null }); prevS = R.eq[i]; prevB = R.bq[i]; last = k; }
+    }
+    return out;
+  }
+
+  // ---------- 실행 · 그리기 ----------
+  $("qgo").addEventListener("click", run);
+  function run(){
+    var c = cfg();
+    if (!D.length) return;
+    if (c.from >= c.to) { $("qdesc").textContent = "백테스트 시작일이 종료일보다 앞이어야 합니다."; return; }
+    var R = runSplit(c);
+    if (!R) { $("qdesc").textContent = "기간이 너무 짧습니다. (모멘텀 계산에 필요한 과거 데이터를 빼면 남는 기간이 거의 없음)"; return; }
+    LAST = R; HOV = -1;
+    var S = stats(R.eq, R.t0), B = stats(R.bq, R.t0);
+    var Y = periodRets(R, function(d){ return Math.floor(d / 10000); });
+    var M = periodRets(R, function(d){ return Math.floor(d / 100); });
+    var bname = $("qbench").options[$("qbench").selectedIndex].text;
+    var warmNote = D[R.t0] > c.from ? " (모멘텀 계산에 1년치 과거 데이터가 필요해 " + ymd(D[R.t0]) + "부터)" : "";
+    $("qres").style.display = "";
+    $("qrsub").textContent = ymd(D[R.t0]) + " ~ " + ymd(D[R.t1]) + " · " + S.yrs.toFixed(1) + "년" + warmNote + " · " + ruleText(c);
+    // 지표
+    var m = function(lbl, v, sub){ return '<div class="qm"><span>' + lbl + "</span><b>" + v + "</b>" + (sub ? "<small>" + sub + "</small>" : "") + "</div>"; };
+    var mw = M.filter(function(x){ return x.s > x.b; }).length;
+    $("qmetrics").innerHTML =
+      m("누적 수익률", cpc(S.tot), bname + " " + pc(B.tot)) +
+      m("연평균 (CAGR)", cpc(S.cagr), bname + " " + pc(B.cagr)) +
+      m("최대 낙폭 (MDD)", '<span style="color:var(--dn)">' + pc(S.mdd) + "</span>", bname + " " + pc(B.mdd)) +
+      m("샤프 지수", S.sharpe === null ? "-" : S.sharpe.toFixed(2), bname + " " + (B.sharpe === null ? "-" : B.sharpe.toFixed(2))) +
+      m("변동성 (연)", pc(S.vol).replace("+", ""), bname + " " + pc(B.vol).replace("+", "")) +
+      m("월간 승률 (vs 지수)", Math.round(mw / M.length * 100) + "%", mw + " / " + M.length + "개월") +
+      m("리밸런싱", R.logs.length + "회" + (R.K ? ' <small style="display:inline">(' + R.K + "묶음 합계)</small>" : ""), "평균 회전율 " + Math.round(R.turn * 50) + "%") +
+      m("매매 비용 합계", pc(-R.cost), "편도 " + (c.cost * 100).toFixed(2) + "% 기준") +
+      m("평균 투자 비중", Math.round(R.invAvg * 100) + "%", "나머지는 현금") +
+      m("보호 장치 발동", (R.ev.ma + R.ev.stop + R.ev.trail + R.ev.dd) + "회",
+        [c.ma ? "시장 " + R.ev.ma : "", c.stop ? "손절 " + R.ev.stop : "", c.trail ? "트레일링 " + R.ev.trail : "", c.dd ? "계좌 " + R.ev.dd : ""].filter(Boolean).join(" · ") || "사용 안 함");
+    R.luck = c.reb > 1 ? timingLuck(c) : null;
+    verdict(S, B, Y, M, R, bname);
+    R.M = M; R.bname = bname;
+    yearTable(Y, bname);
+    var keep = Y.filter(function(y){ return y.k === SELY; })[0];
+    monthChart(keep ? SELY : Y[Y.length - 1].k);
+    logTable(R);
+    picks(c);
+    $("qdecsec").style.display = "";
+    if (c.strat === "nh") $("dfac").value = c.nhSort;
+    showDecile();
+    draw();
+  }
+
+  function verdict(S, B, Y, M, R, bname){
+    var full = Y, yw = full.filter(function(y){ return y.s > y.b; }).length;
+    var items = [], score = 0;
+    var ex = S.cagr - B.cagr;
+    items.push([ex > 0 ? "g" : "b", "연평균 수익률 " + pc(S.cagr) + " — " + bname + "(" + pc(B.cagr) + ")보다 " + (ex > 0 ? "높음" : "낮음") + " (" + (ex > 0 ? "+" : "") + (ex * 100).toFixed(1) + "%p)"]); score += ex > 0 ? 2 : -2;
+    var shOk = S.sharpe !== null && B.sharpe !== null && S.sharpe > B.sharpe;
+    items.push([shOk ? "g" : "b", "위험 대비 수익(샤프) " + (S.sharpe || 0).toFixed(2) + " — 지수 " + (B.sharpe || 0).toFixed(2) + (shOk ? "보다 효율적" : "보다 비효율적")]); score += shOk ? 1 : -1;
+    var ddOk = S.mdd > B.mdd;
+    items.push([ddOk ? "g" : (S.mdd > B.mdd * 1.5 ? "n" : "b"), "최대 낙폭 " + pc(S.mdd) + " (" + ymd(S.mddFrom) + " → " + ymd(S.mddTo) + ") — 지수 " + pc(B.mdd) + (ddOk ? "보다 얕음" : "보다 깊음")]); score += ddOk ? 1 : 0;
+    items.push([yw * 2 >= full.length ? "g" : "b", "연도별 승률 " + yw + " / " + full.length + "년 지수 초과 · 월간 승률 " + Math.round(M.filter(function(x){ return x.s > x.b; }).length / M.length * 100) + "%"]); score += yw * 2 >= full.length ? 1 : -1;
+    if (R.luck) {
+      var L = R.luck, wide = (1 + L.max) / (1 + L.min) > 1.5;
+      items.push([wide ? "n" : "g", "교체일 운: 같은 기간에 교체 날짜만 하루씩 바꾸면 누적 수익률 " + pc(L.min, 0) + " ~ " + pc(L.max, 0) + " (중앙값 " + pc(L.med, 0) + ", " + L.n + "가지) · MDD " + pc(L.mddB, 0) + " ~ " + pc(L.mddW, 0) +
+        (wide ? (R.K ? " — 날짜 운의 영향이 커서 " + R.K + "묶음 분할로 평균화한 결과를 표시 중" : " — 날짜 운의 영향이 큼. 리밸런싱 주기 옆에서 '4묶음 분할'을 권장") : " — 날짜 운의 영향이 작음")]);
+    }
+    if (R.cost > 0.15) items.push(["n", "매매 비용이 누적 " + pc(-R.cost) + "로 큼 — 리밸런싱 주기를 늘리거나 종목 수를 조정해 보세요"]);
+    if (S.yrs < 3 || R.logs.length < 24) items.push(["n", "검증 기간 " + S.yrs.toFixed(1) + "년 · 리밸런싱 " + R.logs.length + "회 — 표본이 적어 우연일 가능성을 배제하기 어려움"]);
+    items.push(["n", "대상 종목이 지금 섹터 차트에 있는 종목(최근 주목받는 테마·살아남은 종목 위주)이라, 과거 시점엔 몰랐을 종목이 미리 들어가 있어 성과가 실제보다 크게 부풀려질 수 있음 (선택·생존 편향) — 절대 수익률보다 설정끼리의 상대 비교로 보세요"]);
+    var v = score >= 4 ? ["유효", "var(--ok)"] : score >= 1 ? ["보통", "var(--warn)"] : ["약함", "var(--up)"];
+    $("qverdict").innerHTML = '<div class="badge" style="background:' + v[1] + '">' + v[0] + "</div><ul>" +
+      items.map(function(x){ return '<li class="' + x[0] + '">' + esc(x[1]) + "</li>"; }).join("") + "</ul>";
+  }
+
+  var SELY = null;
+  $("qyear").addEventListener("click", function(e){ var tr = e.target.closest("tr[data-y]"); if (tr) monthChart(+tr.getAttribute("data-y")); });
+  function monthChart(y){                                // 선택한 연도의 월별 수익률 (전략 · 벤치마크 막대)
+    var R = LAST; if (!R || !R.M) return;
+    SELY = y;
+    renderMonths(R, y, "qyear", "qmtitle", "qmonth");
+  }
+  function renderMonths(R, y, tblId, titleId, boxId){    // R.M = [{k: yyyymm, s, b}] · R.bname
+    [].forEach.call($(tblId).querySelectorAll("tr[data-y]"), function(tr){ tr.classList.toggle("sel", +tr.getAttribute("data-y") === y); });
+    var ms = R.M.filter(function(m){ return Math.floor(m.k / 100) === y; }), by = {};
+    ms.forEach(function(m){ by[m.k % 100] = m; });
+    var mx = 0.01; ms.forEach(function(m){ mx = Math.max(mx, Math.abs(m.s), Math.abs(m.b)); });
+    var bar = function(v, cls){ if (v === undefined) return '<i class="' + cls + ' none"></i>';
+      var h = Math.abs(v) / mx * 46; return '<i class="' + cls + '" style="height:' + h.toFixed(1) + "%;" + (v >= 0 ? "bottom:50%" : "top:50%") + '" title="' + pc(v) + '"></i>'; };
+    var win = ms.filter(function(m){ return m.s > m.b; }).length;
+    var tot = ms.reduce(function(a, m){ return a * (1 + m.s); }, 1) - 1, btot = ms.reduce(function(a, m){ return a * (1 + m.b); }, 1) - 1;
+    $(titleId).innerHTML = y + "년 월별 수익률 " + '<span class="c" style="font-weight:500;color:var(--muted);font-size:12px">전략 ' + pc(tot) + " · " + esc(R.bname) + " " + pc(btot) + " · 지수보다 나은 달 " + win + " / " + ms.length + "</span>";
+    var html = '<div class="mlegend"><span><i style="background:var(--dn)"></i>전략</span><span><i style="background:var(--muted)"></i>' + esc(R.bname) + "</span></div>" + '<div class="mgrid">';
+    for (var m = 1; m <= 12; m++) {
+      var d = by[m];
+      html += '<div class="mcol' + (d ? "" : " empty") + '"><div class="mv" style="color:' + (d ? col(d.s) : "var(--muted)") + '">' + (d ? pc(d.s) : "") + "</div>" +
+        '<div class="mbars">' + bar(d ? d.s : undefined, "ms") + bar(d ? d.b : undefined, "mb") + '</div><div class="mbv">' + (d ? pc(d.b) : "") + '</div><div class="mq">' + m + "월</div></div>";
+    }
+    $(boxId).innerHTML = html + "</div>";
+  }
+  function yearTable(Y, bname){
+    $("qyear").innerHTML = '<thead><tr><th class="l">연도</th><th>전략</th><th>' + esc(bname) + "</th><th>차이</th></tr></thead><tbody>" +
+      Y.map(function(y, i){ return '<tr data-y="' + y.k + '"><td class="l">' + y.k + (i === 0 || i === Y.length - 1 ? '<span class="c">일부</span>' : "") + "</td><td>" + cpc(y.s) + "</td><td>" + cpc(y.b) + "</td><td>" + cpc(y.s - y.b) + "</td></tr>"; }).join("") + "</tbody>";
+  }
+  function logTable(R){
+    $("qlogn").textContent = R.logs.length + "회 · 최근 순";
+    $("qlog").innerHTML = '<thead><tr><th class="l">매매일</th><th>기간 수익</th><th>지수</th><th class="l">보유 종목 (보유 기간 수익률)</th></tr></thead><tbody>' +
+      R.logs.slice().reverse().map(function(L){
+        var hold = L.ma ? '<span class="c">지수 ' + R.c.ma + '일선 아래 — 현금 유지</span>' : L.cash ? '<span class="c">시장 하락 — 전량 현금</span>' : !L.n ? '<span class="c">조건 통과 종목 없음 — 현금</span>' :
+          L.ent.map(function(e){ return '<span class="hp">' + esc(ST[e.s].n) + " " + cpc(e.r, 0) + (e.why ? '<span class="c">' + e.why + "</span>" : "") + "</span>"; }).join("") +
+          (L.expo < 0.999 ? '<span class="c">' + (R.c.vol ? "변동성·비중 조절" : "비중 조절") + ": 투자 " + Math.round(L.expo * 100) + "%</span>" : "") +
+          (L.n < R.c.top ? '<span class="c">+ 현금 ' + Math.round((1 - L.n / R.c.top) * 100) + "%</span>" : "");
+        if (L.why) hold = '<span class="c">' + esc(L.why) + "</span> " + hold;
+        if (L.ev) hold += '<div class="c" style="margin:2px 0 0">' + L.ev.map(esc).join(" · ") + "</div>";
+        return '<tr><td class="l">' + ymd(D[L.at]) + (L.tr ? '<span class="c">묶음 ' + L.tr + "</span>" : "") + (L.open ? '<span class="c">보유 중</span>' : "") + "</td><td>" + cpc(L.r) + "</td><td>" + cpc(L.br) + '</td><td class="l wrap">' + hold + "</td></tr>";
+      }).join("") + "</tbody>";
+  }
+
+  function mrsCell(c, s, t){
+    var m = mrsOf(s, wrsBench(c, s)), v = m[t]; if (!isFinite(v)) return "-";
+    var x = mrsCross(m, t, 0, 5);
+    return '<span style="color:' + col(v) + '">' + (v > 0 ? "+" : "") + v.toFixed(1) + "</span>" + (x ? '<span class="c">0선 돌파</span>' : "");
+  }
+  function picks(c){
+    var t = D.length - 1, U = universe(c), pk = pick(c, U, t);
+    $("qpicksec").style.display = "";
+    $("qptitle").textContent = "현재 기준 종목 추출 — " + ymd(D[t]) + " 종가";
+    $("qpsub").textContent = ruleText(c) + (pk.cash ? "" : " · 조건 통과 " + pk.pool + "개 중 상위 " + pk.list.length + "개");
+    if (pk.cash) { $("qpick").innerHTML = '<tbody><tr><td class="l" style="padding:20px">벤치마크 12개월 수익률이 0 이하라 이 전략은 지금 전량 현금입니다.</td></tr></tbody>'; $("qpnote").textContent = ""; return; }
+    if (!pk.list.length) { $("qpick").innerHTML = '<tbody><tr><td class="l" style="padding:20px">조건을 통과한 종목이 없습니다.</td></tr></tbody>'; $("qpnote").textContent = ""; return; }
+    if (c.strat === "nh") {
+      $("qpick").innerHTML = '<thead><tr><th>순위</th><th class="l">종목</th><th class="l">섹터</th><th>현재가</th><th>정렬 점수</th><th>52주 고가 대비</th><th>52주 저가 대비</th><th>12개월</th><th>1개월</th><th>와인스타인 RS</th><th>비중</th></tr></thead><tbody>' +
+        pk.list.map(function(x, i){
+          var s = x.s, sv = COMP[c.nhSort] ? Math.round(x.v * 100) : c.nhSort === "freq" ? x.v + "일" : c.nhSort === "fresh" ? -x.v + "일 전" :
+                 /^(lowgain|r252|r126|r21)$/.test(c.nhSort) ? pc(x.v) : c.nhSort === "near" ? pc(x.v - 1) : x.v.toFixed(2);
+          return "<tr><td>" + (i + 1) + '</td><td class="l"><b>' + esc(ST[s].n) + '</b><span class="c">' + esc(ST[s].c) + '</span></td><td class="l">' + esc(ST[s].s || "") + "</td><td>" + px(P[s][t]) +
+            "</td><td><b>" + sv + "</b></td><td>" + pc(P[s][t] / HI[s][t] - 1) + "</td><td>" + cpc(P[s][t] / LO[s][t] - 1) + "</td><td>" + cpc(ret(s, t, DD(252))) + "</td><td>" + cpc(ret(s, t, DD(21))) +
+            "</td><td>" + mrsCell(c, s, t) + "</td><td>" + (100 / c.top).toFixed(1) + "%</td></tr>";
+        }).join("") + "</tbody>";
+      $("qpnote").textContent = "오늘 리밸런싱한다면 위 종목을 각 " + (100 / c.top).toFixed(1) + "%씩 담습니다" + (pk.list.length < c.top ? " (후보가 모자라 나머지 " + Math.round((1 - pk.list.length / c.top) * 100) + "%는 현금)" : "") +
+        ". 52주 고가·저가는 종가 기준입니다. 과거 성과가 미래 수익을 보장하지 않으며, 투자 판단의 참고용입니다.";
+      return;
+    }
+    var wcols = c.mode === "mom" && c.rank !== "single" ? WP.filter(function(p, i){ return c.w[i] > 0; }) : [];
+    var head = wcols.length ? "<th>가중 점수</th>" + wcols.map(function(p){ return "<th>" + perName(p) + "</th>"; }).join("") :
+               c.mode === "mom" ? "<th>" + perName(c.look) + " 수익률</th>" : "<th>" + perName(c.mid) + " (중기)</th><th>" + perName(c.short) + " (단기)</th>";
+    $("qpick").innerHTML = '<thead><tr><th>순위</th><th class="l">종목</th><th class="l">섹터</th><th>현재가</th>' + head +
+      (c.absLook !== momLook(c) && wcols.indexOf(c.absLook) < 0 ? "<th>" + perName(c.absLook) + " 수익률</th>" : "") + (wcols.indexOf(DD(21)) < 0 ? "<th>1개월</th>" : "") + "<th>와인스타인 RS</th><th>비중</th></tr></thead><tbody>" +
+      pk.list.map(function(x, i){
+        var s = x.s;
+        var mc = wcols.length ? "<td><b>" + Math.round(x.m * 100) + "</b></td>" + wcols.map(function(p){ return "<td>" + cpc(ret(s, t, p)) + "</td>"; }).join("") :
+                 c.mode === "mom" ? "<td>" + cpc(x.m) + "</td>" : "<td>" + cpc(x.mid) + "</td><td>" + cpc(x.sh) + "</td>";
+        return "<tr><td>" + (i + 1) + '</td><td class="l"><b>' + esc(ST[s].n) + '</b><span class="c">' + esc(ST[s].c) + '</span></td><td class="l">' + esc(ST[s].s || "") + "</td><td>" + px(P[s][t]) + "</td>" + mc +
+          (c.absLook !== momLook(c) && wcols.indexOf(c.absLook) < 0 ? "<td>" + cpc(ret(s, t, c.absLook)) + "</td>" : "") + (wcols.indexOf(DD(21)) < 0 ? "<td>" + cpc(ret(s, t, DD(21))) + "</td>" : "") + "<td>" + mrsCell(c, s, t) + "</td><td>" + (100 / c.top).toFixed(1) + "%</td></tr>";
+      }).join("") + "</tbody>";
+    $("qpnote").textContent = "오늘 리밸런싱한다면 위 종목을 각 " + (100 / c.top).toFixed(1) + "%씩 담습니다" + (pk.list.length < c.top ? " (나머지 " + Math.round((1 - pk.list.length / c.top) * 100) + "%는 현금)" : "") +
+      ". 과거 성과가 미래 수익을 보장하지 않으며, 투자 판단의 참고용입니다.";
+  }
+
+  // ---------- 10분위 분석 ----------
+  function decile(k, H, c){
+    var U = universe(c), t0 = 0, t1 = D.length - 1;
+    while (t0 < t1 && (D[t0] < c.from || t0 < YEAR + 62)) t0++;
+    while (t1 > t0 && D[t1] > c.to) t1--;
+    var rows = [], cand = [];
+    for (var t = t0; t + H <= t1; t += H) {
+      var set = U.filter(function(s){ return P[s][t] > 0 && P[s][t + H] > 0 && HI[s][t] > 0; });
+      var sc = scoreSet(k, set, t); if (sc.length < 50) continue;
+      sc.forEach(function(x, i){ x.f = P[x.s][t + H] / P[x.s][t] - 1; x.i = i; });
+      var avg = sc.reduce(function(a, x){ return a + x.f; }, 0) / sc.length;
+      sc.sort(function(a, b){ return a.v - b.v || a.i - b.i; });
+      var sum = new Array(10).fill(0), cnt = new Array(10).fill(0);
+      sc.forEach(function(x, i){ var q = Math.floor(i * 10 / sc.length); sum[q] += x.f; cnt[q]++; });
+      rows.push(sum.map(function(v, q){ return v / cnt[q] - avg; }));
+      var cs = sc.filter(function(x){ return P[x.s][t] >= HI[x.s][t] * 0.95; });   // 52주 고가 5% 이내 후보 안
+      if (cs.length >= 20) {
+        var cm = cs.reduce(function(a, x){ return a + x.f; }, 0) / cs.length;
+        var top = cs.slice(-10), bot = cs.slice(0, 10), mm = function(a){ return a.reduce(function(z, x){ return z + x.f; }, 0) / a.length; };
+        cand.push([mm(top) - cm, mm(bot) - cm]);
+      }
+    }
+    if (rows.length < 3) return null;
+    var mean = [], q, n = rows.length;
+    for (q = 0; q < 10; q++) mean.push(rows.reduce(function(a, r){ return a + r[q]; }, 0) / n);
+    var sp = rows.map(function(r){ return r[9] - r[0]; }), tt = tstat(sp);
+    var rk = mean.map(function(v, i){ return { v: v, i: i }; }).sort(function(a, b){ return a.v - b.v; }), rr = new Array(10);
+    rk.forEach(function(x, r){ rr[x.i] = r; });
+    var rho = 1 - 6 * rr.reduce(function(a, r, i){ return a + (r - i) * (r - i); }, 0) / (10 * 99);
+    var cd = cand.map(function(x){ return x[0] - x[1]; });
+    return { k: k, n: n, mean: mean, sp: sp.reduce(function(a, b){ return a + b; }, 0) / n, t: tt, rho: rho, win: sp.filter(function(x){ return x > 0; }).length / n,
+             cand: cand.length >= 3 ? { top: avgOf(cand.map(function(x){ return x[0]; })), bot: avgOf(cand.map(function(x){ return x[1]; })), d: avgOf(cd), t: tstat(cd), n: cand.length } : null };
+  }
+  function avgOf(a){ return a.reduce(function(x, y){ return x + y; }, 0) / a.length; }
+  function tstat(a){ var m = avgOf(a), sd = Math.sqrt(a.reduce(function(x, y){ return x + (y - m) * (y - m); }, 0) / Math.max(1, a.length - 1)); return sd ? m / (sd / Math.sqrt(a.length)) : 0; }
+  function judge(r){ return r.t >= 2 && r.rho >= 0.7 ? ["g", "유효 — 계단식 상승"] : r.t >= 1.5 && r.rho >= 0.5 ? ["n", "약하게 유효"] : r.t <= -1.5 || (r.rho <= -0.7 && r.t <= -1) ? ["b", "역방향"] : ["b", "효과 불분명"]; }
+
+  function showDecile(){
+    var c = cfg(), k = $("dfac").value, H = +$("dhold").value, r = decile(k, H, c);
+    if (!r) { $("dout").innerHTML = '<p class="kempty">기간이 짧아 분석할 수 없습니다.</p>'; return; }
+    var mx = Math.max.apply(null, r.mean.map(Math.abs)) || 0.01, j = judge(r);
+    var bars = r.mean.map(function(v, q){
+      var h = Math.abs(v) / mx * 80;
+      return '<div class="dbar"><div class="dv" style="color:' + col(v) + '">' + pc(v) + '</div><div class="dcol"><i style="height:' + h + 'px;' + (v >= 0 ? "bottom:50%" : "top:50%") + ";background:" + (v >= 0 ? "var(--up)" : "var(--dn)") + '"></i></div><div class="dq">D' + (q + 1) + "</div></div>";
+    }).join("");
+    var chip = function(l, v){ return '<div class="qm"><span>' + l + "</span><b>" + v + "</b></div>"; };
+    $("dout").innerHTML = '<div class="dhead"><span class="chip ' + j[0] + '">' + j[1] + "</span> <b>" + esc(FACN[k][1].replace("★ ", "")) + "</b> · " + perName(H) + " 보유 · " + r.n + "개 시점</div>" +
+      '<div class="dbars">' + bars + "</div>" +
+      '<div class="qmetrics" style="margin-top:14px">' + chip("상-하 (D10−D1)", cpc(r.sp)) + chip("t값", r.t.toFixed(2)) + chip("단조성", (r.rho > 0 ? "+" : "") + r.rho.toFixed(2)) +
+        chip("승률 (D10>D1)", Math.round(r.win * 100) + "%") +
+        chip("후보 안 상위10−하위10", r.cand ? cpc(r.cand.d) + ' <small style="display:inline">t ' + r.cand.t.toFixed(1) + "</small>" : "-") + "</div>" +
+      '<p class="kdesc">' + esc(FACN[k][2]) + "</p>";
+  }
+  function showAll(){
+    var c = cfg(), H = +$("dhold").value;
+    $("dallout").innerHTML = '<p class="kdesc">계산 중…</p>';
+    setTimeout(function(){
+      var rs = FAC.map(function(f){ return decile(f[0], H, c); }).filter(Boolean).sort(function(a, b){ return b.t - a.t; });
+      $("dallout").innerHTML = "<h3 style=\"margin:18px 0 8px;font-size:14px\">모든 정렬 기준 비교 — " + perName(H) + " 보유 (t값 높은 순)</h3>" +
+        '<div class="qscroll" style="max-height:none"><table class="qtbl"><thead><tr><th class="l">정렬 기준</th><th>D1</th><th>D5</th><th>D10</th><th>상-하</th><th>t값</th><th>단조성</th><th>승률</th><th>후보 안 상위10−하위10</th><th class="l">판정</th></tr></thead><tbody>' +
+        rs.map(function(r){ var j = judge(r);
+          return '<tr><td class="l">' + esc(FACN[r.k][1]) + "</td><td>" + cpc(r.mean[0]) + "</td><td>" + cpc(r.mean[4]) + "</td><td>" + cpc(r.mean[9]) + "</td><td><b>" + cpc(r.sp) + "</b></td><td>" + r.t.toFixed(2) +
+            "</td><td>" + (r.rho > 0 ? "+" : "") + r.rho.toFixed(2) + "</td><td>" + Math.round(r.win * 100) + "%</td><td>" + (r.cand ? cpc(r.cand.d) + ' <span class="c">t ' + r.cand.t.toFixed(1) + "</span>" : "-") +
+            '</td><td class="l"><span class="chip ' + j[0] + '">' + j[1] + "</span></td></tr>"; }).join("") + "</tbody></table></div>";
+    }, 30);
+  }
+  $("dgo").addEventListener("click", showDecile);
+  $("dall").addEventListener("click", showAll);
+  $("dfac").addEventListener("change", showDecile);
+  $("dhold").addEventListener("change", showDecile);
+
+  // ---------- 차트: 누적 수익률(위) · 낙폭(아래) ----------
+  var LOG = false;
+  function draw(){
+    var R = LAST; if (!R) return;
+    var cv = $("qc"), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    var g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    var L = 8, Rr = 62, T = 8, H1 = Math.round((H - 30) * 0.7), G2 = 14, H2 = H - 30 - H1 - G2, n = R.eq.length;
+    var cS = css("--dn"), cB = css("--muted"), grid = css("--grid") || css("--line"), fg = css("--fg"), mu = css("--muted");
+    var x = function(i){ return L + (W - L - Rr) * i / Math.max(1, n - 1); };
+    var vals = R.eq.concat(R.bq.filter(isFinite)), lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var tf = LOG ? Math.log : function(v){ return v; };
+    var a = tf(lo), b = tf(hi); if (a === b) { a -= 0.01; b += 0.01; }
+    var pad = (b - a) * 0.06; a -= pad; b += pad;
+    var y = function(v){ return T + H1 * (1 - (tf(v) - a) / (b - a)); };
+    g.font = "11px " + getComputedStyle(document.body).fontFamily; g.textBaseline = "middle";
+    // 눈금
+    for (var k = 0; k <= 4; k++) {
+      var vv = LOG ? Math.exp(a + (b - a) * k / 4) : a + (b - a) * k / 4, yy = y(vv);
+      g.strokeStyle = grid; g.lineWidth = 1; g.beginPath(); g.moveTo(L, yy); g.lineTo(W - Rr, yy); g.stroke();
+      g.fillStyle = mu; g.fillText(pc(vv - 1, 0), W - Rr + 6, yy);
+    }
+    g.strokeStyle = mu; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(L, y(1)); g.lineTo(W - Rr, y(1)); g.stroke(); g.setLineDash([]);
+    // 연도 경계
+    g.textBaseline = "top";
+    for (var i = 1; i < n; i++) if (Math.floor(D[R.t0 + i] / 10000) !== Math.floor(D[R.t0 + i - 1] / 10000)) {
+      g.strokeStyle = grid; g.beginPath(); g.moveTo(x(i), T); g.lineTo(x(i), H - 18); g.stroke();
+      g.fillStyle = mu; g.fillText(String(Math.floor(D[R.t0 + i] / 10000)), x(i) + 3, H - 15);
+    }
+    var line = function(arr, c, w){ g.strokeStyle = c; g.lineWidth = w; g.beginPath(); var st = false; for (var i = 0; i < n; i++) { if (!isFinite(arr[i])) continue; var X = x(i), Y = y(arr[i]); st ? g.lineTo(X, Y) : g.moveTo(X, Y); st = true; } g.stroke(); };
+    line(R.bq, cB, 1.4); line(R.eq, cS, 2);
+    // 낙폭
+    var top2 = T + H1 + G2, dd = function(arr){ var pk = -Infinity; return arr.map(function(v){ if (v > pk) pk = v; return v / pk - 1; }); };
+    var dS = dd(R.eq), dB = dd(R.bq), mn = Math.min(Math.min.apply(null, dS), Math.min.apply(null, dB.filter(isFinite)), -0.01);
+    var y2 = function(v){ return top2 + H2 * (v / mn); };
+    g.strokeStyle = grid; g.beginPath(); g.moveTo(L, top2); g.lineTo(W - Rr, top2); g.stroke();
+    g.textBaseline = "middle"; g.fillStyle = mu; g.fillText("0%", W - Rr + 6, top2); g.fillText(pc(mn, 0), W - Rr + 6, top2 + H2);
+    g.fillStyle = cS; g.globalAlpha = 0.18; g.beginPath(); g.moveTo(x(0), top2);
+    for (i = 0; i < n; i++) g.lineTo(x(i), y2(dS[i])); g.lineTo(x(n - 1), top2); g.closePath(); g.fill(); g.globalAlpha = 1;
+    g.strokeStyle = cS; g.lineWidth = 1.2; g.beginPath(); for (i = 0; i < n; i++) i ? g.lineTo(x(i), y2(dS[i])) : g.moveTo(x(i), y2(dS[i])); g.stroke();
+    g.strokeStyle = cB; g.lineWidth = 1; g.beginPath(); var st = false; for (i = 0; i < n; i++) { if (!isFinite(dB[i])) continue; st ? g.lineTo(x(i), y2(dB[i])) : g.moveTo(x(i), y2(dB[i])); st = true; } g.stroke();
+    g.fillStyle = mu; g.textBaseline = "top"; g.fillText("낙폭", L + 2, top2 + 3);
+    // 십자선
+    var hi2 = HOV >= 0 && HOV < n ? HOV : n - 1;
+    if (HOV >= 0 && HOV < n) { g.strokeStyle = mu; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(x(HOV), T); g.lineTo(x(HOV), top2 + H2); g.stroke(); g.setLineDash([]);
+      [[R.eq, cS], [R.bq, cB]].forEach(function(p){ if (!isFinite(p[0][HOV])) return; g.fillStyle = p[1]; g.beginPath(); g.arc(x(HOV), y(p[0][HOV]), 3.5, 0, 7); g.fill(); }); }
+    var bname = $("qbench").options[$("qbench").selectedIndex].text;
+    $("qinfo").innerHTML = "<span><b>" + ymd(D[R.t0 + hi2]) + "</b></span>" +
+      '<span><i style="background:' + cS + '"></i>전략 ' + cpc(R.eq[hi2] - 1) + ' <span style="color:var(--muted)">낙폭 ' + pc(dS[hi2]) + "</span></span>" +
+      '<span><i style="background:' + cB + '"></i>' + esc(bname) + " " + cpc(R.bq[hi2] - 1) + ' <span style="color:var(--muted)">낙폭 ' + pc(dB[hi2]) + "</span></span>" +
+      '<label class="r"><input type="checkbox" id="qlogax"' + (LOG ? " checked" : "") + "> 로그 축</label>";
+    $("qlogax").addEventListener("change", function(){ LOG = this.checked; draw(); });
+  }
+  $("qc").addEventListener("mousemove", function(e){
+    if (!LAST) return; var r = this.getBoundingClientRect(), n = LAST.eq.length;
+    HOV = Math.max(0, Math.min(n - 1, Math.round((e.clientX - r.left - 8) / (r.width - 70) * (n - 1)))); draw();
+  });
+  $("qc").addEventListener("mouseleave", function(){ HOV = -1; draw(); });
+  window.addEventListener("resize", draw);
+  if (window.matchMedia) { var mq = window.matchMedia("(prefers-color-scheme: dark)"); if (mq.addEventListener) mq.addEventListener("change", draw); }
+})();
+</script>
+</body>
+</html>
