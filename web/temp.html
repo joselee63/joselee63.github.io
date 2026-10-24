@@ -475,6 +475,12 @@ header .lnk,header .status{color:var(--hd-mu)}
 #tc{width:100%;height:380px;display:block}
 .tinfo{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;margin-bottom:6px}
 .tinfo i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.zbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 10px}
+.zbar button{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--card);color:inherit;border-radius:8px;padding:4px 10px;cursor:pointer;min-width:34px}
+.zbar button:hover{border-color:var(--hoverline)} .zbar button.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.zsep{width:1px;height:18px;background:var(--line);margin:0 4px}
+.zhint{font-size:11.5px;color:var(--muted);margin-left:6px}
+#tc{cursor:grab;touch-action:pan-y} #tc.drag{cursor:grabbing}
 .note{font-size:12px;color:var(--muted);line-height:1.65;margin:10px 0 0}
 </style>
 <main class="twrap">
@@ -491,6 +497,18 @@ header .lnk,header .status{color:var(--hd-mu)}
   </section>
 
   <section class="card tcard">
+    <h2>최근 2년 흐름</h2>
+    <div class="zbar" id="zbar">
+      <button type="button" data-z="63">3개월</button><button type="button" data-z="126">6개월</button><button type="button" data-z="250">1년</button><button type="button" data-z="0" class="on">2년</button>
+      <span class="zsep"></span><button type="button" data-z="in" title="확대">＋</button><button type="button" data-z="out" title="축소">－</button>
+      <button type="button" data-z="left" title="왼쪽(과거)으로">◀</button><button type="button" data-z="right" title="오른쪽(최근)으로">▶</button>
+      <span class="zhint">마우스 휠 = 확대·축소 · 드래그 = 이동 · 더블클릭 = 전체</span>
+    </div>
+    <div class="tinfo" id="tinfo"></div>
+    <canvas id="tc" aria-label="코스피와 신용융자잔고, 반대매매 차트"></canvas>
+  </section>
+
+  <section class="card tcard">
     <h2>아직 집계 안 된 날 · 다음 거래일 추정</h2>
     <p class="sub">반대매매는 담보 부족 2거래일 뒤 실행 → 최근 사흘 지수 하락으로 예측 (2023~ 표본 외에서 '평소의 2배 이상'이라 본 날 11번 중 10번 실제 2배 이상, 다만 큰 날을 미리 다 잡지는 못함) ·
       신용잔고 변화는 결제(T+2) 때문에 2거래일 전 지수 하락폭과 가장 크게 움직임 → 그 구간의 과거 분포로 추정</p>
@@ -504,11 +522,6 @@ header .lnk,header .status{color:var(--hd-mu)}
     <div class="tscroll"><table class="ttbl" id="rect"></table></div>
   </section>
 
-  <section class="card tcard">
-    <h2>최근 2년 흐름</h2>
-    <div class="tinfo" id="tinfo"></div>
-    <canvas id="tc" aria-label="코스피와 신용융자잔고, 반대매매 차트"></canvas>
-  </section>
 
   <section class="card tcard">
     <h2>신호의 과거 성적 (2006.4 ~ 2026.10, 코스피)</h2>
@@ -593,43 +606,96 @@ header .lnk,header .status{color:var(--hd-mu)}
     draw();
   }
 
+  var VA = 0, VB = -1, LAY = null, DRAG = null;            // 보이는 구간 [VA, VB] (봉 번호)
+  function clearOn(){ [].forEach.call(document.querySelectorAll("#zbar [data-z]"), function(b){ b.classList.remove("on"); }); }
+  function fitView(span){
+    var n = T.chart.d.length;
+    span = Math.max(10, Math.min(n - 1, span));
+    if (VA < 0) { VA = 0; VB = span; }
+    if (VB > n - 1) { VB = n - 1; VA = VB - span; }
+    VA = Math.max(0, Math.round(VA)); VB = Math.min(n - 1, Math.round(VB));
+  }
+  function setPreset(z){
+    var n = T.chart.d.length;
+    if (z === 0) { VA = 0; VB = n - 1; } else { VB = n - 1; VA = Math.max(0, n - 1 - z); }
+    [].forEach.call(document.querySelectorAll("#zbar [data-z]"), function(b){ b.classList.toggle("on", b.getAttribute("data-z") === String(z)); });
+    draw();
+  }
+  function zoom(f, center){                                // f < 1 확대, f > 1 축소 · center = 기준 봉
+    var n = T.chart.d.length, span = VB - VA, c = center === undefined ? (VA + VB) / 2 : center;
+    var ns = Math.max(10, Math.min(n - 1, span * f)), r = (c - VA) / Math.max(1, span);
+    VA = c - ns * r; VB = VA + ns; fitView(ns); clearOn(); draw();
+  }
+  function pan(k){ var span = VB - VA; VA += k; VB += k; fitView(span); clearOn(); draw(); }
   function draw(){
     if (!T) return;
     var C = T.chart, cv = $("tc"), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
     if (!W) return;
+    if (VB < 0) VB = C.d.length - 1;
     cv.width = W * dpr; cv.height = H * dpr;
     var g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
-    var n = C.d.length, L = 8, R = 60, top = 8, H1 = Math.round((H - 30) * 0.62), gap = 14, H2 = H - 30 - H1 - gap;
-    var x = function(i){ return L + (W - L - R) * i / Math.max(1, n - 1); };
-    var up = css("--up"), dn = css("--dn"), fg = css("--fg"), mu = css("--muted"), grid = css("--grid") || css("--line"), blue = "#2563eb", warn = css("--warn");
-    var mm = function(a){ var lo = Infinity, hi = -Infinity; a.forEach(function(v){ if (v !== null && isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }); var p = (hi - lo) * 0.06 || 1; return [lo - p, hi + p]; };
+    var a = VA, b = VB, m = b - a, L = 8, R = 60, top = 8, H1 = Math.round((H - 30) * 0.62), gap = 14, H2 = H - 30 - H1 - gap;
+    var x = function(i){ return L + (W - L - R) * (i - a) / Math.max(1, m); };
+    LAY = { a: a, b: b, L: L, R: R, W: W };
+    var up = css("--up"), fg = css("--fg"), mu = css("--muted"), grid = css("--grid") || css("--line"), blue = "#2563eb", warn = css("--warn");
+    var mm = function(arr){ var lo = Infinity, hi = -Infinity; for (var i = a; i <= b; i++) { var v = arr[i]; if (v !== null && isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } } var p = (hi - lo) * 0.06 || 1; return [lo - p, hi + p]; };
     var kr = mm(C.k), cr = mm(C.cr);
     var yk = function(v){ return top + H1 * (1 - (v - kr[0]) / (kr[1] - kr[0])); };
     var yc = function(v){ return top + H1 * (1 - (v - cr[0]) / (cr[1] - cr[0])); };
     g.font = "11px " + getComputedStyle(document.body).fontFamily; g.textBaseline = "middle";
     for (var q = 0; q <= 4; q++) { var yy = top + H1 * q / 4; g.strokeStyle = grid; g.beginPath(); g.moveTo(L, yy); g.lineTo(W - R, yy); g.stroke();
       g.fillStyle = mu; g.fillText(num(kr[1] - (kr[1] - kr[0]) * q / 4), W - R + 6, yy); }
+    // 날짜 눈금: 넓으면 분기 · 중간이면 월 · 좁으면 며칠 간격
     g.textBaseline = "top";
-    for (var i = 1; i < n; i++) if (String(C.d[i]).slice(4, 6) !== String(C.d[i - 1]).slice(4, 6) && /01|04|07|10/.test(String(C.d[i]).slice(4, 6))) {
-      g.strokeStyle = grid; g.beginPath(); g.moveTo(x(i), top); g.lineTo(x(i), H - 18); g.stroke(); g.fillStyle = mu; g.fillText(String(C.d[i]).slice(2, 4) + "." + String(C.d[i]).slice(4, 6), x(i) + 3, H - 15); }
-    var line = function(a, y, color, w){ g.strokeStyle = color; g.lineWidth = w; g.beginPath(); var st = false; for (var i = 0; i < n; i++) { if (a[i] === null) { continue; } st ? g.lineTo(x(i), y(a[i])) : g.moveTo(x(i), y(a[i])); st = true; } g.stroke(); g.lineWidth = 1; };
+    var mo = function(i){ return String(C.d[i]).slice(4, 6); }, lastX = -99, i;
+    for (i = Math.max(1, a); i <= b; i++) {
+      var ok = m > 300 ? (mo(i) !== mo(i - 1) && /01|04|07|10/.test(mo(i))) : m > 70 ? mo(i) !== mo(i - 1) : (i - a) % Math.max(1, Math.round(m / 8)) === 0;
+      if (!ok || x(i) - lastX < 44) continue;
+      lastX = x(i);
+      g.strokeStyle = grid; g.beginPath(); g.moveTo(x(i), top); g.lineTo(x(i), H - 18); g.stroke(); g.fillStyle = mu;
+      g.fillText(m > 70 ? String(C.d[i]).slice(2, 4) + "." + mo(i) : mo(i) + "." + String(C.d[i]).slice(6, 8), x(i) + 3, H - 15);
+    }
+    g.save(); g.beginPath(); g.rect(L, 0, W - L - R, H); g.clip();
+    var line = function(arr, y, color, w){ g.strokeStyle = color; g.lineWidth = w; g.beginPath(); var st = false;
+      for (var j = Math.max(0, a - 1); j <= Math.min(C.d.length - 1, b + 1); j++) { if (arr[j] === null) continue; st ? g.lineTo(x(j), y(arr[j])) : g.moveTo(x(j), y(arr[j])); st = true; }
+      g.stroke(); g.lineWidth = 1; };
     line(C.cr, yc, blue, 1.4); line(C.k, yk, fg, 1.6);
-    // 반대매매 막대 (배수 색)
-    var fmax = 1; C.fo.forEach(function(v){ if (v) fmax = Math.max(fmax, v); });
-    var top2 = top + H1 + gap, bw = Math.max(1, (W - L - R) / n * 0.8);
+    var fmax = 1; for (i = a; i <= b; i++) if (C.fo[i]) fmax = Math.max(fmax, C.fo[i]);
+    var top2 = top + H1 + gap, bw = Math.max(1, (W - L - R) / Math.max(1, m) * 0.75);
     g.strokeStyle = grid; g.beginPath(); g.moveTo(L, top2 + H2); g.lineTo(W - R, top2 + H2); g.stroke();
-    for (i = 0; i < n; i++) { var v = C.fo[i]; if (!v) continue; var fx = C.fx[i] || 0; g.fillStyle = fx >= 4 ? up : fx >= 2 ? warn : mu; g.globalAlpha = fx >= 2 ? 0.9 : 0.45;
+    for (i = a; i <= b; i++) { var v = C.fo[i]; if (!v) continue; var fx = C.fx[i] || 0; g.fillStyle = fx >= 4 ? up : fx >= 2 ? warn : mu; g.globalAlpha = fx >= 2 ? 0.9 : 0.45;
       var h = v / fmax * H2; g.fillRect(x(i) - bw / 2, top2 + H2 - h, bw, h); }
+    g.restore();
     g.globalAlpha = 1; g.fillStyle = mu; g.textBaseline = "middle"; g.fillText(num(fmax) + "억", W - R + 6, top2 + 6); g.textBaseline = "top"; g.fillText("반대매매 (주황 2배↑ · 빨강 4배↑)", L + 2, top2 + 2);
-    var h2 = HOV >= 0 && HOV < n ? HOV : n - 1;
-    if (HOV >= 0) { g.strokeStyle = mu; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(x(HOV), top); g.lineTo(x(HOV), top2 + H2); g.stroke(); g.setLineDash([]); }
+    var h2 = HOV >= a && HOV <= b ? HOV : b;
+    if (HOV >= a && HOV <= b) { g.strokeStyle = mu; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(x(HOV), top); g.lineTo(x(HOV), top2 + H2); g.stroke(); g.setLineDash([]); }
     $("tinfo").innerHTML = "<span><b>" + ymd(C.d[h2]) + "</b></span>" +
       '<span><i style="background:' + fg + '"></i>코스피 ' + num(C.k[h2], 2) + "</span>" +
       '<span><i style="background:' + blue + '"></i>신용융자 잔고 ' + (C.cr[h2] === null ? "-" : num(C.cr[h2], 2) + "조") + "</span>" +
-      '<span><i style="background:' + warn + '"></i>반대매매 ' + (C.fo[h2] === null ? "미집계" : num(C.fo[h2]) + "억 (평소의 " + C.fx[h2] + "배)") + "</span>";
+      '<span><i style="background:' + warn + '"></i>반대매매 ' + (C.fo[h2] === null ? "미집계" : num(C.fo[h2]) + "억 (평소의 " + C.fx[h2] + "배)") + "</span>" +
+      '<span style="color:var(--muted)">보는 구간 ' + ymd(C.d[a]) + " ~ " + ymd(C.d[b]) + " (" + (m + 1) + "거래일)</span>";
   }
-  $("tc").addEventListener("mousemove", function(e){ if (!T) return; var r = this.getBoundingClientRect(), n = T.chart.d.length; HOV = Math.max(0, Math.min(n - 1, Math.round((e.clientX - r.left - 8) / (r.width - 68) * (n - 1)))); draw(); });
-  $("tc").addEventListener("mouseleave", function(){ HOV = -1; draw(); });
+  function idxAt(e){ var r = $("tc").getBoundingClientRect(); return LAY.a + (e.clientX - r.left - LAY.L) / (LAY.W - LAY.L - LAY.R) * (LAY.b - LAY.a); }
+  $("tc").addEventListener("mousemove", function(e){
+    if (!T || !LAY) return;
+    if (DRAG) {
+      var span = DRAG.b - DRAG.a, di = (DRAG.x - e.clientX) / (LAY.W - LAY.L - LAY.R) * span;
+      VA = DRAG.a + di; VB = DRAG.b + di; fitView(span); clearOn();
+    }
+    HOV = Math.max(LAY.a, Math.min(LAY.b, Math.round(idxAt(e)))); draw();
+  });
+  $("tc").addEventListener("mouseleave", function(){ HOV = -1; DRAG = null; $("tc").classList.remove("drag"); draw(); });
+  $("tc").addEventListener("mousedown", function(e){ if (!T) return; DRAG = { x: e.clientX, a: VA, b: VB }; $("tc").classList.add("drag"); e.preventDefault(); });
+  window.addEventListener("mouseup", function(){ DRAG = null; $("tc").classList.remove("drag"); });
+  $("tc").addEventListener("wheel", function(e){ if (!T || !LAY) return; e.preventDefault(); zoom(e.deltaY < 0 ? 0.8 : 1.25, idxAt(e)); }, { passive: false });
+  $("tc").addEventListener("dblclick", function(){ if (T) setPreset(0); });
+  $("zbar").addEventListener("click", function(e){
+    var bt = e.target.closest("button[data-z]"); if (!bt || !T) return;
+    var z = bt.getAttribute("data-z");
+    if (z === "in") zoom(0.7); else if (z === "out") zoom(1.45);
+    else if (z === "left") pan(-Math.round((VB - VA) * 0.3)); else if (z === "right") pan(Math.round((VB - VA) * 0.3));
+    else setPreset(+z);
+  });
   window.addEventListener("resize", draw);
 })();
 </script>
