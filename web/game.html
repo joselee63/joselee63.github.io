@@ -362,7 +362,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     </div>
     <div class="pane">
       <div class="info" id="info"></div>
-      <div class="prow"><div class="tools" id="tools" role="toolbar" aria-label="차트 지표"><button class="tbtn" type="button" data-ind="ma" title="이동평균선 (5·10·20·60·120일)">MA</button><button class="tbtn" type="button" data-ind="rf" title="라운드 피겨 — 심리적 가격대">RF</button><div class="tsep" id="tsep"></div><button class="tbtn" type="button" data-ind="disp" title="이격도 — 종가 ÷ 이동평균 × 100 (거래량 아래 칸 · 기준 이동평균은 오른쪽 패널에서 설정)">이격</button><button class="tbtn" type="button" data-ind="angle" title="이평각도점수 — 5·7·10·12·15·20·25·30·40·60일선 중 어제보다 오른 선의 개수 (0~10점) · 눌림(2점 이하) 뒤 8점 돌파 = ▲ 표시 (백테스트 근거: 주도주·두 지수 60일선 위에서 매매당 +2.3%)">각도</button><div class="tsep"></div><button class="tbtn" type="button" data-draw="line" title="직선 — 두 점을 잇고 상승·하락률 표시 (끌거나 두 번 클릭 · Esc 취소)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 13L13 3"/><circle cx="3" cy="13" r="1.4" fill="currentColor"/><circle cx="13" cy="3" r="1.4" fill="currentColor"/></svg></button><button class="tbtn" type="button" data-draw="div3" title="3등분 선 — 두 가격 사이를 3등분">⅓</button><button class="tbtn" type="button" data-draw="div4" title="4등분 선 — 두 가격 사이를 4등분">¼</button><button class="tbtn" type="button" data-draw="undo" title="마지막 그림 지우기">↶</button><button class="tbtn" type="button" data-draw="clear" title="그림 모두 지우기">✕</button></div><canvas id="cv" aria-label="종목 일봉 차트"></canvas></div>
+      <div class="prow"><div class="tools" id="tools" role="toolbar" aria-label="차트 지표"><button class="tbtn" type="button" data-ind="ma" title="이동평균선 (5·10·20·60·120일)">MA</button><button class="tbtn" type="button" data-ind="rf" title="라운드 피겨 — 심리적 가격대">RF</button><div class="tsep" id="tsep"></div><button class="tbtn" type="button" data-ind="disp" title="이격도 — 종가 ÷ 이동평균 × 100 (거래량 아래 칸 · 기준 이동평균은 오른쪽 패널에서 설정)">이격</button><button class="tbtn" type="button" data-ind="angle" title="이평각도점수 (100점 만점) — 5·7·10·12·15·20·25·30·40·60일선 중 어제보다 오른 선의 점수 합 · 짧은 선일수록 큰 점수 (60일선 1점 → 5일선 5.5점, 0.5점씩) · 눌림(20점 이하) 뒤 80점 돌파 = ▲ 표시">각도</button><div class="tsep"></div><button class="tbtn" type="button" data-draw="line" title="직선 — 두 점을 잇고 상승·하락률 표시 (끌거나 두 번 클릭 · Esc 취소)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 13L13 3"/><circle cx="3" cy="13" r="1.4" fill="currentColor"/><circle cx="13" cy="3" r="1.4" fill="currentColor"/></svg></button><button class="tbtn" type="button" data-draw="div3" title="3등분 선 — 두 가격 사이를 3등분">⅓</button><button class="tbtn" type="button" data-draw="div4" title="4등분 선 — 두 가격 사이를 4등분">¼</button><button class="tbtn" type="button" data-draw="undo" title="마지막 그림 지우기">↶</button><button class="tbtn" type="button" data-draw="clear" title="그림 모두 지우기">✕</button></div><canvas id="cv" aria-label="종목 일봉 차트"></canvas></div>
       <div class="gbub" id="gbub" hidden aria-live="polite"></div>
     </div>
     <div class="loading" id="loading">종목을 고르는 중…</div>
@@ -456,6 +456,8 @@ header .lnk,header .status{color:var(--hd-mu)}
   var IND_KEY = "krsc_game_ind" + (MKT.market === "kr" ? "" : "_" + MKT.market);
   var IND = { ma: true, rf: false, disp: false, angle: false };
   var ANG_P = [5, 7, 10, 12, 15, 20, 25, 30, 40, 60];      // 이평각도점수 이평선 10개 (검증한 개선판)
+  var ANG_W = ANG_P.map(function(_, k){ return 1 + 0.5 * (ANG_P.length - 1 - k); });   // 가중치: 60일선 1점 … 5일선 5.5점 (짧을수록 +0.5)
+  var ANG_WS = ANG_W.reduce(function(x, y){ return x + y; }, 0);                          // 합 32.5 → 100점 만점으로 환산
   var DISP_KEY = "krsc_game_dispn", DISP_N = Math.max(2, Math.min(240, +store(function(){ return localStorage.getItem(DISP_KEY); }) || 20));                  // 종목 차트 오버레이 지표 (툴바 토글, 브라우저에 기억)
   // 규칙 도우미 — 매수 경고 · 손절선 · 추적 손절선 (수치는 여기서 조정)
   var RULE = {
@@ -1400,7 +1402,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   }
 
   // S = {o,h,l,c,(v)} · opt: vol(거래량) · trades(매매 표시) · avg(평단 선) · dec(소수 자릿수)
-  function angleArr(S){                                  // 이평각도점수: 이평선 10개 중 '오늘 > 어제'인 개수 (0~10)
+  function angleArr(S){                                  // 이평각도점수: '오늘 > 어제'인 이평선의 가중치 합 ÷ 전체 가중치 × 100 (0~100)
     if (S._ang) return S._ang;
     var c = S.c, n = c.length, out = new Array(n).fill(null), maxP = ANG_P[ANG_P.length - 1];
     var prev = ANG_P.map(function(){ return null; }), sums = ANG_P.map(function(){ return 0; });
@@ -1409,10 +1411,10 @@ header .lnk,header .status{color:var(--hd-mu)}
       for (var k = 0; k < ANG_P.length; k++) {
         var p = ANG_P[k]; sums[k] += c[i]; if (i >= p) sums[k] -= c[i - p];
         var m = i >= p - 1 ? sums[k] / p : null;
-        if (m !== null && prev[k] !== null && m > prev[k]) sc++;
+        if (m !== null && prev[k] !== null && m > prev[k]) sc += ANG_W[k];
         prev[k] = m;
       }
-      if (ok) out[i] = sc;
+      if (ok) out[i] = Math.round(sc / ANG_WS * 100);
     }
     return (S._ang = out);
   }
@@ -1526,29 +1528,29 @@ header .lnk,header .status{color:var(--hd-mu)}
       if (dl !== null) { ctx.fillStyle = dl >= 100 ? C.up : C.dn; ctx.fillRect(plotW + 1, DY(dl) - 8, AX - 4, 16); ctx.fillStyle = "#fff"; ctx.fillText(dl.toFixed(1), plotW + 6, DY(dl)); }
     }
 
-    // 이평각도점수 (0~10) — 막대 · 8점(돌파 문턱)·2점(눌림) 점선 · 눌림 뒤 8점 돌파 = ▲
+    // 이평각도점수 (0~100, 단기 가중) — 막대 · 80점(돌파 문턱)·20점(눌림) 점선 · 눌림 뒤 80점 돌파 = ▲
     if (opt.angle) {
-      var av = angleArr(S), AY = function(v){ return aTop + aH - v / 10 * (aH - 4); };
+      var av = angleArr(S), AY = function(v){ return aTop + aH - v / 100 * (aH - 4); };
       ctx.strokeStyle = C.line; ctx.beginPath(); ctx.moveTo(0, aTop - agap / 2 + 0.5); ctx.lineTo(plotW, aTop - agap / 2 + 0.5); ctx.stroke();
       ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = C.mu; ctx.globalAlpha = .7;
-      [8, 2].forEach(function(lv){ var yl = Math.round(AY(lv)) + 0.5; ctx.beginPath(); ctx.moveTo(0, yl); ctx.lineTo(plotW, yl); ctx.stroke(); });
+      [80, 20].forEach(function(lv){ var yl = Math.round(AY(lv)) + 0.5; ctx.beginPath(); ctx.moveTo(0, yl); ctx.lineTo(plotW, yl); ctx.stroke(); });
       ctx.restore();
       var abw = Math.max(1, Math.min(14, sw * 0.66));
       for (i = a; i <= b; i++) {
         var v2 = av[i]; if (v2 === null) continue;
-        ctx.fillStyle = v2 >= 8 ? C.up : v2 <= 2 ? C.dn : C.mu; ctx.globalAlpha = v2 >= 8 || v2 <= 2 ? 0.8 : 0.45;
-        var ya = AY(Math.max(v2, 0.25)); ctx.fillRect(X(i) - abw / 2, ya, abw, aTop + aH - ya);
-        if (v2 >= 8 && i > 0 && av[i - 1] !== null && av[i - 1] < 8) {               // 8점 돌파 + 최근 15일 안에 2점 이하 눌림
-          var dip = false; for (var q2 = Math.max(0, i - 15); q2 < i; q2++) if (av[q2] !== null && av[q2] <= 2) { dip = true; break; }
+        ctx.fillStyle = v2 >= 80 ? C.up : v2 <= 20 ? C.dn : C.mu; ctx.globalAlpha = v2 >= 80 || v2 <= 20 ? 0.8 : 0.45;
+        var ya = AY(Math.max(v2, 2.5)); ctx.fillRect(X(i) - abw / 2, ya, abw, aTop + aH - ya);
+        if (v2 >= 80 && i > 0 && av[i - 1] !== null && av[i - 1] < 80) {             // 80점 돌파 + 최근 15일 안에 20점 이하 눌림
+          var dip = false; for (var q2 = Math.max(0, i - 15); q2 < i; q2++) if (av[q2] !== null && av[q2] <= 20) { dip = true; break; }
           if (dip) { ctx.globalAlpha = 1; ctx.fillStyle = C.ok; ctx.beginPath(); ctx.moveTo(X(i), aTop + 1); ctx.lineTo(X(i) - 5, aTop + 9); ctx.lineTo(X(i) + 5, aTop + 9); ctx.closePath(); ctx.fill(); }
         }
       }
       ctx.globalAlpha = 1;
       ctx.font = font; ctx.textAlign = "left"; ctx.fillStyle = C.mu;
-      ctx.fillText("10", plotW + 8, AY(10)); ctx.fillText("8", plotW + 8, AY(8)); ctx.fillText("2", plotW + 8, AY(2)); ctx.fillText("0", plotW + 8, aTop + aH - 4);
+      ctx.fillText("100", plotW + 8, AY(100)); ctx.fillText("80", plotW + 8, AY(80)); ctx.fillText("20", plotW + 8, AY(20)); ctx.fillText("0", plotW + 8, aTop + aH - 4);
       var al = av[b];
-      ctx.font = bold; ctx.fillStyle = C.fg; ctx.fillText("이평각도점수 (10개)" + (al === null ? "" : "  " + al + " / 10"), 6, aTop + 8);
-      if (al !== null) { ctx.fillStyle = al >= 8 ? C.up : al <= 2 ? C.dn : C.mu; ctx.fillRect(plotW + 1, AY(al) - 8, AX - 4, 16); ctx.fillStyle = "#fff"; ctx.fillText(String(al), plotW + 6, AY(al)); }
+      ctx.font = bold; ctx.fillStyle = C.fg; ctx.fillText("이평각도점수 (단기 가중)" + (al === null ? "" : "  " + al + " / 100"), 6, aTop + 8);
+      if (al !== null) { ctx.fillStyle = al >= 80 ? C.up : al <= 20 ? C.dn : C.mu; ctx.fillRect(plotW + 1, AY(al) - 8, AX - 4, 16); ctx.fillStyle = "#fff"; ctx.fillText(String(al), plotW + 6, AY(al)); }
     }
 
     // 라운드 피겨: 화면 가격 범위 안의 RF 가격에 가로선

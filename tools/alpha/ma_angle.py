@@ -172,3 +172,12 @@ if __name__ == "__main__":
     print("\n[7] 개선판")
     backtest(scL, 0.8, tgt=3.0, use_zero=False, hold=60, label="10개(5~60)·0.8·3R")
     backtest(scL, 0.8, tgt=3.0, use_zero=False, hold=60, lead=LEAD & both60, label="10개(5~60)·0.8·3R·둘 다 60일선 위")
+    # [8] 단기 가중판 (2026-10-24): 60일선 1점 → 5일선 5.5점 (짧을수록 +0.5) · 100점 만점 — 게임 지표와 같은 계산
+    LP = [5, 7, 10, 12, 15, 20, 25, 30, 40, 60]
+    scW = np.round(score(LP, [1 + 0.5 * (len(LP) - 1 - k) for k in range(len(LP))]) * 100) / 100
+    print("\n[8] 단기 가중판 vs 동일 가중 (10개 5~60 · 3R · 최대 60일 · 전저점 손절)")
+    for nm, s_ in (("동일", scL), ("단기가중", scW)):
+        for thr, fl in ((0.8, 0.2), (0.7, 0.2), (0.8, 0.3), (0.9, 0.2)):
+            backtest(s_, thr, floor=fl, tgt=3.0, use_zero=False, hold=60, lead=LEAD & both60, label=f"{nm} · 바닥≤{fl:.1f} → {thr:.1f} 돌파 · 둘 다 60일선 위")
+    r8 = backtest(scW, 0.8, tgt=3.0, use_zero=False, hold=60, lead=LEAD & both60, show=False)
+    print("  단기가중 0.8 연도별: " + " ".join(f"{y%100:02d}:{v*100:+.2f}" for y, v in r8["yy"].items()))
