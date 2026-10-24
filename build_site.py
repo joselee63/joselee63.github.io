@@ -805,6 +805,137 @@ SIM_OHLC_BARS = 500                   # 유사 차트: 기준 차트로 그릴 �
 SUPPLY_WINDOW = 5                     # 수급오실레이터 기본: 외국인+기관 N일 순매수 합 ÷ 시가총액 (페이지에서 5·10일 선택)
 
 
+# --- 시장 체온계 (한국): 반대매매 · 신용잔고 · 예탁금 (금융투자협회 FreeSIS) + 그날 지수·수급으로 미집계일 추정 ---
+#   연구: tools/alpha/credit_signals.py · credit_nowcast.py (2006.4~ 일별)
+#   · 금투협 자료는 2거래일 늦게 공표 → 공식 마지막 날(T) 이후는 '추정', 다음 거래일은 '예상'
+#   · 반대매매 배수 = 그날 반대매매 ÷ 직전 20거래일 중앙값. 담보 부족 → 2거래일 뒤 실행이라 T−1~T−3 지수 하락으로 예측
+#   · 신용잔고 변화는 결제(T+2) 때문에 2거래일 전 지수 등락과 가장 크게 연동 → 그 하락폭 구간별 과거 분포로 추정
+KOFIA_URL = "https://freesis.kofia.or.kr/meta/getMetaDataList.do"
+# log(1 + 반대매매 배수) = 상수 + Σ계수 × 변수  (학습 2015~2022, 검증 2023~ R² 0.24 · '2배 이상' 예상의 적중 10/11)
+FORCED_MODEL = {"c": 0.704, "rq1": -1.452, "rq2": -2.363, "rq3": -2.748, "rk1": -0.987, "rk2": -0.665, "dd20": 0.376, "neg2": -0.127, "negk2": -2.145}
+
+
+def _kofia(obj, sd, ed):
+    body = {"dmSearch": {"tmpV40": "1000000", "tmpV41": "1", "tmpV1": "D", "tmpV45": sd, "tmpV46": ed, "OBJ_NM": obj}}
+    r = _session.post(KOFIA_URL, data=json.dumps(body), timeout=60,
+                      headers={"Content-Type": "application/json; charset=UTF-8", "Referer": "https://freesis.kofia.or.kr/stat/FreeSIS.do"})
+    rows = r.json().get("ds1") or []
+    df = pd.DataFrame(rows)
+    if not len(df):
+        return df
+    df.index = pd.to_datetime(df.pop("TMPV1"), format="%Y%m%d")
+    return df.sort_index()
+
+
+def write_temp_data(data, build_id):
+    if MARKET != "kr" or "KOSPI" not in data or "KOSDAQ" not in data:
+        return None
+    import glob
+    today = dt.datetime.now(KST).strftime("%Y%m%d")
+    try:
+        mo = _kofia("STATSCU0100000060BO", "20060101", today)     # 예탁금 · 미수금 · 반대매매
+        cr = _kofia("STATSCU0100000070BO", "20060101", today)     # 신용융자 잔고
+    except Exception as e:
+        print(f"      시장 체온계: 금투협 자료 받기 실패 ({e})")
+        return None
+    if not len(mo) or not len(cr):
+        return None
+    k = data["KOSPI"]["df"]["Close"]; q = data["KOSDAQ"]["df"]["Close"]
+    df = pd.DataFrame({"k": k, "q": q}).dropna()
+    df = df.join(pd.DataFrame({"dep": mo["TMPV2"], "unpaid": mo["TMPV5"], "forced": mo["TMPV6"]}), how="left")
+    df = df.join(pd.DataFrame({"credit": cr["TMPV2"], "credit_ks": cr["TMPV3"], "credit_kq": cr["TMPV4"]}), how="left")
+    df = df.astype(float)
+    df.loc[df["credit"] <= 0, "credit"] = np.nan
+    df["rk"] = df.k.pct_change(); df["rq"] = df.q.pct_change()
+    df["forced_x"] = df.forced / df.forced.rolling(20, min_periods=15).median().shift(1)
+    df["cr1"] = df.credit.pct_change(fill_method=None); df["cr5"] = df.credit / df.credit.shift(5) - 1
+    df["crpk"] = df.credit / df.credit.rolling(120, min_periods=60).max() - 1
+    df["kpk"] = df.k / df.k.rolling(120, min_periods=60).max() - 1
+    df["dd20"] = df.k / df.k.rolling(20).max() - 1
+    off = df.credit.last_valid_index()                              # 공식 자료 마지막 날
+    offm = df.forced.last_valid_index()
+    T = min(off, offm)
+    # 신용잔고 변화 ↔ 2거래일 전 지수 하락폭 (코스피·코스닥 중 더 크게 빠진 쪽) 과거 분포
+    x2 = np.minimum(df.rk, df.rq).shift(2)
+    hist = df.assign(x2=x2).dropna(subset=["cr1", "x2"])
+    BK = [(-1, -0.06, "−6% 이하"), (-0.06, -0.04, "−6 ~ −4%"), (-0.04, -0.02, "−4 ~ −2%"), (-0.02, 9, "−2% 초과(보통)")]
+    btab = []
+    for lo, hi, lab in BK:
+        h = hist[(hist.x2 > lo) & (hist.x2 <= hi)]
+        btab.append({"lab": lab, "lo": lo, "hi": hi, "n": int(len(h)), "mean": round(float(h.cr1.mean()), 4) if len(h) else None,
+                     "p2": round(float((h.cr1 <= -0.02).mean()), 3) if len(h) else None, "p5": round(float((h.cr1 <= -0.05).mean()), 3) if len(h) else None})
+    def bucket(v):
+        for b in btab:
+            if v is not None and np.isfinite(v) and b["lo"] < v <= b["hi"]:
+                return b
+        return None
+    def forced_hat(i, assume_zero_from=None):                      # i = df 행 번호 (예측 대상 날)
+        g = lambda col, j: (0.0 if (assume_zero_from is not None and j >= assume_zero_from) else float(df[col].iloc[j])) if 0 <= j < len(df) else 0.0
+        rq1, rq2, rq3, rk1, rk2 = g("rq", i - 1), g("rq", i - 2), g("rq", i - 3), g("rk", i - 1), g("rk", i - 2)
+        dd = float(df.dd20.iloc[min(i, len(df) - 1)])
+        M = FORCED_MODEL
+        z = (M["c"] + M["rq1"] * rq1 + M["rq2"] * rq2 + M["rq3"] * rq3 + M["rk1"] * rk1 + M["rk2"] * rk2 + M["dd20"] * dd
+             + M["neg2"] * (min(rq1, 0) + min(rq2, 0)) + M["negk2"] * (min(rk1, 0) + min(rk2, 0)))
+        return float(np.expm1(z))
+    pos = {d: i for i, d in enumerate(df.index)}
+    iT, last = pos[T], len(df) - 1
+    now = []
+    for i in range(iT + 1, last + 1):                              # 공식 자료 이후 ~ 오늘: 추정
+        b = bucket(float(x2.iloc[i]) if pd.notna(x2.iloc[i]) else None)
+        now.append({"d": df.index[i].strftime("%Y%m%d"), "kind": "추정", "fx": round(forced_hat(i), 2), "x2": None if pd.isna(x2.iloc[i]) else round(float(x2.iloc[i]), 4), "b": b and b["lab"]})
+    nd = df.index[last]
+    for step in (1, 2):                                            # 다음 거래일 예상 (주말만 건너뜀 · 휴장일은 모름)
+        nd = nd + pd.offsets.BDay(1)
+        i = last + step
+        xv = float(np.minimum(df.rk.iloc[i - 2], df.rq.iloc[i - 2])) if i - 2 <= last else None
+        fake = forced_hat(i, assume_zero_from=last + 1)
+        b = bucket(xv)
+        now.append({"d": nd.strftime("%Y%m%d"), "kind": "예상" + ("" if step == 1 else " (내일 보합 가정)"), "fx": round(fake, 2),
+                    "x2": None if xv is None else round(xv, 4), "b": b and b["lab"]})
+    # 신호 (공식 자료 기준)
+    r = df.loc[T]
+    win = df.loc[:T].tail(10)
+    sig = {
+        "bottom": {"on": bool(r.cr1 <= -0.03), "strong": bool(r.cr1 <= -0.05), "recent": [d.strftime("%Y%m%d") for d, v in win.cr1.items() if v <= -0.03],
+                   "val": None if pd.isna(r.cr1) else round(float(r.cr1), 4)},
+        "panic": {"on": bool(r.forced_x >= 4), "weak": bool(r.forced_x >= 2), "unflushed": bool(r.forced_x >= 3 and r.cr1 > -0.01),
+                  "recent": [d.strftime("%Y%m%d") for d, v in win.forced_x.items() if v >= 4], "val": None if pd.isna(r.forced_x) else round(float(r.forced_x), 2)},
+        "top": {"on": bool(r.crpk <= -0.10 and r.kpk >= -0.05), "crpk": round(float(r.crpk), 4), "kpk": round(float(r.kpk), 4)},
+    }
+    # 최근 수급 (전 종목 합계, 억원) — data 브랜치 alpha/flows
+    adir = os.environ.get("ALPHA_DIR") or os.path.join(os.path.dirname(os.environ.get("INVESTOR_DIR", "").rstrip("/\\")), "alpha")
+    flows = {}
+    fs = sorted(glob.glob(os.path.join(adir, "flows", "*", "*.csv.gz")))[-3:]
+    if fs:
+        fl = pd.concat([pd.read_csv(f, usecols=["date", "frg_nv", "frg2_nv", "inst_nv", "indiv_nv"]) for f in fs])
+        g = fl.groupby("date").sum()
+        for d, row in g.iterrows():
+            flows[str(d)] = [round((row.indiv_nv) / 1e8), round((row.frg_nv + row.frg2_nv) / 1e8), round(row.inst_nv / 1e8)]
+    nowmap = {x["d"]: x for x in now}
+    recent = []
+    for d, row in df.tail(20).iterrows():
+        key = d.strftime("%Y%m%d"); nx = nowmap.get(key)
+        recent.append({"d": key, "rk": round(float(row.rk), 4), "rq": round(float(row.rq), 4), "fl": flows.get(key),
+                       "cr": None if pd.isna(row.credit) else round(float(row.credit) / 1e6, 2), "cr1": None if pd.isna(row.cr1) else round(float(row.cr1), 4),
+                       "forced": None if pd.isna(row.forced) else round(float(row.forced) / 100), "fx": None if pd.isna(row.forced_x) else round(float(row.forced_x), 2),
+                       "est": nx})
+    ch = df.loc[:].tail(500)
+    out = {"build": build_id, "official": T.strftime("%Y%m%d"), "last": df.index[-1].strftime("%Y%m%d"),
+           "card": {"credit": round(float(r.credit) / 1e6, 2), "credit_ks": round(float(r.credit_ks) / 1e6, 2), "credit_kq": round(float(r.credit_kq) / 1e6, 2),
+                    "cr1": round(float(r.cr1), 4), "cr5": round(float(r.cr5), 4), "crpk": round(float(r.crpk), 4),
+                    "forced": round(float(r.forced) / 100), "fx": round(float(r.forced_x), 2), "unpaid": round(float(r.unpaid) / 100), "dep": round(float(r.dep) / 1e6, 1)},
+           "sig": sig, "now": now, "bucket": btab, "recent": recent,
+           "chart": {"d": [x.strftime("%Y%m%d") for x in ch.index], "k": [round(float(v), 2) for v in ch.k],
+                     "cr": [None if pd.isna(v) else round(float(v) / 1e6, 2) for v in ch.credit],
+                     "fo": [None if pd.isna(v) else round(float(v) / 100) for v in ch.forced],
+                     "fx": [None if pd.isna(v) else round(float(v), 2) for v in ch.forced_x]}}
+    os.makedirs(os.path.join(SITE_DIR, "temp"), exist_ok=True)
+    with open(os.path.join(SITE_DIR, "temp", "index.json"), "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
+    print(f"      시장 체온계: 공식 {T:%Y-%m-%d} · 추정·예상 {len(now)}일 · 신용 {out['card']['credit']}조 · 반대매매 {out['card']['forced']}억({out['card']['fx']}배)")
+    return out
+
+
 def write_supply_data(data, sections, listing, build_id):
     """
     수급 오실레이터용 데이터 (한국만, site/supply/index.json)
@@ -1032,7 +1163,7 @@ def render_page(src, page):
     for a, b in MK.get("replace", {}).items():
         out = out.replace(a, b)
     if MARKET != "kr":                                    # 수급 오실레이터는 한국 매매주체 데이터만 있음
-        out = re.sub(r'\s*<a class="tab sup[^"]*"[^>]*>[\s\S]*?</a>', "", out)
+        out = re.sub(r'\s*<a class="tab (sup|tmp)[^"]*"[^>]*>[\s\S]*?</a>', "", out)
     return out
 
 
@@ -1219,7 +1350,7 @@ def main():
     print("[3/3] 페이지 생성")
     with open(os.path.join(SITE_DIR, "data", "summary.js"), "w", encoding="utf-8") as f:
         f.write("window.__krsc_summary && window.__krsc_summary(" + js + ");\n")
-    for page in ("index.html", "game.html", "similar.html", "screener.html", "quant.html") + (("supply.html",) if MARKET == "kr" else ()):
+    for page in ("index.html", "game.html", "similar.html", "screener.html", "quant.html") + (("supply.html", "temp.html") if MARKET == "kr" else ()):
         with open(os.path.join(WEB_DIR, page), encoding="utf-8") as f:
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:
@@ -1234,6 +1365,10 @@ def main():
         write_quant_data(data, sections, meta["build_id"], listing, exch)
     if MARKET == "kr":
         print(f"      수급 오실레이터 종목 {write_supply_data(data, sections, listing, meta['build_id'])}개")
+        try:
+            write_temp_data(data, meta["build_id"])
+        except Exception as e:                            # 체온계 실패가 사이트 빌드를 막지 않게
+            print(f"      시장 체온계 생성 실패: {e}")
 
     size_mb = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(SITE_DIR) for f in fs) / 1e6
     print(f"      {os.path.relpath(SITE_DIR, ROOT)}/ {size_mb:.1f}MB · 업데이트 {meta['updated_at']} · 기준일 {meta['ref_date']} "
