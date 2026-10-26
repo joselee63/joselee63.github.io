@@ -53,6 +53,11 @@ SCHEDULE = {"base": ["08:40", "19:40"], "results": ["09:06"],
             "live": ["15:00", "15:06", "15:11", "15:15", "15:19", "15:23", "15:27"], "final": ["15:36"], "krxclose": ["15:37"],
             "nxt": ["16:00", "17:00", "18:00", "19:00", "19:30", "19:45"], "nxt1955": ["19:55"], "nxtclose": ["20:03"],
             "am": ["08:05", "08:20", "08:31", "08:40"], "am0845": ["08:46"]}
+# 사이트(GitHub Actions) 워크플로를 정시에 시작 — GitHub 예약 실행은 이 저장소에서 매일 4~5시간씩 늦게 시작됨(2026-10 관찰)
+# 순서: 종가베팅 데이터 → 투자자별 수급 → 시총 등 → 사이트 빌드 → 리포트. 늦게 도는 GitHub 예약은 백업(이미 만든 날은 건너뜀)
+SITE_REPO = "joselee63/joselee63.github.io"
+SITE_JOBS = [("18:42", "closebet.yml"), ("20:10", "investor-data.yml"), ("20:50", "alpha-data.yml"),
+             ("21:10", "daily.yml"), ("21:20", "alpha-reports.yml")]
 LOG = []
 STATE = {"running": False, "last": None, "next": None}
 _lock = threading.Lock()
@@ -1315,6 +1320,32 @@ def prebuild_themes():
         log(f"테마 구성 준비 실패: {e!r}"[:160])
 
 
+def gh_path():
+    import shutil
+    g = shutil.which("gh")
+    if g:
+        return g
+    for c in (r"C:\Program Files\GitHub CLI\gh.exe", os.path.expandvars(r"%LOCALAPPDATA%\Programs\GitHub CLI\gh.exe")):
+        if os.path.exists(c):
+            return c
+    return None
+
+
+def site_dispatch(wf):
+    """GitHub 워크플로 수동 시작 (gh CLI 로그인 필요 · 끄려면 환경변수 RADAR_SITE_TRIGGER=0)"""
+    if os.environ.get("RADAR_SITE_TRIGGER") == "0":
+        return
+    g = gh_path()
+    if not g:
+        log(f"사이트 워크플로 {wf}: gh(GitHub CLI)가 없어 건너뜀"); return
+    import subprocess
+    try:
+        r = subprocess.run([g, "workflow", "run", wf, "-R", SITE_REPO], capture_output=True, text=True, timeout=60)
+        log(f"사이트 워크플로 시작 {wf}: " + ("성공" if r.returncode == 0 else "실패 " + (r.stderr or r.stdout).strip()[:150]))
+    except Exception as e:  # noqa: BLE001
+        log(f"사이트 워크플로 {wf} 실패: {e!r}"[:160])
+
+
 def scheduler():
     fired = set()
     try:
@@ -1345,6 +1376,12 @@ def scheduler():
                         threading.Thread(target=refresh_am, args=(job,), daemon=True).start()
                     else:
                         threading.Thread(target=refresh, args=(job,), daemon=True).start()
+            for x, wf in SITE_JOBS:
+                key = (str(t.date()), "site", x)
+                if key in fired or hm < x or hm > _plus(x, 5):
+                    continue
+                fired.add(key)
+                threading.Thread(target=site_dispatch, args=(wf,), daemon=True).start()
         nx = [f"{x}" for times in SCHEDULE.values() for x in times if x > f"{t:%H:%M}"]
         STATE["next"] = min(nx) if nx and is_trading(t.date()) else None
         time.sleep(15)
