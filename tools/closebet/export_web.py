@@ -123,3 +123,8 @@ print(f"rows {len(ii):,}  stocks {len(stocks):,}  grade stocks {len(gidx):,}  {l
 if os.environ.get("TRACK_OUT"):
     import track
     track.run(L, os.environ.get("TRACK_IN"), os.environ["TRACK_OUT"])
+
+# 종베 레이더 기초 데이터 (closebet.yml 이 RADAR_OUT 을 주면 같은 L 로 만듦 → 로컬 보드가 장중에 내려받음)
+if os.environ.get("RADAR_OUT"):
+    import radar_base
+    radar_base.run(L, os.environ["RADAR_OUT"])

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>종베 레이더</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#fff; --fg:#14171c; --mu:#5b6472; --line:#e3e6eb; --soft:#f0f2f5; --hover:#f7f8fa;
+  --up:#d62d3a; --dn:#1f6fd6; --ok:#13854a; --warn:#b86e00; --acc:#5b4bdb;
+  --t-ok:#e3f4ea; --t-part:#fff3dc; --t-no:#fde7e8; --t-un:#eceef2; --t-acc:#ecebfd;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1115; --card:#171a20; --fg:#e8ebf0; --mu:#98a1ae; --line:#2a2f38; --soft:#1e222a; --hover:#1c2027;
+    --up:#ff5d68; --dn:#5aa2ff; --ok:#3fcf86; --warn:#f0a83a; --acc:#9a8cff;
+    --t-ok:#123524; --t-part:#3a2c10; --t-no:#3d1a1d; --t-un:#252a33; --t-acc:#26224a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1115; --card:#171a20; --fg:#e8ebf0; --mu:#98a1ae; --line:#2a2f38; --soft:#1e222a; --hover:#1c2027;
+  --up:#ff5d68; --dn:#5aa2ff; --ok:#3fcf86; --warn:#f0a83a; --acc:#9a8cff;
+  --t-ok:#123524; --t-part:#3a2c10; --t-no:#3d1a1d; --t-un:#252a33; --t-acc:#26224a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 "Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif}
+.wrap{max-width:1280px;margin:0 auto;padding:14px 16px 60px}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+h1{font-size:20px;margin:0;letter-spacing:-.02em}
+.pill{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.ok{background:var(--t-ok);color:var(--ok)} .part{background:var(--t-part);color:var(--warn)}
+.no{background:var(--t-no);color:var(--up)} .un{background:var(--t-un);color:var(--mu)} .acc{background:var(--t-acc);color:var(--acc)}
+.up{color:var(--up)} .dn{color:var(--dn)} .mu{color:var(--mu)} .warn{color:var(--warn)} .okc{color:var(--ok)}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover{background:var(--hover)} button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+button:disabled{opacity:.6;cursor:default}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0}
+.card h2{font-size:14px;margin:0 0 8px;color:var(--mu);font-weight:700}
+.grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:10px}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.kpi{font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.small{font-size:12px;color:var(--mu)}
+.factor{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.factor:last-child{border-bottom:0}
+.light{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:7px;vertical-align:-1px;flex:none}
+.g{background:var(--ok)} .y{background:var(--warn)} .r{background:var(--up)}
+.bar{height:8px;border-radius:4px;background:var(--soft);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--acc)}
+.tabs{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.tabs button{border-radius:999px;padding:4px 12px;font-size:13px}
+.tabs button.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:6px 7px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--mu);font-weight:600;font-size:12px;white-space:nowrap;position:sticky;top:0;background:var(--card)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.row{cursor:pointer} tr.row:hover td{background:var(--hover)}
+tr.top3 td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
+tr.detail td{background:var(--soft);padding:10px 12px}
+.nm{font-weight:700} .cd{font-size:11.5px;color:var(--mu)}
+.chips span{display:inline-block;margin:1px 4px 1px 0}
+.inp{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--mu)}
+.inp input{width:84px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);text-align:right}
+a{color:var(--acc);text-decoration:none} a:hover{text-decoration:underline}
+.ovs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.ovs div{background:var(--soft);border-radius:8px;padding:7px 9px}
+.ovs b{display:block;font-size:15px}
+.empty{padding:18px;text-align:center;color:var(--mu)}
+.banner{border-radius:10px;padding:10px 14px;margin:8px 0;font-weight:700}
+.dlist div{padding:3px 0;font-size:12.5px}
+.legend span{margin-right:10px}
+input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--acc)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>종베 레이더 <span class="small" id="sub"></span></h1>
+    <div class="small" id="statusline">불러오는 중…</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span id="pills"></span>
+    <button class="primary" id="btnRefresh">지금 갱신</button>
+  </div>
+</header>
+
+<div id="banners"></div>
+
+<div class="grid">
+  <div class="card" id="judge"><h2>A. 오늘 밤 시황 판단</h2><div class="empty">—</div></div>
+  <div class="card">
+    <h2>해외 · 이벤트</h2>
+    <div id="ovs" class="ovs"></div>
+    <div id="evt" class="small" style="margin-top:8px"></div>
+    <div class="inp" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+      <label>계좌 <input id="acct" type="number" min="0" step="100"> 만원</label>
+      <label>기본 투입 <input id="basePct" type="number" min="0" max="100" step="5"> %</label>
+      <label>종목 수 <input id="kStocks" type="number" min="1" max="10" step="1"></label>
+    </div>
+    <div class="small" style="margin-top:4px">기본 투입은 연구 권장 계좌의 50%. 권장 투입 = 기본 투입 × 계단20 × 요일·뜨거운 날 배수 × FOMC. 이 브라우저에만 저장됩니다.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <h2 style="margin:0">B. 후보 <span id="candday" class="small"></span></h2>
+    <div class="tabs" id="tabs">
+      <button data-t="large" class="on">대형주 등급</button>
+      <button data-t="wide">전체 (연구 규칙)</button>
+      <button data-t="excluded">제외</button>
+    </div>
+  </div>
+  <div class="small" id="tabnote" style="margin:4px 0 8px"></div>
+  <div class="scroll"><table id="tbl"></table></div>
+</div>
+
+<div class="grid">
+  <div class="card" id="record"><h2>C. 기록 — 다음날 시가 결과 (최근 20거래일, 비용 0.25% 후)</h2><div class="empty">아직 기록이 없습니다. 15:36 스냅샷 → 다음날 09:06 시가로 자동 채워집니다.</div></div>
+  <div class="card">
+    <h2>매매 규칙 요약</h2>
+    <div class="dlist">
+      <div><span class="pill ok">검증됨</span> 매수: 15:20~15:30 종가 동시호가 · 상위 3종목 균등</div>
+      <div><span class="pill ok">검증됨</span> 매도: 다음날 <b>09:00 시가 동시호가 전량</b> (갭이 크든 작든, 미국이 빠졌든)</div>
+      <div><span class="pill ok">검증됨</span> 종목당 주문액 ≤ 그날 거래대금의 1% (예상체결가를 움직이지 않게)</div>
+      <div><span class="pill part">일부 근거</span> 금요일 +0.5배 · 목요일/옵션만기 −0.5배 · 뜨거운 날 +0.5배 · FOMC 밤 ×0.5</div>
+      <div><span class="pill un">미검증</span> 뉴스 유무 · NXT 애프터 — 기록만 하고 3~6개월 뒤 검증</div>
+    </div>
+    <div class="small legend" style="margin-top:8px"><span><b>밤 끼</b> = 이 종목의 과거 +3% 날 다음날 평균 갭(등급) 백분위</span><span><b>민감도</b> = 나스닥 1%당 다음날 시가 갭(β)</span><span><b>테마</b> = 가격 상관 동료 10종목 중 오늘 +3%↑ 수 · 연속일</span></div>
+    <div class="small" id="logline" style="margin-top:8px;white-space:pre-wrap"></div>
+  </div>
+</div>
+</div>
+
+<script>
+(function(){
+  var D = null, tab = "large", open = {}, lastTs = null;
+  var $ = function(id){ return document.getElementById(id); };
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function ls(k, v){ try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch(e){ return null; } }
+  function num(v, d){ return v == null || isNaN(v) ? "—" : Number(v).toLocaleString("ko-KR", {minimumFractionDigits: d || 0, maximumFractionDigits: d || 0}); }
+  function pct(v, d){ if (v == null || isNaN(v)) return "—"; d = d == null ? 2 : d; return (v > 0 ? "+" : "") + Number(v).toFixed(d) + "%"; }
+  function cls(v){ return v > 0 ? "up" : v < 0 ? "dn" : ""; }
+  function eok(v){ if (v == null) return "—"; return v >= 10000 ? (v / 10000).toFixed(1) + "조" : num(v) + "억"; }
+
+  $("acct").value = ls("radar_acct") || 3000;
+  $("basePct").value = ls("radar_base") || 50;
+  $("kStocks").value = ls("radar_k") || 3;
+  ["acct", "basePct", "kStocks"].forEach(function(id){
+    $(id).addEventListener("change", function(){ ls({acct:"radar_acct", basePct:"radar_base", kStocks:"radar_k"}[id], $(id).value); render(); });
+  });
+
+  function invest(){                                   // 권장 투입 (만원)
+    var acct = +$("acct").value || 0, b = (+$("basePct").value || 0) / 100;
+    var w = D && D.market ? D.market.weight : 0;
+    return { total: acct * b * w, per: acct * b * w / Math.max(1, +$("kStocks").value || 3), w: w, b: b };
+  }
+
+  function renderJudge(){
+    var m = D.market, iv = invest();
+    var f = m.factors.map(function(x){
+      return '<div class="factor"><span><i class="light ' + x.light + '"></i>' + esc(x.label) + '</span><b><span class="pill ' + x.tag + '">' + esc(x.tagt) + '</span></b></div>';
+    }).join("");
+    var mas = [20, 40, 60, 90, 120].map(function(n){
+      var v = m.mas[n], below = m.below.indexOf(n) >= 0;
+      return '<span class="' + (below ? "dn" : "okc") + '">' + n + '일 ' + num(v, 0) + (below ? " ▼" : " ▲") + '</span>';
+    }).join(" · ");
+    $("judge").innerHTML = '<h2>A. 오늘 밤 시황 판단 · ' + esc(m.day) + (m.live ? '' : ' <span class="pill un">어제 지수 기준</span>') + '</h2>' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap">' +
+        '<div><div class="small">권장 투입 (계좌 대비)</div><div class="kpi ' + (iv.w <= 0 ? "dn" : "") + '">' + (iv.b * iv.w * 100).toFixed(0) + '%' +
+        ' <span style="font-size:16px;font-weight:700">' + num(iv.total) + '만원</span></div>' +
+        '<div class="small">기본 ' + (iv.b * 100).toFixed(0) + '% × 계단20 ' + (m.w20 * 100).toFixed(0) + '% × 배수 ' + m.mult.toFixed(1) + (m.fomc ? ' × FOMC 0.5' : '') +
+        ' · 종목당 ' + num(iv.per) + '만원</div></div>' +
+        '<div style="min-width:200px;flex:1;max-width:320px"><div class="small">코스닥 ' + num(m.kq, 2) + (m.kq_rt != null ? ' (' + pct(m.kq_rt) + ')' : '') +
+        ' · 코스피 ' + num(m.ks, 2) + (m.ks_rt != null ? ' (' + pct(m.ks_rt) + ')' : '') + '</div>' +
+        '<div class="bar"><i style="width:' + Math.min(100, iv.b * iv.w * 100) + '%"></i></div><div class="small" style="margin-top:4px">' + mas + '</div></div>' +
+      '</div>' +
+      (iv.w <= 0 ? '<div class="banner no" style="margin-top:10px">오늘은 쉬는 날 — 코스닥이 다섯 이평선 모두 아래 (계단20 0%)</div>' : '') +
+      '<div style="margin-top:8px">' + f + '</div>';
+  }
+
+  function renderOvs(){
+    $("ovs").innerHTML = (D.overseas || []).map(function(o){
+      var dec = o.s === "KRW=X" ? 1 : (o.px != null && o.px > 1000 ? 0 : 2);
+      return '<div><span class="small">' + esc(o.n) + '</span><b>' + num(o.px, dec) + '</b><span class="' + cls(o.chg) + '">' + pct(o.chg) + '</span></div>';
+    }).join("") || '<div class="small">해외 시세를 받지 못했습니다</div>';
+    var e = D.events || {};
+    $("evt").innerHTML = '오늘 밤 이벤트: ' + (e.tonight && e.tonight.length ? '<b class="warn">' + esc(e.tonight.join(", ")) + '</b>' : '없음') +
+      ' · 다음 FOMC ' + esc(e.next_fomc || "—") + ' · 다음 CPI ' + esc(e.next_cpi || "—") +
+      '<br>나스닥 선물·SOX는 15시 판단엔 쓰지 않습니다(종베와 무관). <b>지수형(β 높음)</b> 종목을 들고 갈 때의 밤 위험을 가늠하는 용도입니다.';
+  }
+
+  function warnCap(r){
+    var iv = invest();
+    if (!r.tv || !iv.per) return "";
+    var share = iv.per / (r.tv * 10000) * 100;       // 만원 ÷ (억 → 만원)
+    return share > 1 ? '<div class="warn small">주문 ' + num(iv.per) + '만 = 거래대금 ' + share.toFixed(1) + '%</div>' : "";
+  }
+
+  function discHtml(list, short){
+    if (!list || !list.length) return short ? '<span class="mu">공시 없음</span>' : '<div class="mu">어제 15:30 이후 공시 없음</div>';
+    var c = {up: "ok", mid: "part", bad: "no", warn: "part", info: "un"};
+    if (short) return list.slice(0, 2).map(function(d){ return '<span class="pill ' + c[d.cls] + '">' + esc(d.tag) + '</span>'; }).join(" ") + (list.length > 2 ? ' <span class="mu">+' + (list.length - 2) + '</span>' : '');
+    return list.map(function(d){
+      return '<div><span class="pill ' + c[d.cls] + '">' + esc(d.tag) + '</span> <span class="mu">' + esc(d.t) + '</span> <a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + esc(d.title) + '</a>' +
+        (d.note ? ' <span class="small">— ' + esc(d.note) + '</span>' : '') + '</div>';
+    }).join("");
+  }
+
+  function newsHtml(r, short){
+    if (!r.news) return short ? '<a href="' + esc(r.nsearch) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">뉴스 검색</a>' :
+      '<div class="mu">네이버 뉴스 키가 없어 헤드라인은 못 받았습니다 → <a href="' + esc(r.nsearch) + '" target="_blank" rel="noopener">네이버 뉴스에서 최신순 보기</a></div>';
+    var fresh = r.news.filter(function(n){ return n.fresh; });
+    if (short) return fresh.length ? '<span class="pill acc">새 뉴스 ' + fresh.length + '</span> <span class="small">' + esc((fresh[0].title || "").slice(0, 28)) + '…</span>' : '<span class="mu">새 뉴스 없음</span>';
+    return r.news.map(function(n){
+      return '<div>' + (n.fresh ? '<span class="pill acc">새</span> ' : '') + '<span class="mu">' + esc(n.t) + '</span> ' +
+        (n.url ? '<a href="' + esc(n.url) + '" target="_blank" rel="noopener">' + esc(n.title) + '</a>' : esc(n.title)) + '</div>';
+    }).join("") + '<div style="margin-top:4px"><a href="' + esc(r.nsearch) + '" target="_blank" rel="noopener">네이버 뉴스 최신순 더 보기</a></div>';
+  }
+
+  function renderTable(){
+    var rows = D[tab] || [];
+    var picks = D.picks || {};
+    var note = {
+      large: "시총 5천억↑·20일 평균 거래대금 300억↑ · +3%↑(+28.5% 미만) · 밤 끼 상위 20% → <b>밤 끼 순 상위 3</b> (사이트 퀀트·실전 추적과 같은 규칙, 장기 밤당 +0.29%)",
+      wide: "+3%~+25% · 거래량 20일 평균 2배↑ · 고가권 마감(70%↑) · 거래대금 10억↑ · 상장 1년↑ · 상한가 터치 제외 → <b>종가=고가 → 테마 연속일 → 등락률</b> 상위 3 (연구 최종 규칙)",
+      excluded: "상한가를 찍고 풀린 종목(−0.34%)·+25%↑(−0.33%)은 체결 불리 — 연구에서 손실이라 제외"
+    }[tab];
+    $("tabnote").innerHTML = note + (D.mode === "live" ? "" : ' <span class="pill un">키움 실시간 아님 — ' + esc(D.cand_day) + ' 장 마감 기준</span>');
+    if (!rows.length) { $("tbl").innerHTML = '<tr><td class="empty">' + (tab === "excluded" ? "제외 종목 없음" : "조건에 맞는 후보가 없습니다") + '</td></tr>'; return; }
+    var h = '<tr><th>선택</th><th class="n">#</th><th>종목</th><th class="n">등락</th><th class="n">마감 위치</th><th class="n">거래량</th><th class="n">밤 끼</th><th>나스닥 민감도</th><th>테마</th><th>공시</th><th>뉴스</th><th>경고</th></tr>';
+    rows.forEach(function(r, i){
+      var rank = r["rank_" + tab] || (i + 1), sel = !!picks[r.code];
+      var isTop = tab !== "excluded" && rank <= 3;
+      h += '<tr class="row' + (isTop ? ' top3' : '') + '" data-c="' + r.code + '">' +
+        '<td onclick="event.stopPropagation()"><input type="checkbox" data-pick="' + r.code + '"' + (sel ? ' checked' : '') + '></td>' +
+        '<td class="n">' + rank + '</td>' +
+        '<td><span class="nm">' + esc(r.name) + '</span> <span class="cd">' + r.code + ' · ' + (r.m === "Q" ? "코스닥" : "코스피") + ' · ' + eok(r.mc) + '</span></td>' +
+        '<td class="n ' + cls(r.rt) + '">' + pct(r.rt) + '<div class="cd">' + num(r.px) + '</div></td>' +
+        '<td class="n">' + (r.top ? '<span class="pill ok">고가 마감</span>' : (r.pos != null ? (r.pos * 100).toFixed(0) + '%' : '—')) + '</td>' +
+        '<td class="n">' + (r.vr != null ? r.vr.toFixed(1) + '배' : '—') + (r.tv ? '<div class="cd">' + num(r.tv) + '억</div>' : '') + '</td>' +
+        '<td class="n">' + (r.gp != null ? '상위 ' + Math.max(1, Math.round((1 - r.gp) * 100)) + '%' : '—') + (r.gm != null ? '<div class="cd">평균 ' + pct(r.gm) + '</div>' : '') + '</td>' +
+        '<td>' + (r.beta != null ? r.beta.toFixed(2) + ' <span class="pill ' + (r.btag === "지수형" ? "part" : "un") + '">' + r.btag + '</span>' : '—') + '</td>' +
+        '<td>' + (r.n_up != null ? '동반 ' + r.n_up + '/10' : '') + (r.th ? ' · <b>' + r.th + '일째</b>' : (r.n_up != null ? '' : '<span class="mu">—</span>')) + '</td>' +
+        '<td>' + discHtml(r.disc, true) + '</td>' +
+        '<td>' + newsHtml(r, true) + '</td>' +
+        '<td>' + (r.warn || []).map(function(w){ return '<div class="warn small">' + esc(w) + '</div>'; }).join("") + warnCap(r) + '</td></tr>';
+      if (open[r.code]) {
+        h += '<tr class="detail"><td colspan="12"><div class="grid" style="gap:14px">' +
+          '<div><b>공시</b> (어제 15:30 이후)' + discHtml(r.disc, false) +
+          '<div style="margin-top:8px"><b>같은 테마(가격 상관 동료) 오늘 +3%↑</b><div class="chips">' + ((r.peers_up || []).length ? r.peers_up.map(function(p){ return '<span class="pill un">' + esc(p) + '</span>'; }).join("") : '<span class="mu">없음' + (D.mode === "live" ? '' : ' (실시간 아님)') + '</span>') + '</div></div>' +
+          '<div style="margin-top:8px" class="small">β ' + (r.beta != null ? r.beta.toFixed(2) : "—") + ' → 밤사이 나스닥 −1.5%면 시가 약 ' + (r.beta != null ? pct(-1.5 * r.beta, 1) : "—") + ' (평균적인 반응)</div></div>' +
+          '<div><b>뉴스</b>' + newsHtml(r, false) + '</div></div></td></tr>';
+      }
+    });
+    $("tbl").innerHTML = h;
+  }
+
+  function renderRecord(){
+    var R = D.results;
+    var picks = D.picks || {}, pk = Object.keys(picks);
+    var top = '<div class="small" style="margin-bottom:6px">오늘(' + esc(D.cand_day) + ') 내 선택: ' + (pk.length ? pk.map(function(c){ return '<b>' + esc(picks[c].n) + '</b>'; }).join(", ") : '없음 — 후보표 왼쪽 칸을 체크하면 기록됩니다') + '</div>';
+    if (!R) { $("record").innerHTML = '<h2>C. 기록 — 다음날 시가 결과</h2>' + top + '<div class="empty">아직 결과가 없습니다. 15:36 스냅샷 → 다음날 09:06 시가로 자동 채워집니다.</div>'; return; }
+    function box(lab, a){ return '<div style="flex:1;min-width:130px"><div class="small">' + lab + '</div><div style="font-size:20px;font-weight:800" class="' + cls(a.avg) + '">' + (a.avg == null ? "—" : pct(a.avg)) + '</div><div class="small">' + a.n + '건 · 승률 ' + (a.win == null ? "—" : Math.round(a.win * 100) + '%') + '</div></div>'; }
+    var t = '<table><tr><th>날짜</th><th>목록</th><th class="n">#</th><th>종목</th><th class="n">종가</th><th class="n">다음날 시가</th><th class="n">갭</th></tr>' +
+      R.recent.map(function(r){ return '<tr><td>' + esc(r.date.slice(5)) + '</td><td>' + (r.list === "large" ? "대형" : "전체") + '</td><td class="n">' + esc(r.rank) + '</td><td>' + esc(r.name) + (r.picked === "1" ? ' <span class="pill acc">선택</span>' : '') + '</td><td class="n">' + num(+r.close) + '</td><td class="n">' + num(+r.open_next) + '</td><td class="n ' + cls(+r.gap) + '">' + pct(+r.gap) + '</td></tr>'; }).join("") + '</table>';
+    $("record").innerHTML = '<h2>C. 기록 — 다음날 시가 결과 (최근 ' + R.days + '거래일, 비용 0.25% 후)</h2>' + top +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:6px 0 10px">' + box("대형주 등급 상위 3", R.large3) + box("전체 규칙 상위 3", R.wide3) + box("내 선택", R.mine) + '</div>' +
+      '<div class="scroll" style="max-height:320px;overflow-y:auto">' + t + '</div>';
+  }
+
+  function render(){
+    if (!D || !D.market) return;
+    $("sub").textContent = D.mode === "live" ? "· 실시간 (키움)" : "· 장 마감 기준";
+    var st = D.status || {};
+    $("statusline").innerHTML = '갱신 ' + esc(D.ts) + ' (' + esc(st.secs) + '초) · 판단일 ' + esc(D.day) + ' · 기초 데이터 ' + esc(D.base_asof) + ' · 공시 ' + D.kind_n + '건' +
+      (st.errors && st.errors.length ? ' · <span class="warn">' + esc(st.errors.join(" / ")) + '</span>' : '');
+    $("pills").innerHTML = '<span class="pill ' + (st.kiwoom ? "ok" : "no") + '">키움 ' + (st.kiwoom ? "연결" : "키 없음") + '</span> ' +
+      '<span class="pill ' + (st.naver ? "ok" : "un") + '">뉴스 ' + (st.naver ? "연결" : "링크만") + '</span>';
+    $("candday").textContent = "· " + D.cand_day + (D.mode === "live" ? " 실시간" : " 장 마감");
+    var b = "";
+    if (D.market.panic) b += '<div class="banner ok">패닉 낙주 신호 — 코스피 −4%↓ : 삼성전자·SK하이닉스 종가 매수 → 다음날 시가 매도 (검증됨)</div>';
+    if (D.mode !== "live" && st.kiwoom === false) b += '<div class="banner part">키움 앱키가 아직 없습니다 — 지금은 ' + esc(D.cand_day) + ' 장 마감 기준 후보를 보여줍니다. <b>radar.bat setup-kiwoom</b> 으로 등록하면 15:00~15:30에 실시간으로 바뀝니다.</div>';
+    $("banners").innerHTML = b;
+    renderJudge(); renderOvs(); renderTable(); renderRecord();
+  }
+
+  $("tabs").addEventListener("click", function(e){
+    var t = e.target.getAttribute("data-t"); if (!t) return;
+    tab = t; Array.prototype.forEach.call($("tabs").children, function(b){ b.classList.toggle("on", b === e.target); }); renderTable();
+  });
+  $("tbl").addEventListener("click", function(e){
+    var cb = e.target.getAttribute && e.target.getAttribute("data-pick");
+    if (cb) {
+      var r = (D[tab] || []).filter(function(x){ return x.code === cb; })[0];
+      fetch("/api/pick", {method: "POST", body: JSON.stringify({day: D.cand_day, code: cb, name: r ? r.name : "", list: tab, on: e.target.checked})})
+        .then(function(){ D.picks = D.picks || {}; if (e.target.checked) D.picks[cb] = {n: r ? r.name : cb, l: tab}; else delete D.picks[cb]; renderRecord(); });
+      return;
+    }
+    var tr = e.target.closest("tr.row"); if (!tr) return;
+    var c = tr.getAttribute("data-c"); open[c] = !open[c]; renderTable();
+  });
+  $("btnRefresh").addEventListener("click", function(){
+    $("btnRefresh").disabled = true; $("btnRefresh").textContent = "갱신 중…";
+    fetch("/api/refresh", {method: "POST"}).then(function(){ setTimeout(poll, 1500); });
+  });
+
+  function load(){ return fetch("/api/latest", {cache: "no-store"}).then(function(r){ return r.json(); }).then(function(d){ if (d && d.ts) { D = d; lastTs = d.ts; render(); } }); }
+  function poll(){
+    fetch("/api/status", {cache: "no-store"}).then(function(r){ return r.json(); }).then(function(s){
+      $("btnRefresh").disabled = !!s.running; $("btnRefresh").textContent = s.running ? "갱신 중…" : "지금 갱신";
+      $("logline").textContent = (s.next ? "다음 자동 갱신 " + s.next + "\n" : "") + (s.log || []).slice(-4).join("\n");
+      if (s.last && s.last !== lastTs) load();
+    }).catch(function(){ $("logline").textContent = "보드 서버에 연결할 수 없습니다 — radar.bat 창이 켜져 있는지 확인하세요"; });
+  }
+  load(); poll(); setInterval(poll, 5000);
+})();
+</script>
+</body>
+</html>
