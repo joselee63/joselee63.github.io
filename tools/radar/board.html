@@ -449,6 +449,23 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
       return '<div><span class="small">' + esc(o.n) + ' (직전 종가 대비)</span><b>' + num(o.px, dec) + '</b><span class="' + cls(o.chg) + '">' + pct(o.chg) + '</span></div>';
     }).join("") + '</div>';
   }
+  function macroHtml(M, label){
+    if (!M) return "";
+    var h = '<div class="ovs" style="margin-top:8px">';
+    var k = M.k200n || {};
+    if (k.px != null) h += '<div style="outline:2px solid var(--acc)"><span class="small">코스피200 야간선물 ' + esc(k.code || "") + '</span><b class="' + cls(k.chg) + '">' + num(k.px, 2) + '</b><span class="' + cls(k.chg) + '">' + pct(k.chg) + '</span> <span class="small">' + esc(k.at || "") + '</span></div>';
+    else h += '<div style="outline:1px dashed var(--line)"><span class="small">코스피200 야간선물</span><b class="mu" style="font-size:13px">KIS 키 필요</b><span class="small">키움 REST엔 선물 시세 없음 — radar.bat setup-kis</span></div>';
+    var a = M.adr;
+    if (a) h += '<div><span class="small">SK하이닉스 ADR · ' + esc(a.ses || "") + '</span><b class="' + cls(a.chg) + '">$' + num(a.px, 2) + ' ' + pct(a.chg) + '</b><span class="small">환산 ' + num(a.krw) + '원' +
+      (a.prem_nxt != null ? ' · NXT 대비 ' + pct(a.prem_nxt, 1) : (a.prem_krx != null ? ' · KRX 대비 ' + pct(a.prem_krx, 1) : '')) + ' (' + esc(a.at) + ')</span></div>';
+    var t = M.tnx;
+    if (t) h += '<div><span class="small">' + esc(t.n) + '</span><b>' + num(t.px, 3) + '%</b><span class="' + cls(t.chg_bp) + '">' + (t.chg_bp != null ? (t.chg_bp > 0 ? "+" : "") + t.chg_bp.toFixed(1) + 'bp' : '—') + '</span> <span class="small">' + esc(t.at) + '</span></div>';
+    var z = M.zn;
+    if (z) h += '<div><span class="small">' + esc(z.n) + '</span><b class="' + cls(z.chg) + '">' + pct(z.chg, 2) + '</b><span class="small">' + (z.chg > 0 ? '금리 하락 쪽' : (z.chg < 0 ? '금리 상승 쪽' : '')) + ' (' + esc(z.at) + ')</span></div>';
+    var e = M.ewy;
+    if (e) h += '<div><span class="small">' + esc(e.n) + ' · ' + esc(e.ses || "") + '</span><b class="' + cls(e.chg) + '">' + pct(e.chg) + '</b><span class="small">$' + num(e.px, 2) + ' (' + esc(e.at) + ')</span></div>';
+    return h + '</div><div class="small" style="margin-top:4px">ADR 1주 = 보통주 1/10주 · 원화 환산가는 평소에도 한국 주가보다 30~45% 높게 거래됨(괴리율은 변화를 보세요) · 미국채 10년물은 미국 정규장에만 갱신, 그 외 시간엔 국채선물로 방향 확인 · <a href="https://hlkr.co.kr/" target="_blank" rel="noopener">HLKR(삼전닉스 24시간 참고가) 열기</a></div>';
+  }
   function boxR(lab, a){ return '<div style="flex:1;min-width:120px"><div class="small">' + lab + '</div><div style="font-size:19px;font-weight:800" class="' + cls(a && a.avg) + '">' + (a && a.avg != null ? pct(a.avg) : "—") + '</div><div class="small">' + (a ? a.n : 0) + '건 · 승률 ' + (a && a.win != null ? Math.round(a.win * 100) + '%' : '—') + '</div></div>'; }
   function renderNxt(){
     if (!DN) return;
@@ -460,7 +477,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
     if (st.errors && st.errors.length) b += '<div class="banner part">' + esc(st.errors.join(" / ")) + '</div>';
     $("nxt-banners").innerHTML = b;
     var e = DN.events || {};
-    $("nxt-fut").innerHTML = '<h2>저녁 시황 — 15시 이후 선물 · ' + esc(DN.ts.slice(11, 16)) + '</h2>' + futHtml(DN.futures, "15시 이후") + ovsHtml(DN.overseas) +
+    $("nxt-fut").innerHTML = '<h2>저녁 시황 — 15시 이후 선물 · ' + esc(DN.ts.slice(11, 16)) + '</h2>' + macroHtml(DN.macro) + futHtml(DN.futures, "15시 이후") + ovsHtml(DN.overseas) +
       '<div class="small" style="margin-top:8px">오늘 밤 이벤트: ' + (e.tonight && e.tonight.length ? '<b class="warn">' + esc(e.tonight.join(", ")) + '</b>' : '없음') +
       ' · NXT ' + num(st.nxt_n) + '종목 · KRX 종가 ' + num(st.krx_n) + '종목' + (st.krx_src ? '(' + (st.krx_src === "yahoo" ? "야후 정규장 종가" : "키움 15:3x") + ')' : '') + ' · 공시 ' + DN.kind_n + '건 · ' + esc(st.secs) + '초</div>';
     var R = DN.results;
@@ -473,7 +490,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
   function renderAm(){
     if (!DA) return;
     if (DA.error) { $("am-note").innerHTML = '<span class="warn">' + esc(DA.error) + '</span>'; $("am-rows").innerHTML = ""; return; }
-    $("am-fut").innerHTML = '<h2>밤사이 — 어제(' + esc(DA.prev) + ') 15시 이후 선물 · 해외 · ' + esc(DA.ts.slice(11, 16)) + '</h2>' + futHtml(DA.futures, "어제 15시 이후") + ovsHtml(DA.overseas);
+    $("am-fut").innerHTML = '<h2>밤사이 — 어제(' + esc(DA.prev) + ') 15시 이후 선물 · 해외 · ' + esc(DA.ts.slice(11, 16)) + '</h2>' + macroHtml(DA.macro) + futHtml(DA.futures, "어제 15시 이후") + ovsHtml(DA.overseas);
     $("am-note").innerHTML = '08:00부터 NXT 프리 가격, 08:30부터 KRX 예상체결가가 채워집니다. 선물×β = 밤사이 나스닥 선물 변화 × 이 종목의 민감도(평균적 반응, 참고).' + ((DA.status || {}).errors && DA.status.errors.length ? ' <span class="warn">' + esc(DA.status.errors.join(" / ")) + '</span>' : '');
     var rows = DA.rows || [];
     if (!rows.length) { $("am-rows").innerHTML = '<tr><td class="empty">어제 후보·선택·NXT 기록이 없습니다</td></tr>'; return; }

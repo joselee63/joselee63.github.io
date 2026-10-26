@@ -687,6 +687,95 @@ def futures_since(ref):
     return out
 
 
+def yahoo_last(sym, prepost=True):
+    """야후 1분봉(프리·애프터 포함) → 마지막 가격·시각·직전 정규장 종가·세션"""
+    r = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/" + requests.utils.quote(sym, safe=""),
+                     params={"range": "1d", "interval": "1m", "includePrePost": "true" if prepost else "false"}, headers=UA, timeout=12)
+    res = r.json()["chart"]["result"][0]
+    m = res["meta"]
+    ts = res.get("timestamp") or []
+    cl = res["indicators"]["quote"][0].get("close") or []
+    pts = [(a, c) for a, c in zip(ts, cl) if c is not None]
+    last_t, last = (pts[-1] if pts else (m.get("regularMarketTime"), m.get("regularMarketPrice")))
+    per = m.get("currentTradingPeriod") or {}
+    ses = "정규장"
+    for k, lab in (("pre", "프리마켓"), ("post", "애프터마켓")):
+        p0 = per.get(k) or {}
+        if p0.get("start") and p0.get("start") <= (last_t or 0) < p0.get("end", 0):
+            ses = lab
+    prev = m.get("regularMarketPrice") if ses in ("프리마켓", "애프터마켓") else m.get("chartPreviousClose")   # 프리·애프터는 직전 정규장 종가 대비
+    if ses == "정규장" and last_t and (time.time() - last_t) > 1800:
+        ses = "마감"
+    return {"px": float(last) if last else None, "prev": float(prev) if prev else None, "reg": m.get("regularMarketPrice"),
+            "at": (dt.datetime.fromtimestamp(last_t, dt.timezone.utc) + dt.timedelta(hours=9)).strftime("%m-%d %H:%M") if last_t else "",
+            "ses": ses}
+
+
+def us_macro(kw, krx_hynix=None, nxt_hynix=None):
+    """저녁·아침 시황: 미국채 10년물(^TNX)·10년 국채선물(ZN=F)·SK하이닉스 ADR(키움 미국주식, 프리·애프터 반영)·EWY(MSCI 한국 ETF)"""
+    out = {}
+    try:
+        t = yahoo_last("^TNX", prepost=False)
+        out["tnx"] = {"n": "미국채 10년물", "px": t["px"], "chg_bp": (t["px"] - t["prev"]) * 100 if t["px"] and t["prev"] else None,
+                      "at": t["at"], "note": "CBOE 지수 — 미국 정규장 시간에만 갱신"}
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        z = yahoo_last("ZN=F", prepost=False)
+        out["zn"] = {"n": "10년 국채선물 (가격)", "px": z["px"], "chg": (z["px"] / z["prev"] - 1) * 100 if z["px"] and z["prev"] else None,
+                     "at": z["at"], "note": "24시간 거래 — 가격이 오르면 금리 하락"}
+    except Exception:  # noqa: BLE001
+        pass
+    adr = None
+    try:
+        y = yahoo_last("SKHY")
+        adr = {"ses": y["ses"], "at": y["at"], "px": y["px"], "prev": y["prev"], "fx": None, "src": "yahoo"}
+    except Exception:  # noqa: BLE001
+        y = None
+    if kw is not None:
+        try:
+            d, _ = kw.call("usa20100", "/api/us/mrkcond", {"stex_tp": "ND", "stk_cd": "SKHY"})
+            px, base, fx = KW.num(d.get("cur_prc"), True), KW.num(d.get("base_close_pric"), True), KW.num(d.get("base_exrt"), True)
+            if px:
+                adr = {"ses": (y or {}).get("ses", ""), "at": f"{now():%m-%d %H:%M}", "px": px, "prev": base, "fx": fx, "src": "키움"}
+        except Exception:  # noqa: BLE001
+            pass
+    if adr and adr.get("px"):
+        if not adr.get("fx"):
+            try:
+                adr["fx"] = yahoo_last("KRW=X", prepost=False)["px"]
+            except Exception:  # noqa: BLE001
+                pass
+        adr["chg"] = (adr["px"] / adr["prev"] - 1) * 100 if adr.get("prev") else None
+        if adr.get("fx"):
+            adr["krw"] = adr["px"] * adr["fx"] * 10                    # ADR 1주 = 보통주 1/10주
+            if krx_hynix:
+                adr["prem_krx"] = (adr["krw"] / krx_hynix - 1) * 100
+            if nxt_hynix:
+                adr["prem_nxt"] = (adr["krw"] / nxt_hynix - 1) * 100
+        out["adr"] = adr
+    try:
+        e = yahoo_last("EWY")
+        out["ewy"] = {"n": "EWY (MSCI 한국 ETF)", "px": e["px"], "chg": (e["px"] / e["prev"] - 1) * 100 if e["px"] and e["prev"] else None,
+                      "at": e["at"], "ses": e["ses"]}
+    except Exception:  # noqa: BLE001
+        pass
+    out["k200n"] = kospi200_night()
+    return out
+
+
+def kospi200_night():
+    """코스피200 야간선물 — 키움 REST 에 선물 시세가 없어 KIS(한국투자증권) 키가 있을 때만 (kis.py)"""
+    try:
+        import kis
+    except ImportError:
+        return {"need": "KIS"}
+    try:
+        return kis.night_future() if kis.configured() else {"need": "KIS"}
+    except Exception as e:  # noqa: BLE001
+        return {"need": "KIS", "err": str(e)[:120]}
+
+
 def yahoo_closes(base, day):
     """야후 정규장 종가 (20종목씩 묶어 요청) — 16:00 이후엔 키움 KRX 현재가가 시간외 단일가로 바뀌므로 이걸로 채움"""
     S = base["stocks"]
@@ -895,6 +984,10 @@ def refresh_nxt(kind="manual"):
         except Exception:  # noqa: BLE001
             ovs = []
         pool.shutdown(wait=False)
+        try:
+            macro = us_macro(kw, (closes.get("000660") or {}).get("px"), (nx.get("000660") or {}).get("px"))
+        except Exception as e:  # noqa: BLE001
+            macro = {}; errs.append(f"미국 시황: {e!r}"[:100])
         nq = next((x for x in fut if x["s"] == "NQ=F"), {})
         A = nq.get("chg")
         warn = None
@@ -908,7 +1001,7 @@ def refresh_nxt(kind="manual"):
                 "status": {"errors": errs, "secs": round(time.time() - t0, 1), "nxt_n": len(nx), "krx_n": len(closes),
                            "krx_src": (next(iter(closes.values()), {}) or {}).get("src", ""),
                            "naver": keys is not None, "tg": tgm is not None},
-                "futures": fut, "warn": warn, "overseas": ovs, "events": events(day),
+                "futures": fut, "warn": warn, "overseas": ovs, "events": events(day), "macro": macro,
                 "cands": cands, "movers": movers, "losers": losers, "cand_found": bool(fs and fs.get("cand_day") == str(day)),
                 "cand_src": {"ts": (fs or {}).get("ts"), "kind": (fs or {}).get("kind")},
                 "results": results_nxt_summary(), "kind_n": len(_KIND)}
@@ -1006,7 +1099,12 @@ def refresh_am(kind="manual"):
         except Exception:  # noqa: BLE001
             ovs = []
         pool.shutdown(wait=False)
-        data = {"ts": f"{t:%Y-%m-%d %H:%M:%S}", "kind": kind, "day": str(day), "prev": str(prev),
+        try:
+            hy = next((r for r in rows if r["code"] == "000660"), None)
+            macro = us_macro(kw, (kcl.get("000660") or {}).get("px"), (hy or {}).get("pre"))
+        except Exception as e:  # noqa: BLE001
+            macro = {}; errs.append(f"미국 시황: {e!r}"[:100])
+        data = {"ts": f"{t:%Y-%m-%d %H:%M:%S}", "kind": kind, "day": str(day), "prev": str(prev), "macro": macro,
                 "status": {"errors": errs, "secs": round(time.time() - t0, 1), "tg": tgm is not None},
                 "futures": fut, "overseas": ovs, "rows": rows, "kind_n": len(_KIND)}
         s = json.dumps(data, ensure_ascii=False)
