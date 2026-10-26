@@ -256,14 +256,24 @@ def naver_keys():
         return None
 
 
+NEWS_HUB = "https://naverapihub.apigw.ntruss.com/search/v1/news"      # 네이버 클라우드 NAVER API HUB (2026-07 이후 신규 발급 경로)
+NEWS_OLD = "https://openapi.naver.com/v1/search/news.json"             # 옛 개발자센터 키 (2027-06-30까지 유예)
+
+
 def news_for(name, since, keys):
+    """네이버 뉴스 검색 — 화면에 '그대로 보여주기'용 (약관: 검색 결과의 AI 요약·학습 금지)"""
     if not keys:
         return None
     try:
-        r = requests.get("https://openapi.naver.com/v1/search/news.json", params={"query": name, "display": 6, "sort": "date"},
-                         headers={"X-Naver-Client-Id": keys[0], "X-Naver-Client-Secret": keys[1]}, timeout=8)
+        q = {"query": name, "display": 6, "sort": "date"}
+        r = requests.get(NEWS_HUB, params=q, headers={"X-NCP-APIGW-API-KEY-ID": keys[0], "X-NCP-APIGW-API-KEY": keys[1]}, timeout=8)
+        if r.status_code in (401, 403):
+            r2 = requests.get(NEWS_OLD, params=q, headers={"X-Naver-Client-Id": keys[0], "X-Naver-Client-Secret": keys[1]}, timeout=8)
+            if r2.status_code == 200:
+                r = r2
         if r.status_code != 200:
-            return [{"t": "", "title": f"(뉴스 API 오류 {r.status_code})", "url": "", "fresh": False}]
+            msg = {401: "인증 실패 — 키 확인", 403: "허용 안 됨 — Application에 '뉴스 검색' 포함 여부 확인", 429: "하루 허용량 초과"}.get(r.status_code, "")
+            return [{"t": "", "title": f"(뉴스 API 오류 {r.status_code} {msg})", "url": "", "fresh": False}]
         out = []
         for it in r.json().get("items", []):
             try:
@@ -544,11 +554,17 @@ def refresh(kind="manual"):
         OUT.mkdir(parents=True, exist_ok=True)
         s = json.dumps(data, ensure_ascii=False)
         (OUT / "latest.json").write_text(s, encoding="utf-8")
+        snap = json.loads(s)                                        # 기록용: 뉴스는 제목을 쌓지 않고 '건수·새 뉴스 수'만 (네이버 약관 존중)
+        for lst in ("large", "wide", "excluded"):
+            for r in snap.get(lst, []):
+                if r.get("news") is not None:
+                    r["news"] = {"n": len(r["news"]), "fresh": sum(1 for x in r["news"] if x.get("fresh"))}
+        ss = json.dumps(snap, ensure_ascii=False)
         d = SNAP / data["cand_day"].replace("-", "")
         d.mkdir(parents=True, exist_ok=True)
-        (d / f"{t:%H%M%S}.json").write_text(s, encoding="utf-8")
+        (d / f"{t:%H%M%S}.json").write_text(ss, encoding="utf-8")
         if kind == "final" and mode == "live":
-            (d / "final.json").write_text(s, encoding="utf-8")
+            (d / "final.json").write_text(ss, encoding="utf-8")
         STATE["last"] = data["ts"]
         log(f"갱신 완료 [{kind}/{mode}] 대형 {len(L)} · 전체 {len(W)} · 공시 {len(_KIND)}건 · {time.time()-t0:.0f}초" + (f" · 오류 {errs}" if errs else ""))
         return True
@@ -755,7 +771,7 @@ def setup_kiwoom():
 def setup_naver():
     import getpass
     import keyring
-    print("네이버 개발자센터(developers.naver.com) → 애플리케이션 등록 → 사용 API '검색' 의 Client ID / Secret. 입력값은 보이지 않습니다.")
+    print("네이버 클라우드 콘솔 → NAVER API HUB → Application(뉴스 검색 포함)의 Client ID / Client Secret. 입력값은 화면에 보이지 않습니다.")
     a = getpass.getpass("Client ID: ").strip()
     b = getpass.getpass("Client Secret: ").strip()
     if not a or not b:

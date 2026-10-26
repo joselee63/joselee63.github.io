@@ -7,7 +7,11 @@
 1. **키움 OpenAPI 신청**: [openapi.kiwoom.com](https://openapi.kiwoom.com/main/home)에 로그인 → OpenAPI 사용 신청 → 앱 등록 → **실전** App Key / Secret 발급. 포털이 IP 등록을 요구하면 이 PC의 공인 IP를 등록합니다.
 2. **키 등록**: `tools/radar/radar.bat setup-kiwoom`을 더블클릭하거나 명령창에서 실행합니다. 키를 붙여넣어도 화면에 보이지 않고, Windows 자격 증명 관리자(`kiwoom-real`)에 저장됩니다. 파일이나 저장소에는 남지 않습니다.
    - 키움 공식 CLI(`kiwoomcli setup`)로 이미 등록했다면 이 단계는 건너뛰어도 됩니다. 보드가 그 자격 증명을 그대로 씁니다.
-3. (선택) **네이버 뉴스**: [developers.naver.com](https://developers.naver.com) → 애플리케이션 등록(사용 API: 검색) → `radar.bat setup-naver`. 없어도 보드는 돌아가고, 뉴스 칸이 '네이버 뉴스 검색' 링크로 바뀝니다.
+3. (선택) **네이버 뉴스**: 네이버 검색 API는 2026-07-31부터 네이버 클라우드 **NAVER API HUB**에서만 새로 발급됩니다.
+   - 발급: [ncloud.com](https://www.ncloud.com) 콘솔 → Application Services → NAVER API HUB → 이용 신청 → Application 등록(검색 > 뉴스) → Client ID/Secret 확인 → `radar.bat setup-naver`
+   - '이용 관리'에서 하루 한도를 1,000건 정도로 걸어 두세요. 보드는 하루 약 200건을 씁니다. 지금은 한시적 무료이고, 유료로 바뀌면 사전 공지가 나옵니다.
+   - 약관상 검색 결과는 '그대로 보여주는' 용도만 허용되고 AI 요약·학습은 금지됩니다. 그래서 보드는 헤드라인을 화면에만 보여주고, 기록에는 뉴스 건수만 남깁니다.
+   - 키가 없어도 보드는 돌아가고, 뉴스 칸이 '네이버 뉴스 검색' 링크로 바뀝니다.
 4. **점검**: `radar.bat check`. 이 네트워크의 공인 IP도 함께 출력합니다.
 
 ### 노트북으로 옮겨 다닐 때 (키움 IP 등록)
