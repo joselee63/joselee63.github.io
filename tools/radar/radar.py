@@ -687,8 +687,33 @@ def futures_since(ref):
     return out
 
 
-def krx_closes(kw, day, errs):
-    """그날 KRX 전 종목 종가 (15:31 이후 등락률 API 전체 = 종가) — snap/날짜/krx_close.json 에 한 번 저장"""
+def yahoo_closes(base, day):
+    """야후 정규장 종가 (20종목씩 묶어 요청) — 16:00 이후엔 키움 KRX 현재가가 시간외 단일가로 바뀌므로 이걸로 채움"""
+    S = base["stocks"]
+    items = [(c, f"{c}.{'KQ' if m == 'Q' else 'KS'}") for c, m in zip(S["c"], S["m"])]
+    out = {}
+    for i in range(0, len(items), 20):
+        chunk = items[i:i + 20]
+        try:
+            r = requests.get("https://query1.finance.yahoo.com/v7/finance/spark",
+                             params={"symbols": ",".join(y for _, y in chunk), "range": "1d", "interval": "1d"}, headers=UA, timeout=15)
+            for x in r.json().get("spark", {}).get("result") or []:
+                resp = (x.get("response") or [{}])[0]
+                m = resp.get("meta", {})
+                px, prev, tm = m.get("regularMarketPrice"), m.get("chartPreviousClose"), m.get("regularMarketTime")
+                if not px or not tm:
+                    continue
+                if (dt.datetime.fromtimestamp(tm, dt.timezone.utc) + dt.timedelta(hours=9)).date() != day:
+                    continue                                       # 그날 체결이 아님 (거래정지 등)
+                out[x["symbol"].split(".")[0]] = {"px": float(px), "rt": (px / prev - 1) * 100 if prev else None, "src": "yahoo"}
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+def krx_closes(kw, day, errs, base=None):
+    """그날 KRX 정규장 종가 — snap/날짜/krx_close.json 에 한 번 저장
+    ※ 키움 KRX 현재가는 16:00~18:00 시간외 단일가 체결로 바뀜 → 키움 값은 15:31~16:00 사이 것만 종가로 인정, 그 밖엔 야후 정규장 종가"""
     d = SNAP / str(day).replace("-", "")
     f = d / "krx_close.json"
     if f.exists():
@@ -696,16 +721,22 @@ def krx_closes(kw, day, errs):
             return json.loads(f.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
             pass
-    try:
-        rows = kw.rank_all("1", 45)
-    except Exception as e:  # noqa: BLE001
-        errs.append(f"KRX 종가: {e}"[:120]); return {}
-    m = {c: {"px": r["px"], "rt": r["rt"], "n": r["name"]} for c, r in rows.items() if r.get("px")}
     t = now()
-    if t.date() > day or t.time() >= dt.time(15, 31):
+    m = {}
+    if t.date() == day and dt.time(15, 31) <= t.time() < dt.time(16, 0):
+        try:
+            rows = kw.rank_all("1", 45)
+            m = {c: {"px": r["px"], "rt": r["rt"], "n": r["name"], "src": "kiwoom"} for c, r in rows.items() if r.get("px")}
+        except Exception as e:  # noqa: BLE001
+            errs.append(f"KRX 종가: {e}"[:120])
+    elif (t.date() > day or t.time() >= dt.time(16, 0)) and base is not None:
+        m = yahoo_closes(base, day)
+        if len(m) < 300:
+            errs.append(f"KRX 종가(야후) {len(m)}종목뿐 — 일부 종목 장후 변화 없음")
+    if len(m) >= 300:
         d.mkdir(parents=True, exist_ok=True)
         f.write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
-        log(f"KRX 종가 저장: {len(m):,}종목")
+        log(f"KRX 종가 저장: {len(m):,}종목 ({next(iter(m.values()))['src']})")
     return m
 
 
@@ -796,8 +827,14 @@ def refresh_nxt(kind="manual"):
         f_kind = pool.submit(kind_fetch, since)
         f_fut = pool.submit(futures_since, dt.datetime.combine(day, dt.time(15, 0)))
         f_ovs = pool.submit(overseas)
-        closes = krx_closes(kw, day, errs)
+        closes = krx_closes(kw, day, errs, base)
         nx = kw.rank_all("2", 20)
+        ovt = {}                                                  # KRX 시간외 단일가 (16:00~18:00, 10분마다 체결)
+        if dt.time(16, 0) <= t.time() <= dt.time(18, 15) and t.date() == day:
+            try:
+                ovt = {c: r["px"] for c, r in kw.rank_all("1", 45).items() if r.get("px")}
+            except Exception as e:  # noqa: BLE001
+                errs.append(f"시간외 단일가: {e}"[:100])
         keys = naver_keys()
         # ① 오늘 종베 후보의 NXT 가격
         fs = day_snapshot(day)
@@ -839,6 +876,9 @@ def refresh_nxt(kind="manual"):
             r["tg"] = (tgm or {}).get(r["code"], []) if tgm is not None else None
             i = ix.get(r["code"])
             r["peers_c"] = S["peers"][i] if i is not None else []
+            o = ovt.get(r["code"])
+            if o and r.get("krx") and abs(o / r["krx"] - 1) > 1e-9:
+                r["ovt"], r["ovt_gap"] = o, round((o / r["krx"] - 1) * 100, 2)
         if keys:
             done = {}
             for r in (cands + movers[:15] + losers[:5]):
@@ -866,6 +906,7 @@ def refresh_nxt(kind="manual"):
                 r["est"] = round(r["beta"] * A, 2)                    # 저녁 선물 흐름 × β (평균적 반응, 참고)
         data = {"ts": f"{t:%Y-%m-%d %H:%M:%S}", "kind": kind, "day": str(day), "base_asof": base["asof"],
                 "status": {"errors": errs, "secs": round(time.time() - t0, 1), "nxt_n": len(nx), "krx_n": len(closes),
+                           "krx_src": (next(iter(closes.values()), {}) or {}).get("src", ""),
                            "naver": keys is not None, "tg": tgm is not None},
                 "futures": fut, "warn": warn, "overseas": ovs, "events": events(day),
                 "cands": cands, "movers": movers, "losers": losers, "cand_found": bool(fs and fs.get("cand_day") == str(day)),
@@ -1199,7 +1240,7 @@ def scheduler():
                     elif job == "results":
                         threading.Thread(target=fill_all, daemon=True).start()
                     elif job == "krxclose":
-                        threading.Thread(target=lambda: krx_closes(KW.Kiwoom(), now().date(), []), daemon=True).start()
+                        threading.Thread(target=lambda: krx_closes(KW.Kiwoom(), now().date(), [], load_base()), daemon=True).start()
                     elif job in ("nxt", "nxt1955", "nxtclose"):
                         threading.Thread(target=refresh_nxt, args=(job,), daemon=True).start()
                     elif job in ("am", "am0845"):

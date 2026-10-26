@@ -418,12 +418,13 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
   }
   function nxtTable(id, rows, withSrc){
     if (!rows || !rows.length) { $(id).innerHTML = '<tr><td class="empty">해당 종목 없음</td></tr>'; return; }
-    var h = '<tr><th>종목</th>' + (withSrc ? '<th>출처</th>' : '') + '<th class="n">KRX 종가</th><th class="n">NXT 현재</th><th class="n">장후 변화</th><th>원인</th><th>공시</th><th>뉴스</th><th>텔레그램</th><th>테마</th><th>민감도 · 선물 영향</th></tr>';
+    var h = '<tr><th>종목</th>' + (withSrc ? '<th>출처</th>' : '') + '<th class="n">KRX 종가 (15:30)</th><th class="n">NXT 현재</th><th class="n">장후 변화</th><th>원인</th><th>공시</th><th>뉴스</th><th>텔레그램</th><th>테마</th><th>민감도 · 선물 영향</th></tr>';
     rows.forEach(function(r){
       var k = id + r.code;
       h += '<tr class="row" data-k="' + k + '"><td><span class="nm">' + esc(r.name) + '</span> <span class="cd">' + r.code + ' · ' + eok(r.mc) + '</span></td>' +
         (withSrc ? '<td class="small">' + esc(r.src || "") + '</td>' : '') +
-        '<td class="n">' + num(r.krx) + (r.krx_rt != null ? '<div class="cd ' + cls(r.krx_rt) + '">' + pct(r.krx_rt) + '</div>' : '') + '</td>' +
+        '<td class="n">' + num(r.krx) + (r.krx_rt != null ? '<div class="cd ' + cls(r.krx_rt) + '">' + pct(r.krx_rt) + '</div>' : '') +
+          (r.ovt != null ? '<div class="cd" title="KRX 시간외 단일가 (16:00~18:00)">시간외 ' + num(r.ovt) + ' <span class="' + cls(r.ovt_gap) + '">' + pct(r.ovt_gap) + '</span></div>' : '') + '</td>' +
         '<td class="n">' + (r.nxt != null ? num(r.nxt) : '<span class="mu">NXT 없음</span>') + (r.nxt_vol ? '<div class="cd">' + num(r.nxt_vol) + '주</div>' : '') + '</td>' +
         '<td class="n ' + cls(r.gap) + '" style="font-weight:800">' + pct(r.gap) + '</td>' +
         '<td>' + causePill(r) + '</td><td>' + discHtml(r.disc, true) + '</td><td>' + newsHtml(r, true) + '</td><td>' + tgHtml(r, true) + '</td>' +
@@ -461,7 +462,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
     var e = DN.events || {};
     $("nxt-fut").innerHTML = '<h2>저녁 시황 — 15시 이후 선물 · ' + esc(DN.ts.slice(11, 16)) + '</h2>' + futHtml(DN.futures, "15시 이후") + ovsHtml(DN.overseas) +
       '<div class="small" style="margin-top:8px">오늘 밤 이벤트: ' + (e.tonight && e.tonight.length ? '<b class="warn">' + esc(e.tonight.join(", ")) + '</b>' : '없음') +
-      ' · NXT ' + num(st.nxt_n) + '종목 · KRX 종가 ' + num(st.krx_n) + '종목 · 공시 ' + DN.kind_n + '건 · ' + esc(st.secs) + '초</div>';
+      ' · NXT ' + num(st.nxt_n) + '종목 · KRX 종가 ' + num(st.krx_n) + '종목' + (st.krx_src ? '(' + (st.krx_src === "yahoo" ? "야후 정규장 종가" : "키움 15:3x") + ')' : '') + ' · 공시 ' + DN.kind_n + '건 · ' + esc(st.secs) + '초</div>';
     var R = DN.results;
     $("nxt-rec").innerHTML = '<h2>NXT 기록 — 19:55 NXT 매수 → 다음날 09:00 시가 (최근 ' + (R ? R.days : 0) + '거래일, 비용 0.25% 후)</h2>' + (R ?
       '<div style="display:flex;gap:10px;flex-wrap:wrap">' + boxR("종베 후보", R.cands) + boxR("장후 급등 · 재료형", R.mat) + boxR("동반형", R.co) + boxR("미확인", R.unk) + boxR("재료형 → 08:46 프리 매도", R.mat_pre) + '</div>' +
