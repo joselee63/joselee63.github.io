@@ -50,9 +50,11 @@ def parse_json(d):
         if isinstance(t, list):
             t = "".join(x if isinstance(x, str) else x.get("text", "") for x in t)
         react = sum(r.get("count", 0) for r in m.get("reactions", []) or [])
-        rows.append({"id": m["id"], "dt": pd.Timestamp(m["date"]), "text": t.strip(), "react": react,
+        rows.append({"id": m["id"], "dt": m["date"], "text": t.strip(), "react": react,
                      "link": "http" in t, "fwd": "forwarded_from" in m})
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    df["dt"] = pd.to_datetime(df["dt"])                             # 내보낸 PC의 현지 시각(한국)
+    return df
 
 
 if __name__ == "__main__":

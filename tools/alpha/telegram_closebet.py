@@ -20,8 +20,8 @@ import large_cap as L  # noqa: E402
 
 P, T, N = L.P, L.T, L.N
 name = sys.argv[1] if len(sys.argv) > 1 else "surge_daily"
-M = pd.read_pickle(ROOT / "data-alpha" / "telegram" / f"{name}.pkl")
-M = M[M.text.str.len() > 0].reset_index(drop=True)
+M = pd.concat([pd.read_pickle(ROOT / "data-alpha" / "telegram" / f"{nm}.pkl").assign(src=nm) for nm in name.split("+")])
+M = M[M.text.str.len() > 0].sort_values("dt").reset_index(drop=True)                 # 'a+b' 로 여러 채널 합치기
 COST = L.COST
 
 # ------------------------------------------------------------------ 종목명 추출 (telegram_study.py 와 같은 규칙)
@@ -99,12 +99,14 @@ def features(mask):
         if i not in cache:
             cache[i] = (window_rows(i, prev_buy, buy), window_rows(i, buy, next_open))
         pre, post = cache[i]
-        pm = pre[pre.js.map(lambda x: j in x)]
-        qm = post[post.js.map(lambda x: j in x)]
+        pm = pre[pre.js.map(lambda x: j in x).to_numpy(dtype=bool)]      # 빈 창에서도 열이 사라지지 않게 numpy 불리언으로
+        qm = post[post.js.map(lambda x: j in x).to_numpy(dtype=bool)]
         r = {"i": i, "j": j, "ret": L.RET[i, j] - COST, "yr": P.dates[i].year, "day": P.day[i, j],
              "n": len(pm), "prim": bool(pm.js1.map(lambda x: j in x).any()), "react": int(pm.react.sum()),
              "list_only": bool(len(pm) and (pm.ns >= 6).all()), "link": bool(pm.link.any()),
              "morning": bool(len(pm) and (pm.dt.dt.hour < 9).any()), "post_n": len(qm),
+             "late": bool(len(pm) and ((pm.dt.dt.hour >= 13) & (pm.dt.dt.normalize() == P.dates[i])).any()),
+             "post_eve": bool(len(qm) and (qm.dt.dt.normalize() == P.dates[i]).any()),
              "cobreadth": int(pm.ns.max()) if len(pm) else 0}
         for lab, _ in CAT:
             r[lab] = bool(pm[lab].any()) if len(pm) else False
@@ -136,6 +138,8 @@ for title, mask in (("① 전체 종베 후보 (연구 규칙, 코스닥>20일�
     show(D, (D.n > 0) & ~D.prim & ~D.list_only, "  └ 본문·관련주로만 등장")
     show(D, (D.n > 0) & D.list_only, "  └ 6종목↑ 목록에만 등장")
     show(D, (D.n > 0) & D.morning, "  └ 아침(장전) 뉴스")
+    show(D, (D.n > 0) & D.late, "  └ 매수 직전 13:00~15:20 뉴스")
+    show(D, (D.n > 0) & ~D.late & ~D.morning, "  └ 장중 앞쪽(09~13시)·전날 저녁 뉴스")
     show(D, D.n >= 3, "  └ 3번 이상 언급")
     show(D, (D.n > 0) & (D.react >= 30), "  └ 반응 30↑ (2022~)")
     print("   재료 유형 (매수 전 뉴스에 키워드)")
@@ -143,6 +147,8 @@ for title, mask in (("① 전체 종베 후보 (연구 규칙, 코스닥>20일�
         show(D, D[lab], f"  {lab}")
     print("   매수 뒤(15:20~다음날 08:50) 뉴스 — 판단엔 못 쓰지만 갭 설명")
     show(D, D.post_n > 0, "  매수 뒤 언급 있음")
+    show(D, D.post_eve, "    └ 그날 저녁(15:20~24:00, NXT 애프터 시간 포함)")
+    show(D, (D.post_n > 0) & ~D.post_eve, "    └ 다음날 새벽~08:50만")
     show(D, D.post_n == 0, "  매수 뒤 언급 없음")
     yy = D[D.n > 0].groupby("yr").ret.mean() - D[D.n == 0].groupby("yr").ret.mean()
     print("   연도별 (뉴스 있음 − 없음, %p): " + " ".join(f"{y % 100:02d}:{v*100:+.2f}" for y, v in yy.items()))
