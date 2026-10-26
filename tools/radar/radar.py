@@ -1087,10 +1087,10 @@ def fill_results():
     day = prev_trading(now().date())
     d = SNAP / str(day).replace("-", "")
     f = d / "final.json"
-    if not f.exists():
-        snaps = sorted(d.glob("[0-9]*.json")) if d.exists() else []
+    if not f.exists():                                            # 15:36 확정본이 없으면 15:20 이후 스냅샷만 (장중 가격을 종가로 쓰면 결과가 틀어짐)
+        snaps = sorted(x for x in (d.glob("[0-9]*.json") if d.exists() else []) if x.stem >= "152000")
         if not snaps:
-            log(f"결과 채우기: {day} 스냅샷 없음"); return
+            log(f"결과 채우기: {day} 15:20 이후 스냅샷 없음 — 건너뜀"); return
         f = snaps[-1]
     snap = json.loads(f.read_text(encoding="utf-8"))
     rf = OUT / "results.csv"
