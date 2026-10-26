@@ -160,9 +160,10 @@ class Kiwoom:
         raise KiwoomError(f"{api_id}: 재시도 초과")
 
     # ------------------------------------------------------------------ 조회 API
-    def rank_up(self, stex="1", min_rt=3.0, max_pages=15):
-        """전일대비등락률상위(ka10027) — 상승률 순으로 min_rt% 이상 전부 (stex 1:KRX 2:NXT 3:통합)"""
-        body = {"mrkt_tp": "000", "sort_tp": "1", "trde_qty_cnd": "0000", "stk_cnd": "16", "crd_cnd": "0",
+    def rank_up(self, stex="1", min_rt=3.0, max_pages=15, sort_tp="1"):
+        """전일대비등락률상위(ka10027) — 상승률 순으로 min_rt% 이상 전부 (stex 1:KRX 2:NXT 3:통합)
+        ※ sort_tp 1(상승률)은 오른 종목만, 3(하락률)은 내린 종목만, 5는 보합만 돌려줌"""
+        body = {"mrkt_tp": "000", "sort_tp": sort_tp, "trde_qty_cnd": "0000", "stk_cnd": "16", "crd_cnd": "0",
                 "updown_incls": "1", "pric_cnd": "0", "trde_prica_cnd": "0", "stex_tp": stex}
         out, cont = [], None
         for _ in range(max_pages):
@@ -176,9 +177,17 @@ class Kiwoom:
                 out.append({"code": code, "name": (x.get("stk_nm") or "").strip(), "px": num(x.get("cur_prc"), True),
                             "rt": rt, "vol": num(x.get("now_trde_qty"), True), "sig": str(x.get("pred_pre_sig", "")),
                             "str": num(x.get("cntr_str"))})
-            if not rows or not cont or (num(rows[-1].get("flu_rt")) or 0) < min_rt:
+            if not rows or not cont or (sort_tp == "1" and (num(rows[-1].get("flu_rt")) or 0) < min_rt):
                 break
         return [r for r in out if r["rt"] >= min_rt]
+
+    def rank_all(self, stex="1", max_pages=40):
+        """거래소(1:KRX 2:NXT)의 모든 종목 현재가·등락률 (등락률 상위 API를 끝까지 넘김) → {코드: row}"""
+        out = {}
+        for st in ("1", "3", "5"):                                 # 상승 + 하락 + 보합 = 전 종목
+            for r in self.rank_up(stex, min_rt=-1000.0, max_pages=max_pages, sort_tp=st):
+                out.setdefault(r["code"], r)
+        return out
 
     def stock(self, code):
         """주식기본정보(ka10001) — 고가·저가·상한가·예상체결가·시총 등"""

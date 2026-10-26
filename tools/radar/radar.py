@@ -1,7 +1,8 @@
-"""종베 레이더 1단계 — 15:00~15:30 KRX 종가베팅 판단 보드 (내 PC 전용 · 사이트에 올리지 않음)
+"""종베 레이더 — 15:00~15:30 KRX 종가베팅 · 16:00~20:00 NXT 애프터 · 08:05~08:46 아침 점검 (내 PC 전용 · 사이트에 올리지 않음)
 
   radar.bat               보드 실행 → 브라우저 http://127.0.0.1:8790 (평일 정해진 시각에 자동 갱신)
-  radar.bat run           지금 한 번 갱신하고 끝
+  radar.bat run           지금 한 번 갱신하고 끝 (15시 모드) · radar.bat nxt / radar.bat am  NXT 애프터 / 아침 점검 한 번
+  radar.bat setup-telegram 텔레그램 실시간 수신 설정 (선택 — 내 계정으로 구독 채널 새 글 읽기)
   radar.bat setup-kiwoom  키움 앱키 등록 (입력값은 화면에 안 보이고 Windows 자격 증명 관리자에 저장)
   radar.bat setup-naver   네이버 검색 API 키 등록 (선택 — 없으면 뉴스는 '검색 링크'만)
   radar.bat check         연결 점검 (키 값은 출력하지 않음)
@@ -49,7 +50,9 @@ CPI = {"2026-11-10", "2026-12-10", "2027-01-13", "2027-02-11", "2027-03-10", "20
 OVERSEAS = [("나스닥 선물", "NQ=F"), ("S&P 선물", "ES=F"), ("필라델피아 반도체", "^SOX"), ("SK하이닉스 ADR", "SKHY"),
             ("WTI 유가", "CL=F"), ("원/달러", "KRW=X"), ("VIX", "^VIX")]
 SCHEDULE = {"base": ["08:40", "19:40"], "results": ["09:06"],
-            "live": ["15:00", "15:06", "15:11", "15:15", "15:19", "15:23", "15:27"], "final": ["15:36"]}
+            "live": ["15:00", "15:06", "15:11", "15:15", "15:19", "15:23", "15:27"], "final": ["15:36"], "krxclose": ["15:37"],
+            "nxt": ["16:00", "17:00", "18:00", "19:00", "19:30", "19:45"], "nxt1955": ["19:55"], "nxtclose": ["20:03"],
+            "am": ["08:05", "08:20", "08:31", "08:40"], "am0845": ["08:46"]}
 LOG = []
 STATE = {"running": False, "last": None, "next": None}
 _lock = threading.Lock()
@@ -600,6 +603,9 @@ def refresh(kind="manual"):
             mode = "base"
         L, W = order(rows)
         themes_top = add_themes(rows, kw, errs, base)
+        tgm = tg_mentions(base, since)
+        for r in rows + excluded:
+            r["tg"] = (tgm or {}).get(r["code"], []) if tgm is not None else None
         hot_count = len(W) if mode == "live" else int(base["hot"]["today"])   # 연구 규칙 후보 수 (뜨거운 날 판단)
         if keys:                                                     # 뉴스: 화면 위쪽 후보부터 최대 20종목
             show = (L[:10] + W[:10])
@@ -631,11 +637,7 @@ def refresh(kind="manual"):
         OUT.mkdir(parents=True, exist_ok=True)
         s = json.dumps(data, ensure_ascii=False)
         (OUT / "latest.json").write_text(s, encoding="utf-8")
-        snap = json.loads(s)                                        # 기록용: 뉴스는 제목을 쌓지 않고 '건수·새 뉴스 수'만 (네이버 약관 존중)
-        for lst in ("large", "wide", "excluded"):
-            for r in snap.get(lst, []):
-                if r.get("news") is not None:
-                    r["news"] = {"n": len(r["news"]), "fresh": sum(1 for x in r["news"] if x.get("fresh"))}
+        snap = _strip_news(data, ("large", "wide", "excluded"))   # 기록용: 뉴스·텔레그램은 원문 대신 건수만 (네이버 약관 존중)
         ss = json.dumps(snap, ensure_ascii=False)
         d = SNAP / data["cand_day"].replace("-", "")
         d.mkdir(parents=True, exist_ok=True)
@@ -650,6 +652,412 @@ def refresh(kind="manual"):
         return False
     finally:
         STATE["running"] = False
+
+
+# ====================================================================== 2단계: NXT 애프터 · 아침 점검
+_MODE = {"nxt": {"running": False, "last": None}, "am": {"running": False, "last": None}}
+
+
+def yahoo_series(sym, rng="5d", itv="5m"):
+    """야후 분봉 → [(한국 시각, 종가)]"""
+    r = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/" + requests.utils.quote(sym, safe=""),
+                     params={"range": rng, "interval": itv}, headers=UA, timeout=12)
+    res = r.json()["chart"]["result"][0]
+    ts = res.get("timestamp") or []
+    cl = res["indicators"]["quote"][0].get("close") or []
+    out = []
+    for a, c in zip(ts, cl):
+        if c is not None:
+            out.append((dt.datetime.fromtimestamp(a, dt.timezone.utc).replace(tzinfo=None) + dt.timedelta(hours=9), float(c)))
+    return out
+
+
+def futures_since(ref):
+    """나스닥·S&P 선물: ref(한국 시각, 보통 그날 15:00) 이후 변화 — 저녁 흐름(A) / 밤사이 흐름"""
+    out = []
+    for nm, sym in (("나스닥 선물", "NQ=F"), ("S&P 선물", "ES=F")):
+        try:
+            ser = yahoo_series(sym)
+            before = [c for t, c in ser if ref - dt.timedelta(hours=3) <= t <= ref]
+            p0, p1 = (before[-1] if before else None), ser[-1][1]
+            out.append({"n": nm, "s": sym, "ref": p0, "px": p1, "chg": (p1 / p0 - 1) * 100 if p0 else None,
+                        "at": f"{ser[-1][0]:%H:%M}"})
+        except Exception:  # noqa: BLE001
+            out.append({"n": nm, "s": sym, "ref": None, "px": None, "chg": None, "at": ""})
+    return out
+
+
+def krx_closes(kw, day, errs):
+    """그날 KRX 전 종목 종가 (15:31 이후 등락률 API 전체 = 종가) — snap/날짜/krx_close.json 에 한 번 저장"""
+    d = SNAP / str(day).replace("-", "")
+    f = d / "krx_close.json"
+    if f.exists():
+        try:
+            return json.loads(f.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        rows = kw.rank_all("1", 45)
+    except Exception as e:  # noqa: BLE001
+        errs.append(f"KRX 종가: {e}"[:120]); return {}
+    m = {c: {"px": r["px"], "rt": r["rt"], "n": r["name"]} for c, r in rows.items() if r.get("px")}
+    t = now()
+    if t.date() > day or t.time() >= dt.time(15, 31):
+        d.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+        log(f"KRX 종가 저장: {len(m):,}종목")
+    return m
+
+
+def day_snapshot(day, names=("final.json",)):
+    d = SNAP / str(day).replace("-", "")
+    for nm in names:
+        f = d / nm
+        if f.exists():
+            try:
+                return json.loads(f.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                pass
+    snaps = sorted(d.glob("[0-9]*.json")) if d.exists() else []
+    if snaps and "final.json" in names:
+        return json.loads(snaps[-1].read_text(encoding="utf-8"))
+    return None
+
+
+def tg_mentions(base, since, until=None):
+    try:
+        import tg
+        return tg.mentions(OUT, base, since, until) if tg.configured(OUT) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def stock_row(base, code, extra=None):
+    S, ix = base["stocks"], base["ix"]
+    i = ix.get(code)
+    r = {"code": code, "name": S["n"][i] if i is not None else code, "m": S["m"][i] if i is not None else "",
+         "mc": S["mc"][i] if i is not None else None, "beta": S["beta"][i] if i is not None else None,
+         "gp": S["gp"][i] if i is not None else None, "gm": S["gm"][i] if i is not None else None,
+         "btag": btag(S["beta"][i] if i is not None else None),
+         "nsearch": f"https://search.naver.com/search.naver?where=news&sort=1&query={requests.utils.quote(S['n'][i] if i is not None else code)}"}
+    if extra:
+        r.update(extra)
+    return r
+
+
+def cause_of(rows):
+    """재료형(장후 공시·새 뉴스·텔레그램) / 동반형(같이 움직이는 종목 중 재료형이 있음) / 원인 미확인"""
+    by = {r["code"]: r for r in rows}
+    for r in rows:
+        tags = [d["tag"] for d in r.get("disc") or [] if d["cls"] != "info"]
+        nf = sum(1 for n in (r.get("news") or []) if n.get("fresh"))
+        nt = len(r.get("tg") or [])
+        r["n_fresh"], r["n_tg"] = nf, nt
+        if tags or nf or nt:
+            r["cause"] = "재료형"
+            r["cause_txt"] = " · ".join(([f"공시 {tags[0]}"] if tags else []) + ([f"새 뉴스 {nf}"] if nf else []) + ([f"텔레그램 {nt}"] if nt else []))
+        else:
+            r["cause"] = None
+    for r in rows:
+        if r["cause"]:
+            continue
+        lead = [p for p in r.get("peers_c", []) if p in by and by[p]["cause"] == "재료형"]
+        if lead:
+            r["cause"], r["cause_txt"] = "동반형", f"동반: {by[lead[0]]['name']}"
+        else:
+            r["cause"], r["cause_txt"] = "미확인", "원인 미확인 (뉴스·공시 없음)"
+
+
+def _strip_news(data, lists):
+    snap = json.loads(json.dumps(data, ensure_ascii=False))
+    for lst in lists:
+        for r in snap.get(lst, []):
+            if isinstance(r.get("news"), list):
+                r["news"] = {"n": len(r["news"]), "fresh": sum(1 for x in r["news"] if x.get("fresh"))}
+            if isinstance(r.get("tg"), list):
+                r["tg"] = len(r["tg"])
+    return snap
+
+
+def refresh_nxt(kind="manual"):
+    st = _MODE["nxt"]
+    if st["running"]:
+        return False
+    st["running"] = True
+    t0, errs = time.time(), []
+    try:
+        t = now()
+        day = t.date() if is_trading(t.date()) else prev_trading(t.date())
+        base = load_base()
+        S, ix = base["stocks"], base["ix"]
+        since = dt.datetime.combine(day, dt.time(15, 20))
+        kw = KW.Kiwoom()
+        pool = ThreadPoolExecutor(3)
+        f_kind = pool.submit(kind_fetch, since)
+        f_fut = pool.submit(futures_since, dt.datetime.combine(day, dt.time(15, 0)))
+        f_ovs = pool.submit(overseas)
+        closes = krx_closes(kw, day, errs)
+        nx = kw.rank_all("2", 20)
+        keys = naver_keys()
+        # ① 오늘 종베 후보의 NXT 가격
+        fs = day_snapshot(day)
+        cands, seen = [], set()
+        if fs and fs.get("cand_day") == str(day):
+            for lst, lab in (("large", "대형"), ("wide", "전체")):
+                for r in fs.get(lst, [])[:8]:
+                    if r["code"] in seen:
+                        continue
+                    seen.add(r["code"])
+                    kc = (closes.get(r["code"]) or {}).get("px") or r["px"]
+                    q = nx.get(r["code"])
+                    cands.append(stock_row(base, r["code"], {"src": f"{lab} {r.get('rank_' + lst, '')}위", "krx": kc, "krx_rt": r.get("rt"),
+                                                             "nxt": q["px"] if q else None, "nxt_vol": q["vol"] if q else None,
+                                                             "gap": round((q["px"] / kc - 1) * 100, 2) if q and kc and q["px"] else None}))
+        # ② NXT 장후 등락 (NXT 현재가 ÷ KRX 종가)
+        mv = []
+        for c, q in nx.items():
+            kc = (closes.get(c) or {}).get("px")
+            i = ix.get(c)
+            if not kc or not q.get("px") or i is None or (S["tv20"][i] or 0) < 10:
+                continue
+            mv.append((q["px"] / kc - 1, c, q, kc))
+        up = sorted([x for x in mv if x[0] >= 0.02], key=lambda x: -x[0])[:40]
+        dn = sorted([x for x in mv if x[0] <= -0.03], key=lambda x: x[0])[:12]
+        movers, losers = [], []
+        for lst, src in ((up, movers), (dn, losers)):
+            for g, c, q, kc in lst:
+                src.append(stock_row(base, c, {"krx": kc, "krx_rt": (closes.get(c) or {}).get("rt"), "nxt": q["px"], "nxt_vol": q["vol"],
+                                              "gap": round(g * 100, 2), "src": "NXT 장후"}))
+        try:
+            f_kind.result(timeout=90)
+        except Exception as e:  # noqa: BLE001
+            errs.append(f"KIND 공시: {e!r}"[:120])
+        tgm = tg_mentions(base, since)
+        allr = cands + movers + losers
+        for r in allr:
+            r["disc"] = disc_for(r["code"], since)
+            r["tg"] = (tgm or {}).get(r["code"], []) if tgm is not None else None
+            i = ix.get(r["code"])
+            r["peers_c"] = S["peers"][i] if i is not None else []
+        if keys:
+            done = {}
+            for r in (cands + movers[:15] + losers[:5]):
+                if r["code"] not in done:
+                    done[r["code"]] = news_for(r["name"], since, keys)
+                r["news"] = done[r["code"]]
+        add_themes(allr, kw, errs, base)
+        cause_of(movers + losers + cands)
+        for r in allr:
+            r.pop("peers_c", None)
+        fut = f_fut.result(timeout=40) if not f_fut.exception() else []
+        try:
+            ovs = f_ovs.result(timeout=40)
+        except Exception:  # noqa: BLE001
+            ovs = []
+        pool.shutdown(wait=False)
+        nq = next((x for x in fut if x["s"] == "NQ=F"), {})
+        A = nq.get("chg")
+        warn = None
+        if A is not None and abs(A) >= 0.5:
+            warn = (f"나스닥 선물이 15시 이후 {A:+.2f}% — 이렇게 크게 움직인 저녁은 밤새 같은 방향으로 더 가는 편이었습니다 "
+                    f"(2024-06~2026-10, 이후 평균 {'+0.57' if A > 0 else '−0.63'}%). 지수형(β 높음) 종목에 영향이 큽니다.")
+        for r in allr:
+            if r.get("beta") is not None and A is not None:
+                r["est"] = round(r["beta"] * A, 2)                    # 저녁 선물 흐름 × β (평균적 반응, 참고)
+        data = {"ts": f"{t:%Y-%m-%d %H:%M:%S}", "kind": kind, "day": str(day), "base_asof": base["asof"],
+                "status": {"errors": errs, "secs": round(time.time() - t0, 1), "nxt_n": len(nx), "krx_n": len(closes),
+                           "naver": keys is not None, "tg": tgm is not None},
+                "futures": fut, "warn": warn, "overseas": ovs, "events": events(day),
+                "cands": cands, "movers": movers, "losers": losers, "cand_found": bool(fs and fs.get("cand_day") == str(day)),
+                "cand_src": {"ts": (fs or {}).get("ts"), "kind": (fs or {}).get("kind")},
+                "results": results_nxt_summary(), "kind_n": len(_KIND)}
+        s = json.dumps(data, ensure_ascii=False)
+        (OUT / "latest_nxt.json").write_text(s, encoding="utf-8")
+        snap = json.dumps(_strip_news(data, ("cands", "movers", "losers")), ensure_ascii=False)
+        d = SNAP / str(day).replace("-", "")
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"nxt_{t:%H%M%S}.json").write_text(snap, encoding="utf-8")
+        if kind in ("nxt1955", "nxtclose"):
+            (d / ("nxt_1955.json" if kind == "nxt1955" else "nxt_close.json")).write_text(snap, encoding="utf-8")
+        st["last"] = data["ts"]
+        log(f"NXT 갱신 [{kind}] 후보 {len(cands)} · 장후 급등 {len(movers)} · 급락 {len(losers)} · NXT {len(nx)}종목 · {time.time()-t0:.0f}초" + (f" · 오류 {errs}" if errs else ""))
+        return True
+    except Exception as e:  # noqa: BLE001
+        msg = f"NXT 갱신 실패: {e}"
+        if "8050" in str(e) or "IP" in str(e):
+            msg += f" · 현재 IP {KW.public_ip()}"
+        log(msg[:300]); traceback.print_exc()
+        (OUT / "latest_nxt.json").write_text(json.dumps({"ts": f"{now():%Y-%m-%d %H:%M:%S}", "error": msg}, ensure_ascii=False), encoding="utf-8")
+        st["last"] = f"{now():%Y-%m-%d %H:%M:%S}"
+        return False
+    finally:
+        st["running"] = False
+
+
+def refresh_am(kind="manual"):
+    st = _MODE["am"]
+    if st["running"]:
+        return False
+    st["running"] = True
+    t0, errs = time.time(), []
+    try:
+        t = now()
+        day = t.date() if (is_trading(t.date()) and t.time() < dt.time(15, 40)) else next_trading(t.date())
+        prev = prev_trading(day)
+        base = load_base()
+        kw = KW.Kiwoom()
+        since = dt.datetime.combine(prev, dt.time(15, 20))
+        pool = ThreadPoolExecutor(3)
+        f_kind = pool.submit(kind_fetch, since)
+        f_fut = pool.submit(futures_since, dt.datetime.combine(prev, dt.time(15, 0)))
+        f_ovs = pool.submit(overseas)
+        fs = day_snapshot(prev)
+        nf = day_snapshot(prev, ("nxt_close.json", "nxt_1955.json"))
+        picks = load_picks().get(str(prev), {})
+        kc_file = SNAP / str(prev).replace("-", "") / "krx_close.json"
+        kcl = json.loads(kc_file.read_text(encoding="utf-8")) if kc_file.exists() else {}
+        src = {}
+        if fs:
+            for lst, lab in (("large", "대형"), ("wide", "전체")):
+                for r in fs.get(lst, [])[:5]:
+                    src.setdefault(r["code"], []).append(f"{lab} {r.get('rank_' + lst, '')}위")
+        n1955 = {}
+        if nf:
+            for r in nf.get("cands", []) + nf.get("movers", [])[:15]:
+                n1955[r["code"]] = r.get("nxt")
+                if r.get("src") == "NXT 장후":
+                    src.setdefault(r["code"], []).append(f"NXT 장후 {r.get('gap', 0):+.1f}%")
+        for c in picks:
+            src.setdefault(c, []).insert(0, "내 선택")
+        rows = []
+        for c, labs in list(src.items())[:50]:
+            try:
+                k = kw.stock(c)
+            except Exception as e:  # noqa: BLE001
+                errs.append(f"{c}: {e}"[:80]); continue
+            try:
+                q = kw.stock(c + "_NX") if t.time() >= dt.time(8, 0) else None
+            except Exception:  # noqa: BLE001
+                q = None
+            close = ((kcl.get(c) or {}).get("px")                    # 어제 15:37에 저장한 KRX 종가가 가장 정확
+                     or (fs and next((r["px"] for lst in ("large", "wide") for r in fs.get(lst, []) if r["code"] == c), None))
+                     or k.get("base"))
+            exp = k.get("exp") if dt.time(8, 30) <= t.time() < dt.time(9, 0, 30) else None
+            pre = q.get("px") if q else None
+            rows.append(stock_row(base, c, {"src": labs, "picked": c in picks, "krx": close, "nxt1955": n1955.get(c),
+                                            "pre": pre, "pre_gap": round((pre / close - 1) * 100, 2) if pre and close else None,
+                                            "exp": exp, "exp_gap": round((exp / close - 1) * 100, 2) if exp and close else None,
+                                            "open": k.get("open") if t.time() >= dt.time(9, 0, 30) else None}))
+        try:
+            f_kind.result(timeout=90)
+        except Exception as e:  # noqa: BLE001
+            errs.append(f"KIND 공시: {e!r}"[:120])
+        tgm = tg_mentions(base, since)
+        fut = f_fut.result(timeout=40) if not f_fut.exception() else []
+        nq = next((x for x in fut if x["s"] == "NQ=F"), {})
+        for r in rows:
+            r["disc"] = disc_for(r["code"], since)
+            r["tg"] = (tgm or {}).get(r["code"], []) if tgm is not None else None
+            if r.get("beta") is not None and nq.get("chg") is not None:
+                r["est"] = round(r["beta"] * nq["chg"], 2)
+        try:
+            ovs = f_ovs.result(timeout=40)
+        except Exception:  # noqa: BLE001
+            ovs = []
+        pool.shutdown(wait=False)
+        data = {"ts": f"{t:%Y-%m-%d %H:%M:%S}", "kind": kind, "day": str(day), "prev": str(prev),
+                "status": {"errors": errs, "secs": round(time.time() - t0, 1), "tg": tgm is not None},
+                "futures": fut, "overseas": ovs, "rows": rows, "kind_n": len(_KIND)}
+        s = json.dumps(data, ensure_ascii=False)
+        (OUT / "latest_am.json").write_text(s, encoding="utf-8")
+        d = SNAP / str(day).replace("-", "")
+        d.mkdir(parents=True, exist_ok=True)
+        snap = json.dumps(_strip_news(data, ("rows",)), ensure_ascii=False)
+        (d / f"am_{t:%H%M%S}.json").write_text(snap, encoding="utf-8")
+        if kind == "am0845":
+            (d / "am_0845.json").write_text(snap, encoding="utf-8")
+        st["last"] = data["ts"]
+        log(f"아침 점검 [{kind}] {len(rows)}종목 · {time.time()-t0:.0f}초" + (f" · 오류 {errs}" if errs else ""))
+        return True
+    except Exception as e:  # noqa: BLE001
+        msg = f"아침 점검 실패: {e}"
+        if "8050" in str(e) or "IP" in str(e):
+            msg += f" · 현재 IP {KW.public_ip()}"
+        log(msg[:300]); traceback.print_exc()
+        (OUT / "latest_am.json").write_text(json.dumps({"ts": f"{now():%Y-%m-%d %H:%M:%S}", "error": msg}, ensure_ascii=False), encoding="utf-8")
+        st["last"] = f"{now():%Y-%m-%d %H:%M:%S}"
+        return False
+    finally:
+        st["running"] = False
+
+
+NXT_COLS = ["date", "code", "name", "src", "cause", "krx_close", "gap_1955", "nxt_1955", "nxt_close", "pre_0845", "open_next",
+            "r_1955_open", "r_1955_pre", "disc", "news_fresh", "tg"]
+
+
+def fill_results_nxt(kw, opens):
+    """전 거래일 19:55 NXT 스냅샷 → 오늘 08:45 프리·09:00 시가 (results_nxt.csv): 'NXT 19:55 매수 → 시가/프리 매도' 검증용"""
+    day = prev_trading(now().date())
+    a = day_snapshot(day, ("nxt_1955.json",))
+    if not a:
+        log(f"NXT 결과: {day} 19:55 스냅샷 없음"); return
+    b = day_snapshot(day, ("nxt_close.json",)) or {}
+    am = day_snapshot(now().date(), ("am_0845.json",)) or {}
+    closeq = {r["code"]: r.get("nxt") for r in b.get("cands", []) + b.get("movers", []) + b.get("losers", [])}
+    pre = {r["code"]: r.get("pre") for r in am.get("rows", [])}
+    rf = OUT / "results_nxt.csv"
+    have = set()
+    if rf.exists():
+        with rf.open(encoding="utf-8-sig") as fh:
+            have = {(r["date"], r["code"], r["src"]) for r in csv.DictReader(fh)}
+    rows = []
+    for lst in ("cands", "movers", "losers"):
+        for r in a.get(lst, []):
+            key = (str(day), r["code"], r.get("src", lst))
+            if key in have or not r.get("nxt"):
+                continue
+            if r["code"] not in opens:
+                try:
+                    opens[r["code"]] = kw.stock(r["code"])["open"]
+                except Exception:  # noqa: BLE001
+                    opens[r["code"]] = None
+            o, n1 = opens[r["code"]], r["nxt"]
+            p = pre.get(r["code"])
+            rows.append({"date": str(day), "code": r["code"], "name": r["name"], "src": r.get("src", lst), "cause": r.get("cause") or "",
+                         "krx_close": r.get("krx"), "gap_1955": r.get("gap"), "nxt_1955": n1, "nxt_close": closeq.get(r["code"]),
+                         "pre_0845": p, "open_next": o, "r_1955_open": round((o / n1 - 1) * 100, 3) if o and n1 else "",
+                         "r_1955_pre": round((p / n1 - 1) * 100, 3) if p and n1 else "",
+                         "disc": len([d for d in r.get("disc") or [] if d.get("cls") != "info"]),
+                         "news_fresh": (r.get("news") or {}).get("fresh", "") if isinstance(r.get("news"), dict) else "",
+                         "tg": r.get("tg") if isinstance(r.get("tg"), int) else ""})
+    new = not rf.exists()
+    with rf.open("a", encoding="utf-8-sig", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=NXT_COLS)
+        if new:
+            w.writeheader()
+        w.writerows(rows)
+    log(f"NXT 결과 채우기: {day} {len(rows)}행")
+
+
+def results_nxt_summary():
+    rf = OUT / "results_nxt.csv"
+    if not rf.exists():
+        return None
+    with rf.open(encoding="utf-8-sig") as fh:
+        R = [r for r in csv.DictReader(fh) if r["r_1955_open"] not in ("", None)]
+    if not R:
+        return None
+    days = sorted({r["date"] for r in R})[-20:]
+    R = [r for r in R if r["date"] in days]
+
+    def agg(sel, col="r_1955_open"):
+        g = [float(r[col]) - COST for r in sel if r[col] not in ("", None)]
+        return {"n": len(g), "avg": round(sum(g) / len(g), 3) if g else None, "win": round(sum(x > 0 for x in g) / len(g), 2) if g else None}
+    mv = [r for r in R if r["src"] == "NXT 장후"]
+    return {"days": len(days), "cands": agg([r for r in R if r["src"] != "NXT 장후"]),
+            "mat": agg([r for r in mv if r["cause"] == "재료형"]), "co": agg([r for r in mv if r["cause"] == "동반형"]),
+            "unk": agg([r for r in mv if r["cause"] == "미확인"]), "mat_pre": agg([r for r in mv if r["cause"] == "재료형"], "r_1955_pre"),
+            "recent": sorted(R, key=lambda r: (r["date"], r["src"]), reverse=True)[:30]}
 
 
 # ====================================================================== 기록: 내 선택 · 다음날 시가
@@ -718,6 +1126,18 @@ def fill_results():
     log(f"결과 채우기: {day} {len(rows)}행")
 
 
+def fill_all():
+    """09:06 — 어제 종베 후보의 시가 결과 + 어제 19:55 NXT 목록의 프리·시가 결과"""
+    try:
+        fill_results()
+    except Exception as e:  # noqa: BLE001
+        log(f"결과 채우기 실패: {e!r}"[:200])
+    try:
+        fill_results_nxt(KW.Kiwoom(), {})
+    except Exception as e:  # noqa: BLE001
+        log(f"NXT 결과 채우기 실패: {e!r}"[:200])
+
+
 def results_summary():
     rf = OUT / "results.csv"
     if not rf.exists():
@@ -777,7 +1197,13 @@ def scheduler():
                     if job == "base":
                         threading.Thread(target=lambda: (load_base(True), prebuild_themes()), daemon=True).start()
                     elif job == "results":
-                        threading.Thread(target=fill_results, daemon=True).start()
+                        threading.Thread(target=fill_all, daemon=True).start()
+                    elif job == "krxclose":
+                        threading.Thread(target=lambda: krx_closes(KW.Kiwoom(), now().date(), []), daemon=True).start()
+                    elif job in ("nxt", "nxt1955", "nxtclose"):
+                        threading.Thread(target=refresh_nxt, args=(job,), daemon=True).start()
+                    elif job in ("am", "am0845"):
+                        threading.Thread(target=refresh_am, args=(job,), daemon=True).start()
                     else:
                         threading.Thread(target=refresh, args=(job,), daemon=True).start()
         nx = [f"{x}" for times in SCHEDULE.values() for x in times if x > f"{t:%H:%M}"]
@@ -808,20 +1234,32 @@ class H(BaseHTTPRequestHandler):
         if self.path in ("/", "/index.html"):
             return self._send(200, (HERE / "board.html").read_text(encoding="utf-8"), "text/html; charset=utf-8")
         if self.path.startswith("/api/latest"):
-            f = OUT / "latest.json"
+            m = "nxt" if "m=nxt" in self.path else ("am" if "m=am" in self.path else "")
+            f = OUT / (f"latest_{m}.json" if m else "latest.json")
             return self._send(200, f.read_text(encoding="utf-8") if f.exists() else "{}")
         if self.path.startswith("/api/status"):
+            try:
+                import tg
+                tgs = tg.status()
+                tgs["configured"] = tg.configured(OUT)
+            except Exception:  # noqa: BLE001
+                tgs = {"configured": False}
             return self._send(200, json.dumps({"running": STATE["running"], "last": STATE["last"], "next": STATE["next"],
-                                               "log": LOG[-30:]}, ensure_ascii=False))
+                                               "running_nxt": _MODE["nxt"]["running"], "last_nxt": _MODE["nxt"]["last"],
+                                               "running_am": _MODE["am"]["running"], "last_am": _MODE["am"]["last"],
+                                               "now": f"{now():%Y-%m-%d %H:%M:%S}", "tg": tgs, "log": LOG[-30:]}, ensure_ascii=False))
         self._send(404, "{}")
 
     def do_POST(self):
         n = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(n) or b"{}") if n else {}
-        if self.path == "/api/refresh":
-            if STATE["running"]:
+        if self.path.startswith("/api/refresh"):
+            m = "nxt" if "m=nxt" in self.path else ("am" if "m=am" in self.path else "")
+            fn = {"nxt": refresh_nxt, "am": refresh_am}.get(m, refresh)
+            busy = _MODE[m]["running"] if m else STATE["running"]
+            if busy:
                 return self._send(200, '{"ok":false,"msg":"이미 갱신 중"}')
-            threading.Thread(target=refresh, args=("manual",), daemon=True).start()
+            threading.Thread(target=fn, args=("manual",), daemon=True).start()
             return self._send(200, '{"ok":true}')
         if self.path == "/api/pick":
             set_pick(body["day"], body["code"], body.get("name", ""), body.get("list", ""), bool(body.get("on")))
@@ -831,7 +1269,22 @@ class H(BaseHTTPRequestHandler):
 
 def serve():
     OUT.mkdir(parents=True, exist_ok=True)
+    try:                                                          # 이미 켜져 있으면 브라우저만 열고 끝 (중복 실행 = 예약 갱신 두 번)
+        if requests.get(f"http://127.0.0.1:{PORT}/api/status", timeout=2).ok:
+            print(f"종베 레이더가 이미 실행 중입니다 → http://127.0.0.1:{PORT} 를 엽니다.")
+            if os.environ.get("RADAR_NO_BROWSER") != "1":
+                import webbrowser
+                webbrowser.open(f"http://127.0.0.1:{PORT}")
+            return
+    except Exception:  # noqa: BLE001
+        pass
+    ThreadingHTTPServer.allow_reuse_address = False               # Windows 는 기본값이면 같은 포트를 두 프로그램이 동시에 열 수 있음
     threading.Thread(target=scheduler, daemon=True).start()
+    try:
+        import tg
+        tg.start(OUT, log)
+    except Exception as e:  # noqa: BLE001
+        log(f"텔레그램 수신 시작 실패: {e!r}"[:160])
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
     log(f"종베 레이더 실행 중 → http://127.0.0.1:{PORT}  (이 창을 닫으면 멈춤)")
     try:
@@ -887,6 +1340,11 @@ def check():
         except Exception as e:  # noqa: BLE001
             print("  키움 호출 실패:", e)
     print("네이버 뉴스 키:", "있음" if naver_keys() else "없음 (선택) → radar.bat setup-naver")
+    try:
+        import tg
+        print("텔레그램 수신:", "설정됨" if tg.configured(OUT) else "없음 (선택) → radar.bat setup-telegram")
+    except Exception:  # noqa: BLE001
+        print("텔레그램 수신: telethon 미설치")
     b = load_base()
     print(f"기초 데이터: 기준일 {b['asof']} · {len(b['stocks']['c']):,}종목 · 뜨거운 날 문턱 {b['hot']['thr']:.0f}")
     print(f"오늘 판단일 {decision_day()} · 다음 거래일 {next_trading(decision_day())}")
@@ -894,5 +1352,9 @@ def check():
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "serve"
-    {"serve": serve, "run": lambda: refresh("manual"), "setup-kiwoom": setup_kiwoom, "setup-naver": setup_naver,
-     "check": check, "results": fill_results}.get(cmd, serve)()
+    def _setup_tg():
+        import tg
+        tg.setup(OUT)
+    {"serve": serve, "run": lambda: refresh("manual"), "nxt": lambda: refresh_nxt("manual"), "am": lambda: refresh_am("manual"),
+     "setup-kiwoom": setup_kiwoom, "setup-naver": setup_naver, "setup-telegram": _setup_tg,
+     "check": check, "results": fill_all}.get(cmd, serve)()

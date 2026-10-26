@@ -34,6 +34,7 @@ h1{font-size:20px;margin:0;letter-spacing:-.02em}
 button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:8px;padding:6px 12px;cursor:pointer}
 button:hover{background:var(--hover)} button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
 button:disabled{opacity:.6;cursor:default}
+.modes{margin:2px 0 8px} .modes button{font-weight:700;padding:6px 14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0}
 .card h2{font-size:14px;margin:0 0 8px;color:var(--mu);font-weight:700}
 .grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:10px}
@@ -85,7 +86,12 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
     <button class="primary" id="btnRefresh">지금 갱신</button>
   </div>
 </header>
-
+<div class="tabs modes" id="modes">
+  <button data-m="close" class="on">15시 종가</button>
+  <button data-m="nxt">NXT 애프터 (16~20시)</button>
+  <button data-m="am">아침 점검 (08~09시)</button>
+</div>
+<div id="m-close">
 <div id="banners"></div>
 
 <div class="grid">
@@ -132,6 +138,59 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
     <div class="small" id="logline" style="margin-top:8px;white-space:pre-wrap"></div>
   </div>
 </div>
+</div><!-- /m-close -->
+
+<div id="m-nxt" hidden>
+  <div id="nxt-banners"></div>
+  <div class="grid">
+    <div class="card" id="nxt-fut"><h2>저녁 시황 — 15시 이후 선물</h2><div class="empty">—</div></div>
+    <div class="card" id="nxt-rec"><h2>NXT 기록 — 19:55 NXT 매수 → 다음날 09:00 시가 (최근 20거래일, 비용 0.25% 후)</h2><div class="empty">아직 기록이 없습니다. 19:55 스냅샷 → 다음날 08:46 프리·09:06 시가로 자동 채워집니다.</div></div>
+  </div>
+  <div class="card">
+    <h2>① 오늘 종베 후보의 NXT 가격</h2>
+    <div class="small" style="margin-bottom:6px">15:36 확정 후보(대형 상위 8 · 전체 상위 8) — NXT 현재가가 KRX 종가보다 얼마나 움직였는지. 장후 새 재료가 붙었는지 확인</div>
+    <div class="scroll"><table id="nxt-cands"></table></div>
+  </div>
+  <div class="card">
+    <h2>② NXT 장후 급등 — NXT 현재가 ÷ KRX 종가 (+2%↑, 거래대금 10억↑)</h2>
+    <div class="small" style="margin-bottom:6px"><span class="pill no">재료형</span> 15:20 이후 공시·새 뉴스·텔레그램 언급 있음 · <span class="pill part">동반형</span> 같이 움직이는 종목 중 재료형이 있음 · <span class="pill un">미확인</span> 원인 못 찾음 (만쥬식: 재료 확인 → 동반주는 후순위)</div>
+    <div class="scroll"><table id="nxt-movers"></table></div>
+  </div>
+  <div class="card">
+    <h2>③ NXT 장후 급락 (−3%↓) — 장후 악재 확인용</h2>
+    <div class="scroll"><table id="nxt-losers"></table></div>
+  </div>
+  <div class="card">
+    <h2>읽는 법 (근거)</h2>
+    <div class="dlist">
+      <div><span class="pill ok">검증됨</span> 장 마감 뒤 나온 뉴스가 붙은 종베 후보는 다음날 시가가 같은 날 다른 후보보다 +0.77%p (텔레그램 2개 채널, t 5.4) — 재료는 '속도'</div>
+      <div><span class="pill ok">검증됨</span> 저녁 글을 보고 <b>다음날 시가에 추격하면 손해</b> (시가→종가 −0.61%p, 5일 −0.93%p) — 들고 있으면 시가 매도</div>
+      <div><span class="pill part">일부 근거</span> 저녁(15→20시) 나스닥 선물이 ±0.5% 넘게 움직인 날만 밤새 같은 방향으로 더 감 · 평소엔 무관</div>
+      <div><span class="pill un">미검증</span> NXT에서 19:55에 사서 다음날 시가·프리에 팔면 남는가 — 이 화면이 매일 기록 중 (위 'NXT 기록')</div>
+    </div>
+  </div>
+</div>
+
+<div id="m-am" hidden>
+  <div class="grid">
+    <div class="card" id="am-fut"><h2>밤사이 — 어제 15시 이후 선물 · 해외</h2><div class="empty">—</div></div>
+    <div class="card">
+      <h2>아침 매도 규칙</h2>
+      <div class="dlist">
+        <div><span class="pill ok">검증됨</span> 종베 보유 종목은 <b>09:00 시가 동시호가 전량 매도</b> — 갭이 크든 작든, 미국이 빠졌든 (9시 이후 보유는 모든 갭 구간에서 평균 손해)</div>
+        <div><span class="pill ok">검증됨</span> 08:30부터 KRX 예상체결가가 보이면 그 근처 지정가 또는 시장가</div>
+        <div><span class="pill un">미검증</span> NXT 프리(08:00~08:50) 매도가 시가보다 나은가 — 08:46 가격을 매일 기록 중</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>아침 점검 — 어제 후보 · 내 선택 · 어제 NXT 장후 급등</h2>
+    <div class="small" id="am-note" style="margin-bottom:6px"></div>
+    <div class="scroll"><table id="am-rows"></table></div>
+  </div>
+</div>
+
+<div class="small" id="foot" style="margin-top:10px;white-space:pre-wrap"></div>
 </div>
 
 <script>
@@ -336,18 +395,118 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
   });
   $("btnRefresh").addEventListener("click", function(){
     $("btnRefresh").disabled = true; $("btnRefresh").textContent = "갱신 중…";
-    fetch("/api/refresh", {method: "POST"}).then(function(){ setTimeout(poll, 1500); });
+    fetch("/api/refresh" + (mode === "close" ? "" : "?m=" + mode), {method: "POST"}).then(function(){ setTimeout(poll, 1500); });
   });
 
+  // ================================================================== 2단계: NXT 애프터 · 아침 점검
+  var DN = null, DA = null, lastN = null, lastA = null, mode = "close", autoMode = true, openN = {};
+  function setMode(m){
+    mode = m;
+    ["close", "nxt", "am"].forEach(function(x){ $("m-" + x).hidden = (x !== m); });
+    Array.prototype.forEach.call($("modes").children, function(b){ b.classList.toggle("on", b.getAttribute("data-m") === m); });
+  }
+  $("modes").addEventListener("click", function(e){ var m = e.target.getAttribute("data-m"); if (m) { autoMode = false; setMode(m); poll(); } });
+  function tgHtml(r, short){
+    if (r.tg == null) return short ? '<span class="mu">—</span>' : '<div class="mu">텔레그램 수신 미설정 (radar.bat setup-telegram)</div>';
+    if (!r.tg.length) return short ? '<span class="mu">없음</span>' : '<div class="mu">15:20 이후 언급 없음</div>';
+    if (short) return '<span class="pill acc">' + r.tg.length + '건</span> <span class="small">' + esc(r.tg[0].t.slice(6)) + '</span>';
+    return r.tg.map(function(m){ return '<div><span class="mu">' + esc(m.t) + ' · ' + esc(m.chat) + '</span> ' + esc(m.text) + '</div>'; }).join("");
+  }
+  function causePill(r){
+    var c = {"재료형": "no", "동반형": "part", "미확인": "un"}[r.cause] || "un";
+    return r.cause ? '<span class="pill ' + c + '">' + esc(r.cause) + '</span><div class="cd">' + esc(r.cause_txt || "") + '</div>' : '';
+  }
+  function nxtTable(id, rows, withSrc){
+    if (!rows || !rows.length) { $(id).innerHTML = '<tr><td class="empty">해당 종목 없음</td></tr>'; return; }
+    var h = '<tr><th>종목</th>' + (withSrc ? '<th>출처</th>' : '') + '<th class="n">KRX 종가</th><th class="n">NXT 현재</th><th class="n">장후 변화</th><th>원인</th><th>공시</th><th>뉴스</th><th>텔레그램</th><th>테마</th><th>민감도 · 선물 영향</th></tr>';
+    rows.forEach(function(r){
+      var k = id + r.code;
+      h += '<tr class="row" data-k="' + k + '"><td><span class="nm">' + esc(r.name) + '</span> <span class="cd">' + r.code + ' · ' + eok(r.mc) + '</span></td>' +
+        (withSrc ? '<td class="small">' + esc(r.src || "") + '</td>' : '') +
+        '<td class="n">' + num(r.krx) + (r.krx_rt != null ? '<div class="cd ' + cls(r.krx_rt) + '">' + pct(r.krx_rt) + '</div>' : '') + '</td>' +
+        '<td class="n">' + (r.nxt != null ? num(r.nxt) : '<span class="mu">NXT 없음</span>') + (r.nxt_vol ? '<div class="cd">' + num(r.nxt_vol) + '주</div>' : '') + '</td>' +
+        '<td class="n ' + cls(r.gap) + '" style="font-weight:800">' + pct(r.gap) + '</td>' +
+        '<td>' + causePill(r) + '</td><td>' + discHtml(r.disc, true) + '</td><td>' + newsHtml(r, true) + '</td><td>' + tgHtml(r, true) + '</td>' +
+        '<td>' + themeChips(r, 2) + '</td>' +
+        '<td>' + (r.beta != null ? r.beta.toFixed(2) + ' <span class="pill ' + (r.btag === "지수형" ? "part" : "un") + '">' + r.btag + '</span>' : '—') + (r.est != null ? '<div class="cd ' + cls(r.est) + '">선물×β ' + pct(r.est) + '</div>' : '') + '</td></tr>';
+      if (openN[k]) h += '<tr class="detail"><td colspan="' + (withSrc ? 11 : 10) + '"><div class="grid" style="gap:14px"><div><b>공시</b> (15:20 이후)' + discHtml(r.disc, false) +
+        '<div style="margin-top:8px"><b>텔레그램</b>' + tgHtml(r, false) + '</div><div style="margin-top:8px"><b>키움 테마</b>' + themeList(r) + '</div></div><div><b>뉴스</b>' + newsHtml(r, false) + '</div></div></td></tr>';
+    });
+    $(id).innerHTML = h;
+  }
+  ["nxt-cands", "nxt-movers", "nxt-losers"].forEach(function(id){
+    $(id).addEventListener("click", function(e){ var tr = e.target.closest("tr.row"); if (!tr || e.target.tagName === "A") return; var k = tr.getAttribute("data-k"); openN[k] = !openN[k]; renderNxt(); });
+  });
+  function futHtml(fut, lab){
+    return '<div class="ovs">' + (fut || []).map(function(f){
+      return '<div><span class="small">' + esc(f.n) + ' · ' + lab + '</span><b class="' + cls(f.chg) + '">' + pct(f.chg) + '</b><span class="small">' + num(f.px, 2) + ' (' + esc(f.at) + ')</span></div>';
+    }).join("") + '</div>';
+  }
+  function ovsHtml(ovs){
+    return '<div class="ovs" style="margin-top:8px">' + (ovs || []).map(function(o){
+      var dec = o.s === "KRW=X" ? 1 : (o.px != null && o.px > 1000 ? 0 : 2);
+      return '<div><span class="small">' + esc(o.n) + ' (직전 종가 대비)</span><b>' + num(o.px, dec) + '</b><span class="' + cls(o.chg) + '">' + pct(o.chg) + '</span></div>';
+    }).join("") + '</div>';
+  }
+  function boxR(lab, a){ return '<div style="flex:1;min-width:120px"><div class="small">' + lab + '</div><div style="font-size:19px;font-weight:800" class="' + cls(a && a.avg) + '">' + (a && a.avg != null ? pct(a.avg) : "—") + '</div><div class="small">' + (a ? a.n : 0) + '건 · 승률 ' + (a && a.win != null ? Math.round(a.win * 100) + '%' : '—') + '</div></div>'; }
+  function renderNxt(){
+    if (!DN) return;
+    if (DN.error) { $("nxt-banners").innerHTML = '<div class="banner no">' + esc(DN.error) + '</div>'; return; }
+    var st = DN.status || {}, b = "";
+    if (DN.warn) b += '<div class="banner part">' + esc(DN.warn) + '</div>';
+    if (!DN.cand_found) b += '<div class="banner un">오늘 종베 후보 스냅샷이 없습니다 — 15시에 보드가 켜져 있어야 ① 표가 채워집니다.</div>';
+    else if (DN.cand_src && DN.cand_src.kind !== "final") b += '<div class="banner part">15:36 확정 후보가 없어 ' + esc((DN.cand_src.ts || "").slice(11, 16)) + ' 스냅샷의 후보를 보여줍니다 (15시에 PC가 꺼져 있었거나 절전 상태였음).</div>';
+    if (st.errors && st.errors.length) b += '<div class="banner part">' + esc(st.errors.join(" / ")) + '</div>';
+    $("nxt-banners").innerHTML = b;
+    var e = DN.events || {};
+    $("nxt-fut").innerHTML = '<h2>저녁 시황 — 15시 이후 선물 · ' + esc(DN.ts.slice(11, 16)) + '</h2>' + futHtml(DN.futures, "15시 이후") + ovsHtml(DN.overseas) +
+      '<div class="small" style="margin-top:8px">오늘 밤 이벤트: ' + (e.tonight && e.tonight.length ? '<b class="warn">' + esc(e.tonight.join(", ")) + '</b>' : '없음') +
+      ' · NXT ' + num(st.nxt_n) + '종목 · KRX 종가 ' + num(st.krx_n) + '종목 · 공시 ' + DN.kind_n + '건 · ' + esc(st.secs) + '초</div>';
+    var R = DN.results;
+    $("nxt-rec").innerHTML = '<h2>NXT 기록 — 19:55 NXT 매수 → 다음날 09:00 시가 (최근 ' + (R ? R.days : 0) + '거래일, 비용 0.25% 후)</h2>' + (R ?
+      '<div style="display:flex;gap:10px;flex-wrap:wrap">' + boxR("종베 후보", R.cands) + boxR("장후 급등 · 재료형", R.mat) + boxR("동반형", R.co) + boxR("미확인", R.unk) + boxR("재료형 → 08:46 프리 매도", R.mat_pre) + '</div>' +
+      '<div class="small" style="margin-top:6px">표본이 쌓일수록 의미가 생깁니다 — 20일 미만은 참고만.</div>' :
+      '<div class="empty">아직 기록이 없습니다. 19:55 스냅샷 → 다음날 08:46 프리·09:06 시가로 자동 채워집니다.</div>');
+    nxtTable("nxt-cands", DN.cands, true); nxtTable("nxt-movers", DN.movers, false); nxtTable("nxt-losers", DN.losers, false);
+  }
+  function renderAm(){
+    if (!DA) return;
+    if (DA.error) { $("am-note").innerHTML = '<span class="warn">' + esc(DA.error) + '</span>'; $("am-rows").innerHTML = ""; return; }
+    $("am-fut").innerHTML = '<h2>밤사이 — 어제(' + esc(DA.prev) + ') 15시 이후 선물 · 해외 · ' + esc(DA.ts.slice(11, 16)) + '</h2>' + futHtml(DA.futures, "어제 15시 이후") + ovsHtml(DA.overseas);
+    $("am-note").innerHTML = '08:00부터 NXT 프리 가격, 08:30부터 KRX 예상체결가가 채워집니다. 선물×β = 밤사이 나스닥 선물 변화 × 이 종목의 민감도(평균적 반응, 참고).' + ((DA.status || {}).errors && DA.status.errors.length ? ' <span class="warn">' + esc(DA.status.errors.join(" / ")) + '</span>' : '');
+    var rows = DA.rows || [];
+    if (!rows.length) { $("am-rows").innerHTML = '<tr><td class="empty">어제 후보·선택·NXT 기록이 없습니다</td></tr>'; return; }
+    var h = '<tr><th>종목</th><th>출처</th><th class="n">어제 종가</th><th class="n">어제 NXT 19:55</th><th class="n">NXT 프리 (08:00~)</th><th class="n">KRX 예상체결 (08:30~)</th><th class="n">선물×β</th><th>장후 공시</th><th>텔레그램</th><th class="n">시가</th></tr>';
+    rows.forEach(function(r){
+      h += '<tr' + (r.picked ? ' class="top3"' : '') + '><td><span class="nm">' + esc(r.name) + '</span> <span class="cd">' + r.code + '</span></td><td class="small">' + esc((r.src || []).join(" · ")) + '</td>' +
+        '<td class="n">' + num(r.krx) + '</td><td class="n">' + num(r.nxt1955) + '</td>' +
+        '<td class="n">' + num(r.pre) + '<div class="cd ' + cls(r.pre_gap) + '">' + pct(r.pre_gap) + '</div></td>' +
+        '<td class="n" style="font-weight:800">' + num(r.exp) + '<div class="cd ' + cls(r.exp_gap) + '">' + pct(r.exp_gap) + '</div></td>' +
+        '<td class="n ' + cls(r.est) + '">' + pct(r.est) + '</td><td>' + discHtml(r.disc, true) + '</td><td>' + tgHtml(r, true) + '</td>' +
+        '<td class="n">' + num(r.open) + '</td></tr>';
+    });
+    $("am-rows").innerHTML = h;
+  }
   function load(){ return fetch("/api/latest", {cache: "no-store"}).then(function(r){ return r.json(); }).then(function(d){ if (d && d.ts) { D = d; lastTs = d.ts; render(); } }); }
+  function loadN(){ return fetch("/api/latest?m=nxt", {cache: "no-store"}).then(function(r){ return r.json(); }).then(function(d){ if (d && d.ts) { DN = d; lastN = d.ts; renderNxt(); } }); }
+  function loadA(){ return fetch("/api/latest?m=am", {cache: "no-store"}).then(function(r){ return r.json(); }).then(function(d){ if (d && d.ts) { DA = d; lastA = d.ts; renderAm(); } }); }
   function poll(){
     fetch("/api/status", {cache: "no-store"}).then(function(r){ return r.json(); }).then(function(s){
-      $("btnRefresh").disabled = !!s.running; $("btnRefresh").textContent = s.running ? "갱신 중…" : "지금 갱신";
-      $("logline").textContent = (s.next ? "다음 자동 갱신 " + s.next + "\n" : "") + (s.log || []).slice(-4).join("\n");
+      if (autoMode && s.now) {
+        var hm = s.now.slice(11, 16);
+        setMode(hm >= "07:00" && hm < "09:10" ? "am" : (hm >= "15:40" && hm < "21:00" ? "nxt" : "close"));
+      }
+      var busy = mode === "nxt" ? s.running_nxt : (mode === "am" ? s.running_am : s.running);
+      $("btnRefresh").disabled = !!busy; $("btnRefresh").textContent = busy ? "갱신 중…" : "지금 갱신";
+      var tgs = s.tg || {};
+      var foot = (s.next ? "다음 자동 갱신 " + s.next + " · " : "") + "텔레그램 " + (tgs.configured ? (tgs.running ? "수신 중" : "설정됨(중지)") : "미설정") + (tgs.err ? " · " + tgs.err : "") + "\n" + (s.log || []).slice(-4).join("\n");
+      $("logline").textContent = foot; $("foot").textContent = mode === "close" ? "" : foot;
       if (s.last && s.last !== lastTs) load();
-    }).catch(function(){ $("logline").textContent = "보드 서버에 연결할 수 없습니다 — radar.bat 창이 켜져 있는지 확인하세요"; });
+      if (s.last_nxt && s.last_nxt !== lastN) loadN();
+      if (s.last_am && s.last_am !== lastA) loadA();
+    }).catch(function(){ $("logline").textContent = $("foot").textContent = "보드 서버에 연결할 수 없습니다 — radar.bat 창이 켜져 있는지 확인하세요"; });
   }
-  load(); poll(); setInterval(poll, 5000);
+  load(); loadN(); loadA(); poll(); setInterval(poll, 5000);
 })();
 </script>
 </body>
