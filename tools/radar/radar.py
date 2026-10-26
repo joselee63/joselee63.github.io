@@ -446,6 +446,7 @@ def refresh(kind="manual"):
                 kw = KW.Kiwoom()
             except Exception as e:  # noqa: BLE001
                 errs.append(str(e))
+                kw = None
         pool = ThreadPoolExecutor(4)
         f_kind = pool.submit(kind_fetch, since)
         f_ovs = pool.submit(overseas)
@@ -457,7 +458,8 @@ def refresh(kind="manual"):
                 kq = kw.index("1", "101"); ks = kw.index("0", "001")
                 up = kw.rank_up("1", 3.0)
             except Exception as e:  # noqa: BLE001
-                errs.append(f"키움: {e}"); kw = None
+                ip = KW.public_ip() if ("IP" in str(e) or "801" in str(e)) else None
+                errs.append(f"키움: {e}" + (f" · 현재 IP {ip}" if ip else "")); kw = None
         try:
             f_kind.result(timeout=90)
         except Exception as e:  # noqa: BLE001
@@ -724,6 +726,7 @@ def setup_naver():
 def check():
     c = KW.credentials()
     print("키움 앱키:", f"있음 ({c[2]})" if c else "없음 → radar.bat setup-kiwoom")
+    print("이 네트워크의 공인 IP:", KW.public_ip() or "확인 실패", "← 키움 포털 '계좌 App Key 관리'에 등록돼 있어야 함 (최대 10개)")
     if c:
         try:
             k = KW.Kiwoom()

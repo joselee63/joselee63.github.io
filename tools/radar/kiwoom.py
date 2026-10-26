@@ -24,6 +24,19 @@ class KiwoomError(Exception):
     pass
 
 
+IP_HINT = " — 이 네트워크의 IP가 키움에 등록돼 있지 않을 수 있습니다 (radar.bat check 로 현재 IP 확인 → openapi.kiwoom.com '계좌 App Key 관리'에서 추가, 최대 10개)"
+
+
+def public_ip():
+    """지금 이 PC가 밖에서 보이는 공인 IP (키움 등록 확인용)"""
+    for url in ("https://checkip.amazonaws.com", "https://api.ipify.org"):
+        try:
+            return requests.get(url, timeout=6).text.strip()
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
 def _cli_profile_service():
     """kiwoomcli 의 현재 계좌 별칭이 있으면 그 자격 증명 저장소 이름"""
     try:
@@ -98,7 +111,7 @@ class Kiwoom:
                         headers={"Content-Type": "application/json;charset=UTF-8"}, timeout=20)
         d = r.json()
         if not d.get("token"):
-            raise KiwoomError(f"토큰 발급 실패: {d.get('return_msg') or r.status_code}")
+            raise KiwoomError(f"토큰 발급 실패: {d.get('return_msg') or r.status_code}" + IP_HINT)
         self._token = d["token"]
         exp = d.get("expires_dt")                                 # 'YYYYMMDDhhmmss'
         try:
@@ -134,8 +147,10 @@ class Kiwoom:
             except (TypeError, ValueError):
                 rc = -1
             msg = str(d.get("return_msg") or "")
-            if r.status_code == 401 or rc == 8005 or "8005" in msg:
-                self._token = None; continue                      # 토큰 무효 → 한 번 재발급
+            if r.status_code == 401 or rc in (8005, 8010) or "8005" in msg or "8010" in msg:
+                if attempt >= 2:
+                    raise KiwoomError(f"{api_id}: {msg} (code {rc})" + IP_HINT)
+                self._token = None; continue                      # 토큰 무효·네트워크(IP) 바뀜 → 새 IP로 재발급
             if rc in RATE_CODES or any(str(c) in msg for c in RATE_CODES):
                 time.sleep(1.0 + attempt); continue
             if rc not in (0, None):
