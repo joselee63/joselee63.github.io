@@ -37,8 +37,10 @@ TEMP_URL = "https://joselee63.github.io/temp/index.json"
 PORT = int(os.environ.get("RADAR_PORT", "8790"))
 COST = 0.25                                                      # 왕복 비용 %
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(ROOT / "tools" / "alpha"))
 import kiwoom as KW  # noqa: E402
+
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130 Safari/537.36"}
+# ※ numpy·pandas 같은 컴파일된 패키지를 쓰지 않음 — Windows 스마트 앱 컨트롤이 새 가상환경의 DLL을 막는 경우가 있어서
 
 FOMC = {"2026-10-28", "2026-12-09", "2027-01-27", "2027-03-17", "2027-04-28", "2027-06-09", "2027-07-28", "2027-09-15",
         "2027-10-27", "2027-12-08"}                              # 연준 공식 일정 (발표일 = 미국 날짜 = 한국 그날 밤)
@@ -162,14 +164,56 @@ def disc_tag(title):
     return "기타", "info", ""
 
 
+KIND_URL = "https://kind.krx.co.kr/disclosure/details.do"
+KIND_H = dict(UA, **{"Referer": KIND_URL + "?method=searchDetailsMain", "X-Requested-With": "XMLHttpRequest"})
+KIND_BASE = {f"disclosureType{k:02d}": "" for k in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 20)}
+KIND_BASE.update(method="searchDetailsSub", currentPageSize="100", orderMode="1", orderStat="D", forward="details_sub",
+                 pDisclosureType01="", marketType="", repIsuSrtCd="", kosdaqSegment="", searchCodeType="",
+                 searchCorpName="", copyright="", bfrDsclsType="on", reportNm="")
+_KS = requests.Session()
+_ROW = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S)
+
+
+def _kind_get(sd, ed, page):
+    """KIND 상세검색 한 페이지 (로그인·키 불필요, 서버가 빠른 연속 요청을 싫어해 2.5초 간격)"""
+    import html as _html  # noqa: F401
+    for i in range(4):
+        try:
+            if page == 1 and i == 0:
+                _KS.get(KIND_URL + "?method=searchDetailsMain", headers=KIND_H, timeout=20)
+            t = _KS.post(KIND_URL, data=dict(KIND_BASE, fromDate=sd, toDate=ed, pageIndex=str(page)), headers=KIND_H, timeout=30).text
+            time.sleep(2.5)
+            if "잠시 후 다시" in t:
+                time.sleep(10 * (i + 1)); continue
+            return t
+        except Exception:  # noqa: BLE001
+            time.sleep(5 * (i + 1))
+    return ""
+
+
+def _kind_parse(t):
+    import html as _html
+    body = t[t.find("<tbody"):t.find("</tbody>")]
+    out = []
+    for r in _ROW.findall(body):
+        tm = re.search(r'<td class="txc">(\d{4}-\d{2}-\d{2} \d{2}:\d{2})</td>', r)
+        cd = re.search(r"companysummary_open\('(\w+)'\)", r)
+        ti = re.search(r"openDisclsViewer\('(\d+)'[^>]*title='([^']*)'", r)
+        if not (tm and cd and ti):
+            continue
+        nm = re.search(r"title='([^']*)'>\s*[^<]*</a>", r)
+        out.append(dict(time=tm.group(1), kind_code=cd.group(1), name=_html.unescape(nm.group(1)) if nm else "",
+                        title=_html.unescape(ti.group(2)), corr="[정정]" in r, rcp=ti.group(1)))
+    return out
+
+
 def kind_fetch(since):
     """since(datetime) 이후 공시 — 새 페이지만 받음 (요청 사이 2.5초)"""
-    import kind_disclosures as K
     sd, ed = str(since.date()), str(now().date())
     got = 0
     for page in range(1, 16):
-        t = K.get("", sd, ed, page)
-        rows = K.parse(t) if t else []
+        t = _kind_get(sd, ed, page)
+        rows = _kind_parse(t) if t else []
         if not rows:
             break
         new = 0
@@ -236,15 +280,14 @@ def news_for(name, since, keys):
 
 # ====================================================================== 해외·체온계
 def overseas():
+    """야후 차트 API 직접 (yfinance 없이) — 현재가와 직전 종가"""
     out = []
-    try:
-        import yfinance as yf
-    except ImportError:
-        return out
     for nm, sym in OVERSEAS:
         try:
-            fi = yf.Ticker(sym).fast_info
-            last, prev = float(fi["last_price"]), float(fi["previous_close"])
+            r = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/" + requests.utils.quote(sym, safe=""),
+                             params={"range": "1d", "interval": "5m"}, headers=UA, timeout=10)
+            m = r.json()["chart"]["result"][0]["meta"]
+            last, prev = float(m["regularMarketPrice"]), float(m.get("chartPreviousClose") or m.get("previousClose"))
             out.append({"n": nm, "s": sym, "px": last, "chg": (last / prev - 1) * 100 if prev else None})
         except Exception:  # noqa: BLE001
             out.append({"n": nm, "s": sym, "px": None, "chg": None})
