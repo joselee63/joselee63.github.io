@@ -241,7 +241,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
         '<td class="n">' + (r.vr != null ? r.vr.toFixed(1) + '배' : '—') + (r.tv ? '<div class="cd">' + num(r.tv) + '억</div>' : '') + '</td>' +
         '<td class="n">' + (r.gp != null ? '상위 ' + Math.max(1, Math.round((1 - r.gp) * 100)) + '%' : '—') + (r.gm != null ? '<div class="cd">평균 ' + pct(r.gm) + '</div>' : '') + '</td>' +
         '<td>' + (r.beta != null ? r.beta.toFixed(2) + ' <span class="pill ' + (r.btag === "지수형" ? "part" : "un") + '">' + r.btag + '</span>' : '—') + '</td>' +
-        '<td>' + (r.n_up != null ? '동반 ' + r.n_up + '/10' : '') + (r.th ? ' · <b>' + r.th + '일째</b>' : (r.n_up != null ? '' : '<span class="mu">—</span>')) + '</td>' +
+        '<td>' + ([r.n_up != null ? '동반 ' + r.n_up + '/10' : '', r.th ? '<b>' + r.th + '일째</b>' : ''].filter(Boolean).join(' · ') || '<span class="mu">—</span>') + '</td>' +
         '<td>' + discHtml(r.disc, true) + '</td>' +
         '<td>' + newsHtml(r, true) + '</td>' +
         '<td>' + (r.warn || []).map(function(w){ return '<div class="warn small">' + esc(w) + '</div>'; }).join("") + warnCap(r) + '</td></tr>';
