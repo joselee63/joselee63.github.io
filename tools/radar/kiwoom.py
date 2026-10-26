@@ -195,3 +195,38 @@ class Kiwoom:
         return {"px": num(d.get("cur_prc"), True), "rt": num(d.get("flu_rt")), "open": num(d.get("open_pric"), True),
                 "high": num(d.get("high_pric"), True), "low": num(d.get("low_pric"), True),
                 "up": num(d.get("rising"), True), "down": num(d.get("fall"), True)}
+
+    # ------------------------------------------------------------------ 테마 (키움 테마 분류)
+    @staticmethod
+    def _theme(x):
+        return {"cd": str(x.get("thema_grp_cd", "")).strip(), "nm": (x.get("thema_nm") or "").strip(),
+                "n": int(num(x.get("stk_num"), True) or 0), "rt": num(x.get("flu_rt")),
+                "up": int(num(x.get("rising_stk_num"), True) or 0), "down": int(num(x.get("fall_stk_num"), True) or 0),
+                "main": (x.get("main_stk") or "").strip()}
+
+    def themes_of(self, code):
+        """테마그룹별(ka90001, 종목검색) — 이 종목이 속한 테마들과 각 테마의 오늘 등락률·상승 종목 수"""
+        d, _ = self.call("ka90001", "/api/dostk/thme", {"qry_tp": "2", "stk_cd": code, "date_tp": "1", "thema_nm": "",
+                                                       "flu_pl_amt_tp": "3", "stex_tp": "1"})
+        return [self._theme(x) for x in (d.get("thema_grp") or [])]
+
+    def themes_all(self, max_pages=10):
+        """테마그룹별(ka90001, 전체) — 모든 테마의 오늘 등락률 (상위 등락률 순)"""
+        body = {"qry_tp": "0", "stk_cd": "", "date_tp": "1", "thema_nm": "", "flu_pl_amt_tp": "3", "stex_tp": "1"}
+        out, cont = [], None
+        for _ in range(max_pages):
+            d, cont = self.call("ka90001", "/api/dostk/thme", body, cont)
+            out += [self._theme(x) for x in (d.get("thema_grp") or [])]
+            if not cont:
+                break
+        return out
+
+    def theme_members(self, cd):
+        """테마구성종목(ka90002) — 테마에 속한 종목코드 목록"""
+        out, cont = [], None
+        for _ in range(5):
+            d, cont = self.call("ka90002", "/api/dostk/thme", {"date_tp": "1", "thema_grp_cd": cd, "stex_tp": "1"}, cont)
+            out += [str(x.get("stk_cd", "")).split("_")[0].strip() for x in (d.get("thema_comp_stk") or [])]
+            if not cont:
+                break
+        return [c for c in out if c]

@@ -468,6 +468,81 @@ def build_rows_base(base, since):
     return rows
 
 
+def theme_map(kw, errs, max_age_days=3):
+    """키움 테마 구성(테마 → 종목)을 하루 한 번 받아 radar-out/kiwoom_themes.json 에 저장 (약 140번 호출, 40초 안팎)"""
+    f = OUT / "kiwoom_themes.json"
+    old = None
+    if f.exists():
+        try:
+            old = json.loads(f.read_text(encoding="utf-8"))
+            if old.get("day") == str(now().date()):
+                return old
+        except Exception:  # noqa: BLE001
+            old = None
+    try:
+        allt = kw.themes_all()
+        names, members = {}, {}
+        for t in allt:
+            names[t["cd"]] = t["nm"]
+            members[t["cd"]] = kw.theme_members(t["cd"])
+        by = {}
+        for cd, cs in members.items():
+            for c in cs:
+                by.setdefault(c, []).append(cd)
+        m = {"day": str(now().date()), "names": names, "by": by}
+        f.write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+        log(f"키움 테마 구성 받음: 테마 {len(names)} · 종목 {len(by)}")
+        return m
+    except Exception as e:  # noqa: BLE001
+        errs.append(f"테마 구성: {e}"[:120])
+        if old and (now().date() - dt.date.fromisoformat(old["day"])).days <= max_age_days:
+            return old
+        return None
+
+
+def add_themes(rows, kw, errs, base):
+    """후보마다 ① 키움 테마(직접 소속) ② 추정 테마(같이 움직이는 동료 10종목의 키움 테마 중 2개↑ 겹침) ③ 동료 이름.
+    테마 등락률·상승 종목 수는 매 갱신 실시간. 키움 키가 없으면 동료 이름만."""
+    S, ix = base["stocks"], base["ix"]
+    for r in rows:
+        i = ix.get(r["code"])
+        r["peers_nm"] = [S["n"][ix[p]] for p in (S["peers"][i] if i is not None else [])[:6] if p in ix]
+    if kw is None:
+        if not KW.credentials():
+            return []
+        try:
+            kw = KW.Kiwoom()
+        except Exception:  # noqa: BLE001
+            return []
+    stats = {}
+    try:
+        for t in kw.themes_all():
+            stats[t["cd"]] = t
+    except Exception as e:  # noqa: BLE001
+        errs.append(f"테마 등락: {e}"[:120])
+    tm = theme_map(kw, errs)
+    if tm is None:
+        return []
+    names, by = tm["names"], tm["by"]
+
+    def info(cd, cnt=None):
+        st = stats.get(cd, {})
+        return {"cd": cd, "nm": names.get(cd, st.get("nm", cd)), "rt": st.get("rt"), "up": st.get("up"), "n": st.get("n"),
+                "main": st.get("main", ""), **({"cnt": cnt} if cnt is not None else {})}
+    for r in rows:
+        own = by.get(r["code"], [])
+        r["themes"] = sorted([info(cd) for cd in own], key=lambda t: -(t["rt"] if t["rt"] is not None else -99))
+        i = ix.get(r["code"])
+        cnt = {}
+        for p in (S["peers"][i] if i is not None else []):
+            for cd in by.get(p, []):
+                if cd not in own:
+                    cnt[cd] = cnt.get(cd, 0) + 1
+        r["themes_inf"] = [info(cd, n) for cd, n in sorted(cnt.items(), key=lambda x: -x[1]) if n >= 2][:4]
+    top = sorted([t for t in stats.values() if (t["n"] or 0) >= 3 and t["rt"] is not None], key=lambda t: -t["rt"])[:10]
+    return top
+
+
 def order(rows):
     L = sorted([r for r in rows if r["large"]], key=lambda r: -(r["gm"] if r["gm"] is not None else -9))
     W = sorted([r for r in rows if r["wide"]], key=lambda r: (-(1 if r["top"] else 0), -r["th"], -r["rt"]))
@@ -524,6 +599,7 @@ def refresh(kind="manual"):
             rows, excluded = build_rows_base(base, since), []
             mode = "base"
         L, W = order(rows)
+        themes_top = add_themes(rows, kw, errs, base)
         hot_count = len(W) if mode == "live" else int(base["hot"]["today"])   # 연구 규칙 후보 수 (뜨거운 날 판단)
         if keys:                                                     # 뉴스: 화면 위쪽 후보부터 최대 20종목
             show = (L[:10] + W[:10])
@@ -550,6 +626,7 @@ def refresh(kind="manual"):
                            "secs": round(time.time() - t0, 1)},
                 "market": mk, "events": events(dday), "overseas": ovs, "temp": temp,
                 "large": L, "wide": W, "excluded": excluded, "hot": {"count": hot_count, "thr": base["hot"]["thr"]},
+                "themes_top": themes_top,
                 "picks": picks, "results": results_summary(), "kind_n": len(_KIND)}
         OUT.mkdir(parents=True, exist_ok=True)
         s = json.dumps(data, ensure_ascii=False)
@@ -666,12 +743,26 @@ def results_summary():
 
 
 # ====================================================================== 예약 실행 · 웹 서버
+def prebuild_themes():
+    """키움 테마 구성을 미리 받아 둠 (15:00 갱신이 기다리지 않게)"""
+    if not KW.credentials():
+        return
+    try:
+        errs = []
+        theme_map(KW.Kiwoom(), errs)
+        if errs:
+            log(f"테마 구성 준비 실패: {errs}")
+    except Exception as e:  # noqa: BLE001
+        log(f"테마 구성 준비 실패: {e!r}"[:160])
+
+
 def scheduler():
     fired = set()
     try:
         load_base()
     except Exception as e:  # noqa: BLE001
         log(str(e))
+    threading.Thread(target=prebuild_themes, daemon=True).start()
     threading.Thread(target=refresh, args=("start",), daemon=True).start()
     while True:
         t = now()
@@ -684,7 +775,7 @@ def scheduler():
                         continue
                     fired.add(key)
                     if job == "base":
-                        threading.Thread(target=lambda: load_base(True), daemon=True).start()
+                        threading.Thread(target=lambda: (load_base(True), prebuild_themes()), daemon=True).start()
                     elif job == "results":
                         threading.Thread(target=fill_results, daemon=True).start()
                     else:

@@ -57,7 +57,8 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 tr.row{cursor:pointer} tr.row:hover td{background:var(--hover)}
 tr.top3 td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
 tr.detail td{background:var(--soft);padding:10px 12px}
-.nm{font-weight:700} .cd{font-size:11.5px;color:var(--mu)}
+.nm{font-weight:700;white-space:nowrap} .cd{font-size:11.5px;color:var(--mu)}
+#tbl td:nth-child(3){min-width:150px} #tbl td:nth-child(9){min-width:170px}
 .chips span{display:inline-block;margin:1px 4px 1px 0}
 .inp{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--mu)}
 .inp input{width:84px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);text-align:right}
@@ -111,6 +112,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
       <button data-t="excluded">제외</button>
     </div>
   </div>
+  <div class="small chips" id="topthemes" style="margin:6px 0 2px"></div>
   <div class="small" id="tabnote" style="margin:4px 0 8px"></div>
   <div class="scroll"><table id="tbl"></table></div>
 </div>
@@ -126,7 +128,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
       <div><span class="pill part">일부 근거</span> 금요일 +0.5배 · 목요일/옵션만기 −0.5배 · 뜨거운 날 +0.5배 · FOMC 밤 ×0.5</div>
       <div><span class="pill un">미검증</span> 뉴스 유무 · NXT 애프터 — 기록만 하고 3~6개월 뒤 검증</div>
     </div>
-    <div class="small legend" style="margin-top:8px"><span><b>밤 끼</b> = 이 종목의 과거 +3% 날 다음날 평균 갭(등급) 백분위</span><span><b>민감도</b> = 나스닥 1%당 다음날 시가 갭(β)</span><span><b>테마</b> = 가격 상관 동료 10종목 중 오늘 +3%↑ 수 · 연속일</span></div>
+    <div class="small legend" style="margin-top:8px"><span><b>밤 끼</b> = 이 종목의 과거 +3% 날 다음날 평균 갭(등급) 백분위</span><span><b>민감도</b> = 나스닥 1%당 다음날 시가 갭(β)</span><span><b>테마</b> = 키움 테마 분류(테마 평균 등락률) · 아래 줄은 가격 상관 동료 10종목 중 오늘 +3%↑ 수·연속일(연구에 쓴 테마 정의)</span></div>
     <div class="small" id="logline" style="margin-top:8px;white-space:pre-wrap"></div>
   </div>
 </div>
@@ -218,6 +220,37 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
     }).join("") + '<div style="margin-top:4px"><a href="' + esc(r.nsearch) + '" target="_blank" rel="noopener">네이버 뉴스 최신순 더 보기</a></div>';
   }
 
+  function tname(t){ return String(t.nm || "").replace(/_/g, "·"); }
+  function themeChips(r, k){
+    var ts = r.themes || [], inf = r.themes_inf || [], h = "";
+    function chip(t, guess){
+      return '<span class="pill ' + (t.rt > 0 ? "no" : "un") + '"' + (guess ? ' style="background:transparent;border:1px dashed currentColor"' : '') +
+        ' title="' + esc(tname(t) + (guess ? " (추정: 동료 " + t.cnt + "/10)" : "") + " · 상승 " + (t.up == null ? "?" : t.up) + "/" + (t.n == null ? "?" : t.n) + " · " + (t.main || "")) + '">' +
+        esc(tname(t)) + (t.rt != null ? ' ' + pct(t.rt, 1) : '') + (guess ? ' <span style="font-weight:400">추정</span>' : '') + '</span>';
+    }
+    if (ts.length) h += ts.slice(0, k).map(function(t){ return chip(t, false); }).join("") + (ts.length > k ? '<span class="mu small">+' + (ts.length - k) + '</span>' : '');
+    if (inf.length) h += inf.slice(0, Math.max(1, k - Math.min(ts.length, k))).map(function(t){ return chip(t, true); }).join("");
+    if (!h && r.peers_nm && r.peers_nm.length) h = '<span class="small mu">' + esc(r.peers_nm.slice(0, 3).join(", ")) + ' 등과 동행</span>';
+    return h ? '<div class="chips">' + h + '</div>' : '';
+  }
+  function themeList(r){
+    var ts = r.themes || [], inf = r.themes_inf || [], h = "";
+    function line(t, guess){
+      return '<div><span class="nm">' + esc(tname(t)) + '</span>' + (guess ? ' <span class="pill un">추정 · 동료 ' + t.cnt + '/10</span>' : '') +
+        ' <span class="' + cls(t.rt) + '">' + pct(t.rt) + '</span> <span class="mu">· 상승 ' + (t.up == null ? "?" : t.up) + '/' + (t.n == null ? "?" : t.n) + (t.main ? ' · ' + esc(t.main) : '') + '</span></div>';
+    }
+    h += ts.length ? ts.map(function(t){ return line(t, false); }).join("") : '<div class="mu">' + (r.themes ? "키움 테마 분류에 직접 들어 있지 않음" : "키움 연결 시 표시") + '</div>';
+    if (inf.length) h += inf.map(function(t){ return line(t, true); }).join("");
+    if (r.peers_nm && r.peers_nm.length) h += '<div class="small" style="margin-top:4px">같이 움직이는 종목(최근 120일 상관): ' + esc(r.peers_nm.join(", ")) + '</div>';
+    return h;
+  }
+  function renderTopThemes(){
+    var tt = D.themes_top || [];
+    $("topthemes").innerHTML = tt.length ? '오늘 강한 테마: ' + tt.map(function(t){
+      return '<span class="pill ' + (t.rt > 0 ? "no" : "un") + '" title="' + esc((t.main || "") + " · 상승 " + t.up + "/" + t.n) + '">' + esc(tname(t)) + ' ' + pct(t.rt, 1) + ' <span style="font-weight:400">' + t.up + '/' + t.n + '</span></span>';
+    }).join(" ") : '';
+  }
+
   function renderTable(){
     var rows = D[tab] || [];
     var picks = D.picks || {};
@@ -241,13 +274,14 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
         '<td class="n">' + (r.vr != null ? r.vr.toFixed(1) + '배' : '—') + (r.tv ? '<div class="cd">' + num(r.tv) + '억</div>' : '') + '</td>' +
         '<td class="n">' + (r.gp != null ? '상위 ' + Math.max(1, Math.round((1 - r.gp) * 100)) + '%' : '—') + (r.gm != null ? '<div class="cd">평균 ' + pct(r.gm) + '</div>' : '') + '</td>' +
         '<td>' + (r.beta != null ? r.beta.toFixed(2) + ' <span class="pill ' + (r.btag === "지수형" ? "part" : "un") + '">' + r.btag + '</span>' : '—') + '</td>' +
-        '<td>' + ([r.n_up != null ? '동반 ' + r.n_up + '/10' : '', r.th ? '<b>' + r.th + '일째</b>' : ''].filter(Boolean).join(' · ') || '<span class="mu">—</span>') + '</td>' +
+        '<td>' + themeChips(r, 3) + '<div class="cd">' + ([r.n_up != null ? '동반 ' + r.n_up + '/10' : '', r.th ? '<b>' + r.th + '일째</b>' : ''].filter(Boolean).join(' · ') || '') + '</div></td>' +
         '<td>' + discHtml(r.disc, true) + '</td>' +
         '<td>' + newsHtml(r, true) + '</td>' +
         '<td>' + (r.warn || []).map(function(w){ return '<div class="warn small">' + esc(w) + '</div>'; }).join("") + warnCap(r) + '</td></tr>';
       if (open[r.code]) {
         h += '<tr class="detail"><td colspan="12"><div class="grid" style="gap:14px">' +
           '<div><b>공시</b> (어제 15:30 이후)' + discHtml(r.disc, false) +
+          '<div style="margin-top:8px"><b>키움 테마</b> (테마 평균 등락률 · 상승 종목 수/전체 · 주요 종목) — 점선 = 같이 움직이는 종목들의 테마로 추정' + themeList(r) + '</div>' +
           '<div style="margin-top:8px"><b>같은 테마(가격 상관 동료) 오늘 +3%↑</b><div class="chips">' + ((r.peers_up || []).length ? r.peers_up.map(function(p){ return '<span class="pill un">' + esc(p) + '</span>'; }).join("") : '<span class="mu">없음' + (D.mode === "live" ? '' : ' (실시간 아님)') + '</span>') + '</div></div>' +
           '<div style="margin-top:8px" class="small">β ' + (r.beta != null ? r.beta.toFixed(2) : "—") + ' → 밤사이 나스닥 −1.5%면 시가 약 ' + (r.beta != null ? pct(-1.5 * r.beta, 1) : "—") + ' (평균적인 반응)</div></div>' +
           '<div><b>뉴스</b>' + newsHtml(r, false) + '</div></div></td></tr>';
@@ -282,7 +316,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--ac
     if (D.market.panic) b += '<div class="banner ok">패닉 낙주 신호 — 코스피 −4%↓ : 삼성전자·SK하이닉스 종가 매수 → 다음날 시가 매도 (검증됨)</div>';
     if (D.mode !== "live" && st.kiwoom === false) b += '<div class="banner part">키움 앱키가 아직 없습니다 — 지금은 ' + esc(D.cand_day) + ' 장 마감 기준 후보를 보여줍니다. <b>radar.bat setup-kiwoom</b> 으로 등록하면 15:00~15:30에 실시간으로 바뀝니다.</div>';
     $("banners").innerHTML = b;
-    renderJudge(); renderOvs(); renderTable(); renderRecord();
+    renderJudge(); renderOvs(); renderTopThemes(); renderTable(); renderRecord();
   }
 
   $("tabs").addEventListener("click", function(e){
