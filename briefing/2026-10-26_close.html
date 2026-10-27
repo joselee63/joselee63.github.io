@@ -7,14 +7,16 @@
   --bg:#f4f5f8; --card:#ffffff; --ink:#1b1f29; --sub:#5d6475; --line:#e6e8ee;
   --up:#d6293b; --down:#1f6fd1; --accent:#5b4bdb; --accent-soft:#efedff;
   --hero1:#20243a; --hero2:#3b2f7a; --th:#f7f8fb; --badge:#fff4d6; --badge-ink:#8a5a00;
-  --judge:#f1fbf5; --judge-line:#22a06b; --shadow:0 1px 2px rgba(20,24,40,.05),0 6px 20px rgba(20,24,40,.06);
+  --judge:#f1fbf5; --judge-line:#22a06b;
+  --in-bg:#fde8ea; --in-ink:#c21d30; --out-bg:#e6effc; --out-ink:#1a5bb8; --imp-bg:#fff1e0; --imp-ink:#b35c00; --shadow:0 1px 2px rgba(20,24,40,.05),0 6px 20px rgba(20,24,40,.06);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#0f1117; --card:#181b24; --ink:#e8eaf0; --sub:#9aa1b2; --line:#2a2e3a;
     --up:#ff5c6c; --down:#5aa2ff; --accent:#9d92ff; --accent-soft:#262347;
     --hero1:#1b1e33; --hero2:#2e2563; --th:#1e2230; --badge:#3a2f12; --badge-ink:#ffcf66;
-    --judge:#13261d; --judge-line:#3ccf8e; --shadow:none;
+    --judge:#13261d; --judge-line:#3ccf8e;
+    --in-bg:#3a1a1f; --in-ink:#ff8f9a; --out-bg:#16263f; --out-ink:#8cc0ff; --imp-bg:#3a2a12; --imp-ink:#ffc067; --shadow:none;
   }
 }
 *{box-sizing:border-box}
@@ -69,6 +71,35 @@ blockquote p{margin:4px 0}
 hr{border:0;border-top:1px solid var(--line);margin:24px 0}
 .foot{color:var(--sub);font-size:12.5px;margin-top:20px;text-align:center}
 .star{color:#f5a623;letter-spacing:-1px;white-space:nowrap}
+/* ---- 가독성: 카드형 항목 · 라벨 · 소제목 ---- */
+section.card h3{font-size:15.5px;margin:22px 0 10px;padding:0 0 8px;border-bottom:1px solid var(--line)}
+section.card h3.flow{border:0;display:inline-block;padding:5px 12px;border-radius:999px;font-size:14.5px}
+section.card h3.flow.in{background:var(--in-bg);color:var(--in-ink)}
+section.card h3.flow.out{background:var(--out-bg);color:var(--out-ink)}
+ul.blks{list-style:none;padding:0;margin:10px 0;display:grid;grid-template-columns:1fr;gap:10px}
+.s-grid ul.blks{grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
+ul.blks>li{background:var(--th);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0}
+ul.blks>li>strong:first-child{font-size:15px}
+li.blk>ul,li.blk>ol{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:5px}
+li.blk>ul>li,li.blk>ol>li{margin:0;font-size:14px;line-height:1.6;color:var(--ink);padding-left:0;border:0}
+li.blk>ul>li::before{content:none}
+.lb{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.02em;padding:1px 7px;border-radius:6px;margin-right:7px;
+  vertical-align:1px;background:var(--line);color:var(--sub);white-space:nowrap}
+.lb-1{background:var(--accent-soft);color:var(--accent)}
+.lb-2{background:var(--imp-bg);color:var(--imp-ink)}
+.imp{margin-top:6px}
+section.card ol:not(.blks){list-style:none;padding:0;margin:8px 0;counter-reset:n}
+section.card ol:not(.blks)>li{counter-increment:n;position:relative;padding:12px 0 12px 38px;margin:0;border-bottom:1px solid var(--line)}
+section.card ol:not(.blks)>li:last-child{border-bottom:0}
+section.card ol:not(.blks)>li::before{content:counter(n);position:absolute;left:0;top:12px;width:26px;height:26px;border-radius:8px;
+  background:var(--accent-soft);color:var(--accent);font-weight:800;font-size:13px;display:grid;place-items:center}
+section.card ol.blks{counter-reset:none}
+ul.blks>li.judge{background:var(--judge);border-color:var(--judge-line);border-left-width:4px}
+blockquote.judgeq{background:var(--judge);border-left-color:var(--judge-line)}
+section.card>ul:not(.blks)>li{margin:7px 0}
+@media (max-width:600px){
+  ul.blks{grid-template-columns:1fr}
+}
 @media (max-width:600px){
   .wrap{padding:14px 12px 48px} .hero{padding:20px 18px 16px;border-radius:16px}
   .hero h1{font-size:22px} section.card{padding:4px 16px 16px}
@@ -83,7 +114,7 @@ hr{border:0;border-top:1px solid var(--line);margin:24px 0}
 2. 원인: 외국인 코스피 6,827억 순매도(비차익 프로그램 <span class="down">-6,455억</span>) + 슈퍼위크(FOMC·삼전닉스·빅테크 실적) 앞둔 관망. 방산·조선·에너지장비·SOFC가 크게 빠졌다.
 3. 내일 체크: 외국인 매도 강도 둔화 여부, 10/28(수) SK하이닉스 실적·주주환원, 10/29(목) 새벽 FOMC 결과.</p>
 </blockquote></div></header>
-<nav class="toc"><a href="#s1">시장 데이터</a><a href="#s2">수급 (억원)</a><a href="#s3">중요 뉴스</a><a href="#s4">돈이 몰린 섹터</a><a href="#s5">향후 주요 일정</a><a href="#s6">선취매 관찰 후보 (투자 권유 아님</a><a href="#s7">📺 blueoak 영상 요약</a></nav>
+<nav class="toc"><a href="#s1">시장 데이터</a><a href="#s2">수급 (억원)</a><a href="#s3">중요 뉴스</a><a href="#s4">돈이 몰린 섹터</a><a href="#s5">향후 주요 일정</a><a href="#s6">선취매 관찰 후보 (투자 권유 아님</a></nav>
 <section class="card" id="s1"><h2><span class="num">1</span>시장 데이터</h2><div class="tbl"><table>
 <thead>
 <tr>
@@ -232,76 +263,62 @@ hr{border:0;border-top:1px solid var(--line);margin:24px 0}
 <td>→ 한화시스템 등 한화·SK 계열</td>
 </tr>
 </tbody>
-</table></div></section><section class="card" id="s4"><h2><span class="num">4</span>돈이 몰린 섹터</h2><p><strong>들어간 곳 (방어·테마 순환)</strong></p>
-<div class="tbl"><table>
-<thead>
-<tr>
-<th>섹터</th>
-<th>등락</th>
-<th>대표 종목</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>건강관리기술 / 의료AI</td>
-<td><span class="up">+16.82%</span> / <span class="up">+4.82%</span></td>
-<td>루닛 <span class="up">+30.00%</span>(상한가), 레몬헬스케어 <span class="up">+11.84%</span>, 엠에스바이오 <span class="up">+6.40%</span>(코스닥 대금 2위), 노을 2연속 상한가</td>
-</tr>
-<tr>
-<td>로봇·휴머노이드</td>
-<td><span class="up">+1.51%</span> / <span class="up">+1.32%</span></td>
-<td>빅웨이브로보틱스 <span class="up">+29.82%</span>, 로보티즈 <span class="up">+11.78%</span>, 앤로보틱스 <span class="up">+4.94%</span>, HT로보틱스 <span class="up">+3.04%</span></td>
-</tr>
-<tr>
-<td>우주(위성) 개별주</td>
-<td>—</td>
-<td>컨텍 <span class="up">+29.89%</span>, AP위성 <span class="up">+5.78%</span></td>
-</tr>
-<tr>
-<td>반도체 대형주(선별)</td>
-<td>—</td>
-<td>SK하이닉스 <span class="up">+1.02%</span>(대금 3.15조 1위), 삼성물산 <span class="up">+2.08%</span>, LG씨엔에스 <span class="up">+1.37%</span></td>
-</tr>
-</tbody>
-</table></div>
-<p><strong>빠진 곳 (올해 주도주 차익실현)</strong></p>
-<div class="tbl"><table>
-<thead>
-<tr>
-<th>섹터</th>
-<th>등락</th>
-<th>대표 종목</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>에너지장비 / SOFC</td>
-<td><span class="down">-6.78%</span> / <span class="down">-7.88%</span></td>
-<td>두산에너빌리티 <span class="down">-2.86%</span></td>
-</tr>
-<tr>
-<td>우주항공·방산</td>
-<td><span class="down">-5.51%</span></td>
-<td>LIG디펜스앤에어로스페이스 <span class="down">-10.62%</span>, 한화에어로스페이스 <span class="down">-4.92%</span></td>
-</tr>
-<tr>
-<td>조선</td>
-<td><span class="down">-4.82%</span></td>
-<td>HD현대중공업 <span class="down">-5.08%</span></td>
-</tr>
-<tr>
-<td>반도체 기판·장비</td>
-<td><span class="down">-5.06%</span></td>
-<td>디티에스 <span class="down">-11.60%</span>, 주성엔지니어링 <span class="down">-6.78%</span>, 심텍 <span class="down">-6.61%</span>, 원익IPS <span class="down">-6.28%</span>, HPSP <span class="down">-5.87%</span>, 한미반도체 <span class="down">-3.30%</span></td>
-</tr>
-<tr>
-<td>금융·자동차</td>
-<td>—</td>
-<td>KB금융 <span class="down">-3.14%</span>, 현대차 <span class="down">-2.20%</span></td>
-</tr>
-</tbody>
-</table></div>
-<p>→ 정리: <strong>방산·조선·전력기기·반도체 소부장 등 기존 주도주에서 돈이 빠지고</strong>, 소형 헬스케어 AI·로봇·우주 테마로 단기 자금이 옮겨갔다. 대형 반도체는 실적 앞두고 하이닉스만 연기금 매수로 버팀. 엘리스 <span class="down">-19.75%</span>처럼 신규·소형주 변동성 매우 큼.</p></section><section class="card" id="s5"><h2><span class="num">5</span>향후 주요 일정</h2><div class="tbl"><table>
+</table></div></section><section class="card s-grid" id="s4"><h2><span class="num">4</span>돈이 몰린 섹터</h2><h3 class="flow in">🟢 들어온 곳</h3>
+<ul class="blks">
+<li class="blk"><strong>의료AI·건강관리기술</strong><ul>
+<li><span class="lb lb-0">종목</span>업종 <span class="up">+16.82%</span>; 루닛 <span class="up">+30.00%</span>(상한가), 레몬헬스케어 <span class="up">+11.84%</span>, 엠에스바이오 <span class="up">+6.40%</span>, 노을 2연속 상한가</li>
+<li><span class="lb lb-1">이유</span>루닛이 미국 바이오기업 시티테라퓨틱스와 면역항암제 AI 바이오마커 연구 협력을 발표했다(KB증권).</li>
+<li>뷰노·씨어스 등 동종 업체로 매수가 번졌다.</li>
+</ul>
+</li>
+<li class="blk"><strong>로봇·휴머노이드</strong><ul>
+<li><span class="lb lb-0">종목</span>빅웨이브로보틱스 <span class="up">+29.82%</span>, 로보티즈 <span class="up">+11.78%</span>, 앤로보틱스 <span class="up">+4.94%</span>, HT로보틱스 <span class="up">+3.04%</span></li>
+<li><span class="lb lb-1">이유</span>로보티즈가 프랑스 로봇기업과 소형 액추에이터 75만 개 공급계약을 맺었다(KB증권).</li>
+<li>내년 추가 수요 기대가 관련주 전반으로 확산됐다.</li>
+</ul>
+</li>
+<li class="blk"><strong>우주·위성</strong><ul>
+<li><span class="lb lb-0">종목</span>컨텍 <span class="up">+29.89%</span>, AP위성 <span class="up">+5.78%</span></li>
+<li><span class="lb lb-1">이유</span><span class="src">추정</span> 지수 하락기에 독자 재료를 가진 성장 테마로 순환매가 몰렸다.</li>
+</ul>
+</li>
+<li class="blk"><strong>반도체 대형주 (선별)</strong><ul>
+<li><span class="lb lb-0">종목</span>SK하이닉스 <span class="up">+1.02%</span>(대금 3.15조 1위), 삼성물산 <span class="up">+2.08%</span></li>
+<li><span class="lb lb-1">이유</span>10/28 실적 발표를 앞둔 주주환원 기대와 연기금 매수.</li>
+<li>삼성물산은 삼성전자 주주환원 기대가 지배구조 연결고리로 번졌다.</li>
+</ul>
+</li>
+</ul>
+<h3 class="flow out">🔴 빠져나간 곳</h3>
+<ul class="blks">
+<li class="blk"><strong>방산·우주항공</strong><ul>
+<li><span class="lb lb-0">종목</span>업종 <span class="down">−5.51%</span>; LIG디펜스앤에어로스페이스 <span class="down">−10.62%</span>, 한화에어로스페이스 <span class="down">−4.92%</span></li>
+<li><span class="lb lb-1">이유</span>신규 수출계약과 기존 물량 인도 지연 우려(뉴스1). 같은 기간 미국 방산 ETF는 상승했다.</li>
+</ul>
+</li>
+<li class="blk"><strong>조선</strong><ul>
+<li><span class="lb lb-0">종목</span>업종 <span class="down">−4.82%</span>; HD현대중공업 <span class="down">−5.08%</span></li>
+<li><span class="lb lb-1">이유</span><span class="src">추정</span> 올해 주도주의 차익실현과 외국인 매도.</li>
+</ul>
+</li>
+<li class="blk"><strong>에너지장비·SOFC</strong><ul>
+<li><span class="lb lb-0">종목</span>업종 <span class="down">−6.78%</span> / 테마 <span class="down">−7.88%</span>; 두산에너빌리티 <span class="down">−2.86%</span></li>
+<li><span class="lb lb-1">이유</span><span class="src">추정</span> 주도주 차익실현과 신용 물량 정리.</li>
+</ul>
+</li>
+<li class="blk"><strong>반도체 기판·장비</strong><ul>
+<li><span class="lb lb-0">종목</span>테마 <span class="down">−5.06%</span>; 디티에스 <span class="down">−11.60%</span>, 주성엔지니어링 <span class="down">−6.78%</span>, 심텍 <span class="down">−6.61%</span>, 원익IPS <span class="down">−6.28%</span>, HPSP <span class="down">−5.87%</span></li>
+<li><span class="lb lb-1">이유</span>하이닉스가 장중 130만 원 돌파에 실패하자 실망 매물이 나왔고, 코스닥 신용 반대매매가 겹쳤다.</li>
+</ul>
+</li>
+<li class="blk"><strong>금융·자동차</strong><ul>
+<li><span class="lb lb-0">종목</span>KB금융 <span class="down">−3.14%</span>, 신한지주 <span class="down">−2%</span>대, 현대차 <span class="down">−2.20%</span></li>
+<li><span class="lb lb-1">이유</span>은행 순이자마진(NIM) 하락 우려(머니투데이).</li>
+<li>금융주가 추세선을 이탈한 것은 시장 전반의 불안이 커졌다는 신호다.</li>
+</ul>
+</li>
+</ul>
+<div class="judge"><strong>판단</strong>: 방산·조선·전력기기·반도체 소부장 같은 기존 주도주에서 돈이 빠지고, 의료AI·로봇·우주 같은 개별 재료 테마로 단기 자금이 옮겨 갔다. 대형 반도체는 실적을 앞둔 하이닉스만 버텼다. 엘리스 <span class="down">−19.75%</span>처럼 소형주 변동성이 매우 크다.</div></section><section class="card" id="s5"><h2><span class="num">5</span>향후 주요 일정</h2><div class="tbl"><table>
 <thead>
 <tr>
 <th>날짜(한국시간)</th>
@@ -410,8 +427,8 @@ hr{border:0;border-top:1px solid var(--line);margin:24px 0}
 </table></div>
 <blockquote>
 <p>공통 리스크: 이벤트가 몰린 주라 발표 직후 '재료 소멸' 매도 가능. 외국인 비차익 매도가 이어지면 개별 호재도 묻힐 수 있다.</p>
-</blockquote></section><section class="card fold" id="s7"><details><summary><h2><span class="num">7</span>📺 blueoak 영상 요약<span class="hint">펼치기</span></h2></summary><p><strong>오늘은 영상 요약 없음</strong> — 채널에서 오늘 장마감 '주식 시황' 영상을 찾지 못함(40분 대기 후 종료, 22:38~23:20경 기준).</p>
+</blockquote>
 <hr />
-<p><em>데이터: market_data.py (2026-10-26 22:38 수집), 네이버 증권 주요뉴스, AP·ABC(아시아장/유가), TipRanks·StockTitan(미국 실적 일정), SK하이닉스 IR 공지.</em></p></details></section>
+<p><em>데이터: market_data.py (2026-10-26 22:38 수집), 네이버 증권 주요뉴스, AP·ABC(아시아장/유가), TipRanks·StockTitan(미국 실적 일정), SK하이닉스 IR 공지.</em></p></section>
 <div class="foot">투자 판단의 참고 자료이며 투자 권유가 아닙니다.</div>
 </div></body></html>
