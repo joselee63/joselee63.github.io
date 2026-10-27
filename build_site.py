@@ -1153,7 +1153,8 @@ def render_page(src, page):
         here = MARKETS[MARKET]["site"]                       # 지금 페이지 위치에서 상대 경로
         there = MARKETS[m]["site"]
         href = ("../" if here else "") + (there + "/" if there else "")
-        href = (href or "./") + ("" if page == "index.html" else page)
+        kr_only = page in ("briefing.html",) and m != "kr"        # 한국에만 있는 페이지 → 다른 시장은 첫 화면으로
+        href = (href or "./") + ("" if page == "index.html" or kr_only else page)
         links.append(f'<a href="{href}"{" class=\"on\" aria-current=\"page\"" if m == MARKET else ""}>'
                      f'{FLAG_SVG[m]}<span>{label}</span></a>')
     out = (src.replace("한국 증시 섹터 차트", MK["title"])
@@ -1163,7 +1164,7 @@ def render_page(src, page):
     for a, b in MK.get("replace", {}).items():
         out = out.replace(a, b)
     if MARKET != "kr":                                    # 수급 오실레이터는 한국 매매주체 데이터만 있음
-        out = re.sub(r'\s*<a class="tab (sup|tmp|trk)[^"]*"[^>]*>[\s\S]*?</a>', "", out)
+        out = re.sub(r'\s*<a class="tab (sup|tmp|trk|brf)[^"]*"[^>]*>[\s\S]*?</a>', "", out)
     return out
 
 
@@ -1350,7 +1351,7 @@ def main():
     print("[3/3] 페이지 생성")
     with open(os.path.join(SITE_DIR, "data", "summary.js"), "w", encoding="utf-8") as f:
         f.write("window.__krsc_summary && window.__krsc_summary(" + js + ");\n")
-    for page in ("index.html", "game.html", "similar.html", "screener.html", "quant.html") + (("supply.html", "temp.html", "track.html") if MARKET == "kr" else ()):
+    for page in ("index.html", "game.html", "similar.html", "screener.html", "quant.html") + (("supply.html", "temp.html", "track.html", "briefing.html") if MARKET == "kr" else ()):
         with open(os.path.join(WEB_DIR, page), encoding="utf-8") as f:
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:
@@ -1358,6 +1359,8 @@ def main():
     for extra in ("secret.js", "secret.json") + (("closebet.json",) if MARKET == "kr" else ()):   # 숨은 사진 · 종가베팅 백테스트 데이터(한국)
         if os.path.exists(os.path.join(WEB_DIR, extra)):
             shutil.copy(os.path.join(WEB_DIR, extra), os.path.join(SITE_DIR, extra))
+    if MARKET == "kr" and os.path.isdir(os.path.join(ROOT, "briefing")):   # Daily briefing 리포트 (모닝·마감)
+        shutil.copytree(os.path.join(ROOT, "briefing"), os.path.join(SITE_DIR, "briefing"), dirs_exist_ok=True)
     open(os.path.join(SITE_DIR, ".nojekyll"), "w").close()
     if GAME_BARS:
         print(f"      차트 게임 종목 {write_game_data(data, sections, meta['build_id'], listing, exch, caps)}개")

@@ -1,0 +1,378 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>☀️ 모닝브리핑 — 2026-10-27 (화)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+:root{
+  --bg:#f4f5f8; --card:#ffffff; --ink:#1b1f29; --sub:#5d6475; --line:#e6e8ee;
+  --up:#d6293b; --down:#1f6fd1; --accent:#5b4bdb; --accent-soft:#efedff;
+  --hero1:#20243a; --hero2:#3b2f7a; --th:#f7f8fb; --badge:#fff4d6; --badge-ink:#8a5a00;
+  --judge:#f1fbf5; --judge-line:#22a06b; --shadow:0 1px 2px rgba(20,24,40,.05),0 6px 20px rgba(20,24,40,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1117; --card:#181b24; --ink:#e8eaf0; --sub:#9aa1b2; --line:#2a2e3a;
+    --up:#ff5c6c; --down:#5aa2ff; --accent:#9d92ff; --accent-soft:#262347;
+    --hero1:#1b1e33; --hero2:#2e2563; --th:#1e2230; --badge:#3a2f12; --badge-ink:#ffcf66;
+    --judge:#13261d; --judge-line:#3ccf8e; --shadow:none;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;
+  font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+.hero{background:linear-gradient(135deg,var(--hero1),var(--hero2));color:#fff;border-radius:20px;
+  padding:28px 28px 22px;box-shadow:var(--shadow)}
+.hero .kind{font-size:13px;letter-spacing:.08em;opacity:.75;font-weight:600}
+.hero h1{margin:4px 0 14px;font-size:28px;line-height:1.3}
+.hero .summary{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14);
+  border-radius:14px;padding:14px 18px}
+.hero .summary p,.hero .summary li{margin:4px 0}
+.hero .summary ol,.hero .summary ul{margin:0;padding-left:20px}
+.hero .summary blockquote{margin:0;padding:0;border:0}
+.hero .up{color:#ff8f9a}.hero .down{color:#8cc0ff}
+.hero .src{background:rgba(255,255,255,.18);color:#fff}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
+nav.toc a{font-size:13px;text-decoration:none;color:var(--accent);background:var(--accent-soft);
+  padding:6px 12px;border-radius:999px;font-weight:600;white-space:nowrap}
+section.card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:6px 24px 20px;margin-top:16px;box-shadow:var(--shadow);scroll-margin-top:12px}
+section.card h2{font-size:19px;margin:18px 0 10px;display:flex;align-items:center;gap:10px}
+section.card h2 .num{display:inline-grid;place-items:center;min-width:28px;height:28px;border-radius:8px;
+  background:var(--accent);color:#fff;font-size:14px}
+section.card h3{font-size:16px;margin:18px 0 6px}
+p{margin:8px 0} ul,ol{padding-left:22px;margin:6px 0} li{margin:4px 0}
+li::marker{color:var(--sub)}
+a{color:var(--accent)}
+.tbl{overflow-x:auto;margin:10px 0;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th{background:var(--th);color:var(--sub);font-weight:700;text-align:left;font-size:13px}
+th,td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td:first-child{font-weight:600}
+.up{color:var(--up);font-weight:700}.down{color:var(--down);font-weight:700}
+.src{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:6px;
+  background:var(--badge);color:var(--badge-ink);vertical-align:1px;white-space:nowrap}
+.yt{font-size:12px;margin-left:3px;opacity:.8;cursor:help;vertical-align:1px}
+.fold summary{list-style:none;cursor:pointer}
+.fold summary::-webkit-details-marker{display:none}
+.fold h2 .hint{margin-left:auto;font-size:12px;font-weight:600;color:var(--sub)}
+.fold h2 .hint::after{content:" ▾"}
+.fold details[open] h2 .hint{font-size:0}
+.fold details[open] h2 .hint::after{content:"접기 ▴";font-size:12px}
+.judge{background:var(--judge);border-left:4px solid var(--judge-line);border-radius:10px;
+  padding:10px 14px;margin:12px 0}
+blockquote{margin:12px 0;padding:10px 16px;border-left:4px solid var(--accent);
+  background:var(--accent-soft);border-radius:10px}
+blockquote p{margin:4px 0}
+hr{border:0;border-top:1px solid var(--line);margin:24px 0}
+.foot{color:var(--sub);font-size:12.5px;margin-top:20px;text-align:center}
+.star{color:#f5a623;letter-spacing:-1px;white-space:nowrap}
+@media (max-width:600px){
+  .wrap{padding:14px 12px 48px} .hero{padding:20px 18px 16px;border-radius:16px}
+  .hero h1{font-size:22px} section.card{padding:4px 16px 16px}
+  table{font-size:13px} th,td{padding:7px 9px}
+}
+@media print{body{background:#fff} section.card,.hero{box-shadow:none;break-inside:avoid}}
+</style></head><body><div class="wrap">
+<header class="hero"><div class="kind">MORNING BRIEFING</div><h1>☀️ 모닝브리핑 — 2026-10-27 (화)</h1>
+<div class="summary"><p><strong>3줄 요약</strong></p>
+<ol>
+<li>앤트로픽 IPO 신청(S-1)과 유가 하락으로 미국 3대 지수 동반 상승, <strong>SOX <span class="up">+2.82%</span></strong>. 어제 무너진 코스피 박스권 하단(5,500)을 반도체 반등과 함께 되찾을 수 있을지가 오늘의 핵심.</li>
+<li>갭상승 뒤 '응징성 매도'가 반복되고 있음(<span class="up">+0.3%</span> 다음 날 <span class="down">−1.46%</span>)<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>. 시초가보다 <strong>양봉 마감 여부와 외국인 순매수 전환</strong>을 확인해야 함. SK하이닉스 130만원대 안착이 열쇠<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>.</li>
+<li>코스닥은 신용 반대매매 위험이 남아 있음(10월 고점 대비 <span class="down">−21%</span>)<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>. 이번 주 하이라이트는 <strong>28일 하이닉스, 29일 삼성전자 실적·주주환원</strong>과 FOMC.</li>
+</ol></div></header>
+<nav class="toc"><a href="#s1">시장 데이터</a><a href="#s2">수급</a><a href="#s3">중요 뉴스</a><a href="#s4">돈이 몰린 섹터</a><a href="#s5">향후 주요 일정</a><a href="#s6">선취매 관찰 후보 (투자 권유 아님, 관찰용)</a><a href="#s7">📺 blueoak 영상 요약</a></nav>
+<section class="card" id="s1"><h2><span class="num">1</span>시장 데이터</h2><div class="tbl"><table>
+<thead>
+<tr>
+<th>구분</th>
+<th>종가</th>
+<th>등락</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>다우</td>
+<td>52,361.58</td>
+<td><span class="up">+0.28%</span></td>
+</tr>
+<tr>
+<td>S&amp;P500</td>
+<td>7,676.77</td>
+<td><span class="up">+0.70%</span></td>
+</tr>
+<tr>
+<td>나스닥</td>
+<td>26,169.38</td>
+<td><span class="up">+0.83%</span></td>
+</tr>
+<tr>
+<td><strong>필라델피아반도체(SOX)</strong></td>
+<td>11,083.47</td>
+<td><strong><span class="up">+2.82%</span></strong></td>
+</tr>
+<tr>
+<td>VIX</td>
+<td>18.39</td>
+<td><span class="down">−5.45%</span></td>
+</tr>
+<tr>
+<td>미 10년물</td>
+<td>4.99%</td>
+<td><span class="up">+0.2bp</span></td>
+</tr>
+<tr>
+<td>달러인덱스</td>
+<td>101.96</td>
+<td><span class="up">+0.15%</span></td>
+</tr>
+<tr>
+<td>WTI / 브렌트</td>
+<td>$101.35 / $115.81</td>
+<td><span class="down">−0.40%</span> / <span class="down">−0.78%</span></td>
+</tr>
+<tr>
+<td>금</td>
+<td>$4,029.4</td>
+<td><span class="down">−0.22%</span></td>
+</tr>
+<tr>
+<td>비트코인</td>
+<td>미확인</td>
+<td>—</td>
+</tr>
+<tr>
+<td>원/달러</td>
+<td>1,327.0</td>
+<td><span class="up">+1.0원</span> (NDF 미확인)</td>
+</tr>
+<tr>
+<td>코스피 (10/26)</td>
+<td>5,469.47</td>
+<td><span class="down">−1.46%</span></td>
+</tr>
+<tr>
+<td>코스닥 (10/26)</td>
+<td>727.21</td>
+<td><span class="down">−3.26%</span></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>국내 연결고리</strong></p>
+<ul>
+<li>SOX <span class="up">+2.8%</span>, 마이크론 <span class="up">+3.0%</span>, AMD <span class="up">+2.8%</span> → 삼성전자·하이닉스와 소부장이 반등 출발할 가능성이 높음.</li>
+<li>유가가 장중 <span class="down">−3%</span>에서 낙폭을 줄이며 마감. 여전히 100달러대라 정유는 중립, 항공·화학은 부담이 이어짐. 진행자는 "70달러대까지 내려와야 위험 구간 통과"라고 봄<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>.</li>
+<li>10년물 4.99%로 높은 수준에서 멈춤 → 성장주와 코스닥 밸류에이션에 계속 부담. 진행자는 "FOMC~중간선거 전후 4.8%대로 내려오는지"가 다음 국면의 열쇠라고 봄<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>.</li>
+<li>원화 강세(1,327원) → 외국인 환차익 측면에서 매수에 유리한 환경.</li>
+</ul>
+<div class="judge"><strong>판단:</strong> 미국발 재료는 분명히 우호적(반도체 반등, VIX 하락). 다만 금리와 유가 수준이 높아 상승 출발 뒤 매물이 나올 가능성도 큼. 코스피 5,500 회복과 종가 유지 여부를 1차 체크포인트로 둔다.</div></section><section class="card" id="s2"><h2><span class="num">2</span>수급</h2><p><strong>미국:</strong> 기술 섹터 <span class="up">+1.5%</span>로 주도, 커뮤니케이션서비스 <span class="down">−1.4%</span>(메타·알파벳 약세). 11개 섹터 중 7개 상승, 4개 하락<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>. 상반기 낙폭주로 갈아탔던 자금이 다시 방향을 탐색하는 국면이라는 해석<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>.</p>
+<p><strong>국내 전일 수급 (억원)</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>시장</th>
+<th>개인</th>
+<th>외국인</th>
+<th>기관</th>
+<th>기타법인</th>
+<th>프로그램 합계</th>
+<th>차익</th>
+<th>비차익</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>코스피</td>
+<td><span class="up">+331</span></td>
+<td><strong><span class="down">−6,827</span></strong></td>
+<td><span class="up">+6,131</span></td>
+<td><span class="up">+365</span></td>
+<td><span class="down">−4,983</span></td>
+<td><span class="up">+1,472</span></td>
+<td><span class="down">−6,455</span></td>
+</tr>
+<tr>
+<td>코스닥</td>
+<td><span class="up">+801</span></td>
+<td><span class="up">+442</span></td>
+<td><span class="down">−1,268</span></td>
+<td><span class="up">+25</span></td>
+<td><span class="up">+260</span></td>
+<td><span class="down">−32</span></td>
+<td><span class="up">+292</span></td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>코스피는 외국인 매도 규모가 1조원을 크게 넘지 않고, 10/16 이후 매수 3일·매도 4일로 비중 축소가 정점을 지난 흐름<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>. 다만 어제도 비차익 <span class="down">−6,455억</span>으로 바스켓 매도가 이어짐.</li>
+<li>코스닥은 개인이 4일 연속 매수했고 연기금 매수는 산발적으로 바뀜<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span> → 신용 물량이 소화될 때까지 하방 변동성이 이어질 수 있음.</li>
+</ul>
+<div class="judge"><strong>판단:</strong> SOX <span class="up">+2.8%</span>와 원화 강세로 오늘 외국인은 <strong>반도체 중심의 소폭 순매수 전환을 시도할 가능성</strong>이 있음. 다만 비차익 매도가 이어지는 한 지수 전체의 순매수는 확인이 필요함. 장중 프로그램 비차익 방향을 보며 판단.</div></section><section class="card" id="s3"><h2><span class="num">3</span>중요 뉴스</h2><ol>
+<li><strong>앤트로픽 IPO 신청서(S-1) 제출, 티커 'ANT'로 나스닥 상장 예정.</strong> 11월 19~20일 상장설이 있음<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>. 역대 최대 수준의 현금 보유가 공개되며 AI 거품론이 누그러지고 반도체가 반등함.
+   → 국내 영향: HBM(하이닉스·삼성전자), AI 인프라 심리 개선.</li>
+<li><strong>사우디·이란·튀르키예·파키스탄 4개국 회동</strong>, 카타르의 이란 방문. 유가가 장중 <span class="down">−3%</span>까지 밀렸다가 낙폭을 줄임. 전쟁 종결은 아니라는 인식<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>.
+   → 국내 영향: 항공·화학 단기 안도. 유가 100달러 이탈 여부가 관건.</li>
+<li><strong>메타 350억 달러 유상증자에 엔비디아·AMD·브로드컴이 참여</strong>(메타 <span class="down">−1.9%</span>)<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>. 빅테크 자금 조달 이슈가 이어짐.
+   → 국내 영향: AI 반도체 수요는 확인되나, 자금 조달 부담 뉴스가 반복되면 변동성 요인.</li>
+<li><strong>머스크, "네오클라우드 업체 200곳 이상 사라질 수 있다" 경고.</strong> 코어위브만 플러스로 회복<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>.
+   → 국내 영향: 데이터센터·AI 인프라 중소형주의 심리에 부담.</li>
+<li><strong>무디스, 프랑스 신용등급 유지</strong>(강등 예상을 뒤집음)<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>. 채권시장 불안이 진정됨.
+   → 국내 영향: 글로벌 금리 안정에 소폭 우호적.</li>
+<li><strong>삼성전자·SK하이닉스 3분기 실적 발표(28~29일).</strong> 하이닉스 영업이익은 76조원대로 예상되나 주가는 한 달 새 <span class="down">−31%</span>. 최대 60조원 규모의 주주환원설이 나옴<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>.
+   → 국내 영향: 지수 방향을 가를 이번 주 최대 변수.</li>
+<li><strong>JYP엔터, 일본계 넥스록 공개매수설로 야간장 <span class="up">+14%</span>.</strong> 회사는 "인수 제안을 받은 적 없다"고 반박.
+   → 국내 영향: 엔터주 단기 변동성. 자금 증빙이 없어 추격 매수는 위험.</li>
+<li><strong>브라질, 룰라 재집권으로 증시가 장중 16~17% 폭락.</strong>
+   → 국내 영향: 브라질 채권·펀드 투자자에게 부담. 신흥국 위험회피 심리가 번지는지 확인 필요.</li>
+</ol></section><section class="card" id="s4"><h2><span class="num">4</span>돈이 몰린 섹터</h2><p><strong>미국</strong></p>
+<ul>
+<li><strong>반도체 강세</strong> (마이크론 <span class="up">+3.0%</span>, AMD <span class="up">+2.8%</span>, 엔비디아 <span class="up">+2.4%</span>, 브로드컴 <span class="up">+2.3%</span>) — 이유: 앤트로픽 IPO로 AI 수요 기대가 되살아남<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span></li>
+<li><strong>테슬라 <span class="up">+5.2%</span></strong> — 이유: 바클레이즈 매수 의견<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span></li>
+<li><strong>커뮤니케이션 약세</strong> (메타 <span class="down">−1.9%</span>, 알파벳 <span class="down">−1.1%</span>), <strong>애플 <span class="down">−1.1%</span></strong> — 이유: 메타 유상증자, 애플은 아이폰 폴더블(듀오) 화면 결함 보도<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span></li>
+</ul>
+<p><strong>국내 (10/26)</strong></p>
+<ul>
+<li><strong>의료AI / 건강관리기술</strong> (루닛 <span class="up">+30%</span>, 레몬헬스케어 <span class="up">+11.8%</span>, 엠에스바이오 <span class="up">+6.4%</span>) — 이유 미확인. <span class="src">추정</span> 하락장 속 독자 재료를 가진 업종으로 순환매가 몰림.</li>
+<li><strong>로봇</strong> (빅웨이브로보틱스 <span class="up">+29.8%</span>, 로보티즈 <span class="up">+11.8%</span>, 브릴스 <span class="up">+23.6%</span>) — 이유: 로보티즈 '마이크로덕' 사흘 만에 1만 대 판매, 액추에이터 공급 확대 기대(젠슨 황 언급 화제)</li>
+<li><strong>우주</strong> (컨텍 <span class="up">+29.9%</span>, AP위성 <span class="up">+5.8%</span>) — 이유 미확인</li>
+<li><strong>반도체 대형주</strong> (하이닉스 <span class="up">+1.0%</span>, 삼성전자 <span class="down">−0.9%</span>) — 이유: 주주환원 기대로 하이닉스에 자금이 쏠림. 장중 세 차례 130만원 돌파에 실패<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span></li>
+<li><strong>방산 약세</strong> (LIG디펜스 <span class="down">−10.6%</span>, 한화에어로 <span class="down">−4.9%</span>, 우주항공·국방 업종 <span class="down">−5.5%</span>) — 이유: 신규 수출계약·인도 지연 우려. 지난주 K방산 ETF <span class="down">−12%</span>(뉴스1)</li>
+<li><strong>조선 / 에너지장비 약세</strong> (HD현대중공업 <span class="down">−5.1%</span>, 업종 <span class="down">−4.8%</span> / <span class="down">−6.8%</span>) — 이유 미확인. <span class="src">추정</span> 외국인 차익실현과 유가 고점 인식</li>
+<li><strong>반도체 기판·장비 약세</strong> (주성엔지니어링 <span class="down">−6.8%</span>, 심텍 <span class="down">−6.6%</span>, 원익IPS <span class="down">−6.3%</span>, 테마 <span class="down">−5.1%</span>) — 이유: 메모리 업황 둔화 우려와 코스닥 신용 반대매매<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span></li>
+<li><strong>SOFC / 연료전지 <span class="down">−7.9%</span></strong> — 이유 미확인</li>
+</ul></section><section class="card" id="s5"><h2><span class="num">5</span>향후 주요 일정</h2><div class="tbl"><table>
+<thead>
+<tr>
+<th>날짜</th>
+<th>일정</th>
+<th>중요도</th>
+<th>관련 섹터</th>
+<th>관전 포인트</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10/27~28</td>
+<td>FOMC (결과는 29일 새벽 KST) <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐⭐⭐⭐</span></td>
+<td>성장주·금융</td>
+<td>10년물이 5%선에서 꺾이는지. 진행자는 FOMC 뒤 금리 하락 변곡을 기대<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span></td>
+</tr>
+<tr>
+<td>10/28</td>
+<td>SK하이닉스 3Q 실적</td>
+<td><span class="star">⭐⭐⭐⭐⭐</span></td>
+<td>메모리·HBM 소부장</td>
+<td>영업익 76조 전망, 주주환원 카드. 130만원 돌파 여부<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span></td>
+</tr>
+<tr>
+<td>10/29 (목)</td>
+<td>삼성전자 3Q 실적</td>
+<td><span class="star">⭐⭐⭐⭐⭐</span></td>
+<td>반도체 전반</td>
+<td>"목요일이 하이라이트, 이후 거래대금이 터져야"<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span></td>
+</tr>
+<tr>
+<td>이번 주</td>
+<td>MS·알파벳·메타·애플·아마존 실적 <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐⭐⭐</span></td>
+<td>AI 인프라·반도체</td>
+<td>설비투자(Capex) 가이던스가 AI 수익성 의구심을 해소하는지</td>
+</tr>
+<tr>
+<td>11/3</td>
+<td>미국 중간선거</td>
+<td><span class="star">⭐⭐⭐⭐</span></td>
+<td>전 섹터</td>
+<td>마이클 윌슨·야데니는 "선거 뒤 랠리"를 전망<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span></td>
+</tr>
+<tr>
+<td>11/6</td>
+<td>미국 10월 고용 <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐⭐</span></td>
+<td>금리 민감주</td>
+<td></td>
+</tr>
+<tr>
+<td>11/12</td>
+<td>국내 옵션만기 <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐⭐</span></td>
+<td>대형주</td>
+<td>프로그램 매물</td>
+</tr>
+<tr>
+<td>11/10~</td>
+<td>앤트로픽 IPO 로드쇼, 11/19~20 상장설<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span> <span class="src">확인 필요</span></td>
+<td><span class="star">⭐⭐⭐⭐</span></td>
+<td>HBM·AI</td>
+<td>공모 흥행이 AI 심리를 되살리는지</td>
+</tr>
+</tbody>
+</table></div></section><section class="card" id="s6"><h2><span class="num">6</span>선취매 관찰 후보 (투자 권유 아님, 관찰용)</h2><div class="tbl"><table>
+<thead>
+<tr>
+<th>종목</th>
+<th>연결 이벤트</th>
+<th>근거</th>
+<th>리스크 / 무효화 조건</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SK하이닉스</td>
+<td>10/28 실적·주주환원</td>
+<td>SOX <span class="up">+2.8%</span>, 마이크론 <span class="up">+3.0%</span>. 코스피가 박스권 하단일 때도 하이닉스는 상단을 지킴<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>. 대규모 주주환원설</td>
+<td>130만원 돌파에 다시 실패하고 실적 발표 뒤 '재료 소멸' 음봉이 나오면 무효</td>
+</tr>
+<tr>
+<td>삼성전자</td>
+<td>10/29 실적</td>
+<td>역사적 저평가, 3분기 역대 최대 실적 전망</td>
+<td>외국인 비차익 매도 지속, 메모리 업황 둔화 가이던스</td>
+</tr>
+<tr>
+<td>한미반도체</td>
+<td>앤트로픽 IPO, 빅테크 Capex</td>
+<td>HBM 장비 대표주. 전일 <span class="down">−3.3%</span>로 낙폭이 큼</td>
+<td>빅테크 Capex 하향 시 무효</td>
+</tr>
+<tr>
+<td>로보티즈</td>
+<td>피지컬AI 모멘텀</td>
+<td>마이크로덕 판매 호조, 액추에이터 공급 확대</td>
+<td>전일 <span class="up">+11.8%</span> 급등 → 추격 매수 금지, 눌림 확인 필요. 코스닥 반대매매</td>
+</tr>
+<tr>
+<td>루닛</td>
+<td>의료AI 순환매</td>
+<td>하락장 속 상한가(<span class="up">+30%</span>), 거래대금 593억</td>
+<td>재료 미확인. 이틀째 음봉 전환 시 무효</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p>진행자 조언: 10월 7일 이후 외국인·기관이 손실을 감수하며 모은 종목을 관심 목록에 올려 두고, 수급이 꾸준히 이어지는지 매일 확인할 것<span class="yt" title="blueoak 영상 출처" aria-label="영상 출처">📺</span>.</p>
+</blockquote></section><section class="card fold" id="s7"><details><summary><h2><span class="num">7</span>📺 blueoak 영상 요약<span class="hint">펼치기</span></h2></summary><p><strong><a href="https://www.youtube.com/watch?v=wkYf_k9G7UU">모닝 브리핑. 미 증시 상승 이끈 기습 호재 셋. 앤트로픽 상장, 메, 스 뉴스까지…</a></strong> — 2026-10-27 06:08 업로드</p>
+<ul>
+<li>미국 상승 재료 세 가지: 앤트로픽 상장 절차 돌입(11/19~20 상장설), 중동 4개국 회동에 따른 유가 하락, 무디스의 프랑스 등급 유지.</li>
+<li>메타 350억 달러 유상증자는 엔비디아·AMD·브로드컴이 참여해 낙폭이 제한됨. 머스크의 네오클라우드 경고로 AI주는 여전히 불안정.</li>
+<li>유가 100달러대는 여전히 위험 구간이고, 70달러대가 돼야 안심. 10년물은 4.8%대로 내려와야 주식이 다음 단계로 갈 수 있음.</li>
+<li>코스피 박스권(5,500~5,700) 하단을 이탈. 빠르게 되찾지 못하면 저항으로 바뀜. 오늘은 양봉 마감이 중요.</li>
+<li>최근 패턴은 오른 다음 날 더 크게 빠지는 '응징 매도'. 이보다 큰 상승률이 나와야 추세 전환.</li>
+<li>외국인 매도는 1조원 이하로 둔화. 오늘 순매수 전환이 나오면 매수의 지속성이 확인됨.</li>
+<li>하이닉스 '몰아주기' 국면. 130만원 돌파 시 시황이 풀릴 수 있음. 주주환원(최대 60조원설)에 대한 기대.</li>
+<li>코스피 고점 대비 약 <span class="down">−40%</span>로 코로나 때(<span class="down">−45%</span>)에 근접. 실적 훼손 없이 '매도가 매도를 부르는 장'.</li>
+<li>코스닥은 10월 <span class="down">−21%</span>로 수급 붕괴에 따른 과매도. 신용 반대매매로 오후장 급락에 주의.</li>
+<li>한국·대만의 이익 증가 속도가 가장 가팔라 외국인이 한국을 포기하기 어려움. FOMC와 중간선거 뒤 방향이 결정될 전망.</li>
+</ul>
+<p><strong>이견 / 주의</strong></p>
+<ul>
+<li>"하이닉스도 4% 정도 올랐다"는 미국 상장 관련 지표(ADR·ETF 등)를 가리킨 것으로 보이나 확인하지 못함. 국내 하이닉스는 전일 <span class="up">+1.0%</span>.</li>
+<li>진행자는 외국인 매도가 둔화됐다고 봤지만, 어제 코스피 외국인 <span class="down">−6,827억</span>과 비차익 <span class="down">−6,455억</span>은 여전히 큰 규모. 매도가 '정점을 지났다'는 판단은 이르다고 봄.</li>
+<li>10년물이 이번 달 꺾일 것이라는 전망과 달리, 실제로는 4.99%로 5%선 근처에 머물러 아직 확인되지 않음.</li>
+<li>FOMC 일정을 "FMC"로 언급했으나 정확한 날짜는 확인 필요.</li>
+</ul></details></section>
+<div class="foot">투자 판단의 참고 자료이며 투자 권유가 아닙니다.</div>
+</div></body></html>

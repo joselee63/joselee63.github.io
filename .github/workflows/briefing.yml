@@ -1,0 +1,45 @@
+name: briefing
+# Daily briefing(모닝·마감 리포트)만 사이트에 바로 반영 — 전체 빌드(daily.yml)를 기다리지 않음
+# main 의 briefing/ 폴더가 바뀌어 push 되면 gh-pages 의 briefing/ 만 교체해서 올린다.
+# (daily.yml 전체 빌드 때도 build_site.py 가 briefing/ 을 복사하므로 사라지지 않음)
+on:
+  push:
+    branches: [main]
+    paths: ["briefing/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: briefing-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: src
+          sparse-checkout: briefing
+
+      - name: gh-pages 에 브리핑만 반영
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in 1 2 3; do
+            rm -rf pages
+            git clone -q --depth 1 -b gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages
+            rm -rf pages/briefing && cp -r src/briefing pages/briefing
+            cd pages
+            git add -A briefing
+            if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -q -m "briefing ${GITHUB_SHA::7}"
+            if git push -q origin gh-pages; then echo "브리핑 반영 완료"; exit 0; fi
+            cd ..
+            echo "push 실패(전체 빌드와 겹침?) — ${i}번째 재시도"; sleep 15
+          done
+          exit 1
