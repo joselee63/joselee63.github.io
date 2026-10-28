@@ -56,6 +56,7 @@ SCHEDULE = {"base": ["08:40", "19:40"], "results": ["09:06"],
 # 사이트(GitHub Actions) 워크플로를 정시에 시작 — GitHub 예약 실행은 이 저장소에서 매일 4~5시간씩 늦게 시작됨(2026-10 관찰)
 # 순서: 종가베팅 데이터 → 투자자별 수급 → 시총 등 → 사이트 빌드 → 리포트. 늦게 도는 GitHub 예약은 백업(이미 만든 날은 건너뜀)
 SITE_REPO = "joselee63/joselee63.github.io"
+NEWS_JOBS = ["08:45", "10:00", "11:30", "13:30", "15:45", "17:30", "19:50"]   # 사이트 시황판 뉴스 올리는 시각 (tools/market/news_tg.py)
 SITE_JOBS = [("18:42", "closebet.yml"), ("20:10", "investor-data.yml"), ("20:50", "alpha-data.yml"),
              ("21:10", "daily.yml"), ("21:20", "alpha-reports.yml")]
 LOG = []
@@ -1346,6 +1347,18 @@ def site_dispatch(wf):
         log(f"사이트 워크플로 {wf} 실패: {e!r}"[:160])
 
 
+def news_push():
+    """텔레그램 속보 중 '기사 제목 + 원문 링크'만 저장소 data 브랜치 news/tg/ 로 올리고 news.yml 시작 (끄려면 RADAR_SITE_TRIGGER=0)"""
+    if os.environ.get("RADAR_SITE_TRIGGER") == "0" or not (OUT / "telegram").exists():
+        return
+    try:
+        sys.path.insert(0, str(ROOT / "tools" / "market"))
+        import news_tg
+        news_tg.push(log=log)
+    except Exception as e:  # noqa: BLE001
+        log(f"뉴스 올리기 실패: {e!r}"[:160])
+
+
 def scheduler():
     fired = set()
     try:
@@ -1376,6 +1389,12 @@ def scheduler():
                         threading.Thread(target=refresh_am, args=(job,), daemon=True).start()
                     else:
                         threading.Thread(target=refresh, args=(job,), daemon=True).start()
+            for x in NEWS_JOBS:                                  # 사이트 시황판 뉴스: 텔레그램 기사 제목·링크 올리기
+                key = (str(t.date()), "news", x)
+                if key in fired or hm < x or hm > _plus(x, 5):
+                    continue
+                fired.add(key)
+                threading.Thread(target=news_push, daemon=True).start()
             for x, wf in SITE_JOBS:
                 key = (str(t.date()), "site", x)
                 if key in fired or hm < x or hm > _plus(x, 5):

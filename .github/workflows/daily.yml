@@ -141,6 +141,7 @@ jobs:
           fi
           [ -f cbnew/track.json ] && cp cbnew/track.json site/track.json && echo "실전 추적 기록 반영"
           [ -f cbnew/market.json ] && cp cbnew/market.json site/market.json && echo "시황판 데이터 반영"
+          [ -f prev/news.json ] && [ ! -f site/news.json ] && cp prev/news.json site/news.json && echo "시황판 뉴스 유지 (news.yml 이 따로 갱신)"
           echo "deploy=true" >> "$GITHUB_OUTPUT"
 
       - name: gh-pages 브랜치에 배포

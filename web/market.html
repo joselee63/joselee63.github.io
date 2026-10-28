@@ -240,6 +240,7 @@ svg text{font-family:inherit}
 .kw span em{font-style:normal;font-size:11px;color:var(--mu);margin-left:4px}
 .kw.hot span{background:var(--t-no);color:var(--up)} .kw.cold span{background:var(--t-dn);color:var(--dn)}
 .feed{list-style:none;margin:0;padding:0;max-height:520px;overflow:auto}
+.feed a{text-decoration:none;color:inherit} .feed a:hover{text-decoration:underline}
 .feed li{padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.45}
 .feed .meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--mu);margin-bottom:2px}
 .src{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;background:var(--t-un);color:var(--mu)}
@@ -355,12 +356,42 @@ textarea{width:100%;min-height:64px;font:inherit;border:1px solid var(--line);bo
   <div class="hmhead">
     <div>
       <h2>섹터 히트맵 — 언제 어느 섹터가 올랐나</h2>
-      <p class="q">사이트 섹터 분류 33개 · 칸 = 그날 섹터 평균 등락 · 굵은 테두리 = 그날 1위 · 줄을 누르면 섹터 안 종목</p>
+      <p class="q">사이트 섹터 분류 33개 · 칸 = 그날 섹터 평균 등락 · 굵은 테두리 = 그날 1위 · 줄을 누르면 종목과 뉴스</p>
     </div>
     <div class="mtabs" id="hmSort"></div>
   </div>
   <div class="hm-wrap"><table class="hm" id="hm"></table></div>
   <div class="statrow" id="hmStats"></div>
+</section>
+
+<div class="ng">
+  <section class="card">
+    <h2>뉴스 × 반응 — 뉴스가 먹히는 섹터는?</h2>
+    <p class="q">최근 5거래일 · 가로 = 뉴스량(평소 60거래일 대비) · 세로 = 5일 주가(시장 대비) · 점 크기 = 뉴스 건수 · 점을 누르면 그 섹터 뉴스</p>
+    <div id="quad"></div>
+  </section>
+  <section class="card">
+    <h2>이야기 온도 — 헤드라인 단어</h2>
+    <p class="q" id="kwq"></p>
+    <div class="small" style="font-weight:700;margin:4px 0">뜨는 단어 (평소보다 자주)</div>
+    <div class="kw hot" id="kwHot"></div>
+    <div class="small" style="font-weight:700;margin:12px 0 4px">식는 단어</div>
+    <div class="kw cold" id="kwCold"></div>
+    <div class="small" style="font-weight:700;margin:12px 0 4px">이번 주 가장 많이 나온 단어</div>
+    <div class="kw" id="kwTop"></div>
+  </section>
+</div>
+
+<section class="card">
+  <div class="hmhead">
+    <div>
+      <h2>뉴스 피드 <span class="small" id="feedTitle"></span></h2>
+      <p class="q">섹터별로 묶은 기사 제목 — 누르면 원문 기사 · 옆 칩 = 그 뒤 주가 반응 (장 마감 뒤 기사는 다음날 반응)</p>
+    </div>
+    <div class="mtabs" id="feedTabs"></div>
+  </div>
+  <ul class="feed" id="feed"></ul>
+  <div class="small" id="newsSrc" style="margin-top:8px"></div>
 </section>
 
 <div class="ng">
@@ -571,7 +602,7 @@ function renderHM() {
     }
   });
   $("hm").innerHTML = h + "</tbody>";
-  $("hm").querySelectorAll("tr.row").forEach(tr => tr.onclick = () => { const n = tr.dataset.s; openSec = openSec === n ? null : n; renderHM(); });
+  $("hm").querySelectorAll("tr.row").forEach(tr => tr.onclick = () => { const n = tr.dataset.s; openSec = openSec === n ? null : n; selectSector(n, false); renderHM(); });
 }
 $("hmSort").innerHTML = [["r5", "5일 강한 순"], ["r20", "20일 강한 순"]].map(([k, t]) => `<button type="button" data-k="${k}" class="${k === hmSort ? "on" : ""}">${t}</button>`).join("");
 $("hmSort").querySelectorAll("button").forEach(b => b.onclick = () => { hmSort = b.dataset.k; $("hmSort").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); renderHM(); });
@@ -587,6 +618,82 @@ $("hmStats").innerHTML = [
 $("cal").innerHTML = D.cal.map(c => `<li><span class="d">${c.d}</span><span>${esc(c.t)}${c.note ? ` <span class="small">· ${esc(c.note)}</span>` : ""}</span></li>`).join("");
 
 renderHM();
+
+/* ---------- 뉴스 (news.json: 텔레그램 속보의 기사 제목·원문 링크 + 언론사 RSS) ---------- */
+let NW = null;
+/* ---------- 사분면 ---------- */
+function renderQuad() {
+  const qs = NW.quad, W = 560, Hh = 380, P = {l: 44, r: 14, t: 16, b: 34};
+  const xs = qs.map(q => q.x), ys = qs.map(q => q.y);
+  const xm = Math.max(1, ...xs.map(Math.abs)) * 1.08, ym = Math.max(2, ...ys.map(Math.abs)) * 1.1;
+  const X = x => P.l + (x + xm) / (2 * xm) * (W - P.l - P.r), Y = y => P.t + (ym - y) / (2 * ym) * (Hh - P.t - P.b);
+  let s = `<svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="섹터별 뉴스량과 주가 반응">`;
+  s += `<rect x="${X(0)}" y="${P.t}" width="${W - P.r - X(0)}" height="${Y(0) - P.t}" fill="var(--up)" opacity=".05"/>`;
+  s += `<rect x="${X(0)}" y="${Y(0)}" width="${W - P.r - X(0)}" height="${Hh - P.b - Y(0)}" fill="var(--dn)" opacity=".05"/>`;
+  s += `<line x1="${X(0)}" x2="${X(0)}" y1="${P.t}" y2="${Hh - P.b}" stroke="var(--line)"/><line x1="${P.l}" x2="${W - P.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)"/>`;
+  const lab = (x, y, t, a) => `<text x="${x}" y="${y}" font-size="11" fill="var(--mu)" text-anchor="${a}" font-weight="700">${t}</text>`;
+  s += lab(W - P.r - 4, P.t + 12, "뉴스↑ 주가↑ · 호재가 먹힘", "end") + lab(W - P.r - 4, Hh - P.b - 6, "뉴스↑ 주가↓ · 호재 무시 / 악재", "end");
+  s += lab(P.l + 4, P.t + 12, "뉴스 없이 상승 · 수급·순환", "start") + lab(P.l + 4, Hh - P.b - 6, "조용한 약세", "start");
+  s += `<text x="${(P.l + W - P.r) / 2}" y="${Hh - 8}" font-size="11" fill="var(--mu)" text-anchor="middle">뉴스량 (평소 대비, 오른쪽일수록 많음)</text>`;
+  s += `<text x="12" y="${(P.t + Hh - P.b) / 2}" font-size="11" fill="var(--mu)" text-anchor="middle" transform="rotate(-90 12 ${(P.t + Hh - P.b) / 2})">5일 주가 (시장 대비 %p)</text>`;
+  [-ym * .66, -ym * .33, ym * .33, ym * .66].forEach(v => s += `<text x="${P.l - 6}" y="${Y(v) + 4}" font-size="10" fill="var(--mu)" text-anchor="end">${sgn(v, 0)}</text>`);
+  const order = qs.map((q, i) => i).sort((a, b) => qs[a].cnt - qs[b].cnt);
+  // 라벨 겹침 피하기: 선택 섹터 → 뉴스 많은 순 → 멀리 떨어진 순으로 자리 잡기
+  const placed = [], showLab = new Set();
+  const pri = qs.map((q, i) => i).sort((a, b) => ((qs[b].n === selSec) - (qs[a].n === selSec)) || (qs[b].cnt + Math.abs(qs[b].y) / ym * 6 + Math.abs(qs[b].x) / xm * 6) - (qs[a].cnt + Math.abs(qs[a].y) / ym * 6 + Math.abs(qs[a].x) / xm * 6));
+  pri.forEach(i => {
+    const q = qs[i], r = 4 + Math.sqrt(q.cnt) * 2.2, w = short(q.n).length * 11 + 4;
+    const box = [X(q.x) + r + 2, Y(q.y) - 8, X(q.x) + r + 2 + w, Y(q.y) + 6];
+    if (box[2] > W - 2) { box[0] = X(q.x) - r - 2 - w; box[2] = X(q.x) - r - 2; }
+    if (placed.some(b => !(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3]))) return;
+    if (placed.length >= 16 && q.n !== selSec) return;
+    placed.push(box); showLab.add(i); q._lx = box[0];
+  });
+  order.forEach(i => {
+    const q = qs[i], r = 4 + Math.sqrt(q.cnt) * 2.2, on = selSec === q.n;
+    const c = q.y >= 0 ? "var(--up)" : "var(--dn)";
+    s += `<g class="qp" data-s="${esc(q.n)}" style="cursor:pointer"><title>${esc(q.n)} · 뉴스 ${q.cnt}건 (평소 ${q.base}) · 시장 대비 ${sgn(q.y, 2)}%p</title>
+      <circle cx="${X(q.x)}" cy="${Y(q.y)}" r="${r}" fill="${c}" fill-opacity="${on ? .9 : .35}" stroke="${on ? "var(--fg)" : c}" stroke-width="${on ? 2 : 1}"/>`;
+    if (showLab.has(i)) s += `<text x="${q._lx}" y="${Y(q.y) + 4}" font-size="11" fill="var(--fg)" font-weight="${on ? 800 : 400}">${esc(short(q.n))}</text>`;
+    s += `</g>`;
+  });
+  $("quad").innerHTML = s + "</svg>";
+  $("quad").querySelectorAll(".qp").forEach(g => g.onclick = () => selectSector(g.dataset.s, true));
+}
+
+/* ---------- 피드 ---------- */
+let feedMode = "sec";
+function rxChip(it) {
+  if (it.live) return `<span class="rx l">${esc(it.who && it.who !== "섹터" ? it.who : "")} 오늘 장중</span>`;
+  if (it.r == null) return "";
+  return `<span class="rx ${it.r >= 0 ? "u" : "d"}" title="${it.sd} 세션 반응">${esc(it.who === "섹터" ? "섹터" : it.who)} ${sgn(it.r)}% <span style="font-weight:400">${it.sd}</span></span>`;
+}
+function renderFeed() {
+  const items = feedMode === "all" ? NW.all : (NW.feed[selSec] || []);
+  $("feedTitle").textContent = feedMode === "all" ? "— 전체 최신" : `— ${selSec}`;
+  $("feedTabs").innerHTML = `<button type="button" data-m="sec" class="${feedMode === "sec" ? "on" : ""}">${esc(short(selSec))}</button><button type="button" data-m="all" class="${feedMode === "all" ? "on" : ""}">전체 최신</button>`;
+  $("feedTabs").querySelectorAll("button").forEach(b => b.onclick = () => { feedMode = b.dataset.m; renderFeed(); });
+  $("feed").innerHTML = items.length ? items.map(it => `<li><div class="meta"><span>${it.t}</span><span class="src">${esc(it.m)}</span>${(it.sec || []).map(t => `<span class="tag">${esc(short(t))}</span>`).join("")}${feedMode === "sec" ? rxChip(it) : (it.live ? '<span class="rx l">오늘 장중</span>' : "")}</div><a href="${esc(it.u)}" target="_blank" rel="noopener">${esc(it.h)}</a></li>`).join("") : `<li class="mu">최근 2주 이 섹터 헤드라인 없음</li>`;
+}
+function selectSector(n, scroll) {
+  if (!NW) return;
+  selSec = n; feedMode = "sec"; renderFeed(); renderQuad();
+  document.querySelectorAll("#hm tr.row").forEach(tr => tr.classList.toggle("sel", tr.dataset.s === n));
+  if (scroll) $("feed").scrollIntoView({behavior: "smooth", block: "nearest"});
+}
+
+fetch("news.json?t=" + Date.now(), {cache: "no-cache"}).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(N => {
+  NW = N;
+  $("kwq").textContent = `최근 5거래일(오늘 포함) 헤드라인 ${N.n_rec.toLocaleString()}건 vs 직전 20거래일 ${N.n_base.toLocaleString()}건 · 규칙으로 센 단어라 거침`;
+  $("kwHot").innerHTML = N.rising.length ? N.rising.map(k => `<span title="이번 ${k.c}건 · 직전 ${k.b}건">${esc(k.w)}<em>×${k.r.toFixed(1)}</em></span>`).join("") : `<span class="mu">없음</span>`;
+  $("kwCold").innerHTML = N.cool.length ? N.cool.map(k => `<span title="이번 ${k.c}건 · 직전 ${k.b}건">${esc(k.w)}<em>×${k.r.toFixed(1)}</em></span>`).join("") : `<span class="mu">없음</span>`;
+  $("kwTop").innerHTML = N.top.map(k => `<span>${esc(k.w)}<em>${k.c}</em></span>`).join("");
+  $("newsSrc").textContent = `출처: 텔레그램 속보 채널의 기사 제목·원문 링크(수집 ${N.tg_last || "–"}까지) + 연합뉴스·한국경제·전자신문 RSS · 갱신 ${N.built}` + (N.basis === "all" ? " · 텔레그램 기록이 적어 RSS 포함 기준" : "");
+  const top = N.quad.slice().sort((a, b) => (b.today - a.today) || (b.cnt - a.cnt))[0];
+  if (top) { selSec = top.n; renderQuad(); renderFeed(); }
+}).catch(e => {
+  ["quad", "kwHot", "feed"].forEach(id => $(id).innerHTML = `<span class="mu">뉴스 데이터를 아직 만들지 못했습니다 (${esc(e.message)})</span>`);
+});
 
 /* ---------- 메모 ---------- */
 const SEG = [["비중", ["공격", "보통", "방어"], G1.verdict], ["매수 방식", ["불타기", "중립", "눌림 대기", "눌림 금지"], G2.verdict], ["섹터", ["주도 집중", "혼합", "순환·대기"], G3.verdict]];

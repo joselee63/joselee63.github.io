@@ -1,0 +1,88 @@
+name: news
+# 시황판 뉴스(news.json)만 사이트에 바로 반영 — 전체 빌드(daily.yml)를 기다리지 않음
+#   입력: 언론사 RSS(실행 때마다 받아 data 브랜치 news/rss/ 에 쌓음)
+#         + 내 PC 종베 레이더가 올린 텔레그램 속보의 '기사 제목 · 원문 링크'(data 브랜치 news/tg/, tools/market/news_tg.py)
+#         + 릴리스 closebet-data 의 market.json (섹터 구성 · 등락)
+#   레이더가 뉴스를 올릴 때마다 이 워크플로를 바로 시작하고, PC 가 꺼져 있어도 아래 시각엔 RSS 로 갱신
+on:
+  schedule:
+    - cron: "50 8 * * 1-5"
+      timezone: "Asia/Seoul"
+    - cron: "40 11 * * 1-5"
+      timezone: "Asia/Seoul"
+    - cron: "40 13 * * 1-5"
+      timezone: "Asia/Seoul"
+    - cron: "50 15 * * 1-5"
+      timezone: "Asia/Seoul"
+    - cron: "55 19 * * 1-5"
+      timezone: "Asia/Seoul"
+    - cron: "20 10 * * 0,6"          # 주말 한 번
+      timezone: "Asia/Seoul"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: news-publish
+  cancel-in-progress: false
+
+jobs:
+  news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: src
+          sparse-checkout: tools/market
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: 패키지 · data 브랜치 news/ · market.json 받기
+        run: |
+          pip install -q requests
+          git clone -q --depth 5 --filter=blob:none --sparse -b data \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" datab
+          git -C datab sparse-checkout set news
+          gh release download closebet-data -p market.json -D mk -R "$GITHUB_REPOSITORY"
+          ls datab/news/tg | tail -2; ls datab/news/rss 2>/dev/null | tail -2 || true
+
+      - name: news.json 만들기
+        run: python src/tools/market/news_board.py datab/news mk/market.json news.json
+
+      - name: RSS 기록 저장 (data 브랜치 news/rss)
+        continue-on-error: true
+        run: |
+          cd datab
+          git add -A news/rss
+          if git diff --cached --quiet; then echo "새 RSS 기사 없음"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "news rss $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          for i in 1 2 3; do
+            git push -q origin data && { echo "RSS 기록 저장"; exit 0; }
+            git fetch -q --depth 5 origin data && git rebase -q origin/data || true
+            sleep 5
+          done
+          exit 1
+
+      - name: gh-pages 에 news.json 반영
+        run: |
+          for i in 1 2 3; do
+            rm -rf pages
+            git clone -q --depth 1 -b gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages
+            cp news.json pages/news.json
+            cd pages
+            git add news.json
+            if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -q -m "news $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+            if git push -q origin gh-pages; then echo "뉴스 반영 완료"; exit 0; fi
+            cd ..
+            echo "push 실패(전체 빌드와 겹침?) — ${i}번째 재시도"; sleep 15
+          done
+          exit 1
