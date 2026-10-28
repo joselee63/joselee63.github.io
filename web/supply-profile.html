@@ -438,6 +438,21 @@ header .lnk,header .status{color:var(--hd-mu)}
 .ptip .r i{font-style:normal;color:var(--muted)}
 .ptip .dot{display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:2px;vertical-align:0}
 @media (max-width:1000px){ .pwrap{height:min(620px,76vh)} .who{order:2} }
+/* 구간 주체 분석 */
+.pana{border:1px solid var(--line);border-radius:14px;padding:12px 14px 10px;margin:12px 0 0}
+.pana .hd{font-size:13.5px;line-height:1.55;margin:0 0 8px}
+.pana .hd b{font-weight:700}
+.pana .tw{overflow-x:auto}
+.pana table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pana th,.pana td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--line)}
+.pana th{font-size:11.5px;font-weight:600;color:var(--muted)}
+.pana th:first-child,.pana td:first-child{text-align:left}
+.pana tr:last-child td{border-bottom:0}
+.pana td i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.pana .lead{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--accent);color:var(--accent-fg);margin-left:6px}
+.pana .sub2{color:var(--muted);font-size:11.5px;margin-left:4px}
+.pana .ft{font-size:11.5px;color:var(--muted);margin:8px 0 0;line-height:1.6}
+.pana tr.off td{opacity:.45}
 </style>
 </head>
 <body>
@@ -524,6 +539,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         <div class="ptip" id="ptip"></div>
       </div>
       <div class="povwrap"><canvas id="pov" aria-label="전체 기간 미니맵"></canvas></div>
+      <div class="pana" id="pana"></div>
       <p class="unote">마우스 휠 = 확대·축소 · 드래그 = 기간 이동 · 더블클릭 = 전체 보기 · 아래 미니맵을 눌러 구간 이동 · 왼쪽 매물대에 마우스를 올리면 가격대별 합계, 종가선·아래 막대에 올리면 그날 값 · 아래 막대 = 일별 주체별 순매수 (1년·전체처럼 막대가 좁으면 순매수는 위로·순매도는 아래로 쌓아서 표시)<br>
         매물대는 화면에 보이는 기간만 집계합니다 · 가격대는 그 기간 종가의 최저~최고를 같은 폭으로 나눈 것 · 매매주체 데이터는 KRX(2021-10~), ETF 제외</p>
     </div>
@@ -736,7 +752,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       ctx.strokeStyle = C.mu; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(hx, T); ctx.lineTo(hx, FB); ctx.moveTo(L, Math.round(hy) + .5); ctx.lineTo(R, Math.round(hy) + .5); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = C.fg; ctx.beginPath(); ctx.arc(hx, hy, 3.6, 0, 6.3); ctx.fill();
     }
-    drawOverview(C); drawStats(a, b, prof);
+    drawOverview(C); drawStats(a, b, prof); drawAnalysis(a, b);
   }
   function drawOverview(C){
     var pr = prep(ov), x = pr.x, w = pr.w, h = pr.h, N = S.rows.length;
@@ -753,6 +769,63 @@ header .lnk,header .status{color:var(--hd-mu)}
     x.fillStyle = C.mu; x.font = "11px -apple-system,'Malgun Gothic',sans-serif"; x.textBaseline = "middle"; x.textAlign = "left";
     x.fillText(num(N) + "일", R + 8, T + ph / 2);
     ov._geo = { L: L, R: R, N: N };
+  }
+  // ---------- 보이는 구간의 주체별 분석 (확대·이동할 때마다 다시 계산) ----------
+  function corr(xs, ys){
+    var n = xs.length; if (n < 10) return NaN;
+    var mx = 0, my = 0, i; for (i = 0; i < n; i++) { mx += xs[i]; my += ys[i]; } mx /= n; my /= n;
+    var sxy = 0, sxx = 0, syy = 0; for (i = 0; i < n; i++) { var dx = xs[i] - mx, dy = ys[i] - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy; }
+    return sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : NaN;
+  }
+  function analyze(t, a, b){
+    // 추정 평균단가: 그날 순매수 금액 ÷ 종가 = 추정 주식 수, 이동평균법(증권사 평단과 같은 방식). 구간 시작일 보유 0에서 출발
+    var q = 0, A = 0, real = 0, gross = 0, net = 0, xs = [], ys = [], i;
+    for (i = a; i <= b; i++) {
+      var r = S.rows[i], amt = r.v[t], c = r.c;
+      net += amt; gross += Math.abs(amt);
+      if (i > a) { xs.push(amt); ys.push(c / S.rows[i - 1].c - 1); }
+      if (!amt) continue;
+      var sh = amt / c;
+      if (q === 0 || (q > 0) === (sh > 0)) { A = (A * Math.abs(q) + Math.abs(amt)) / (Math.abs(q) + Math.abs(sh)); q += sh; }
+      else {
+        var cl = Math.min(Math.abs(sh), Math.abs(q)), q0 = q;
+        real += (q0 > 0 ? 1 : -1) * cl * (c - A); q += sh;
+        if (Math.abs(q) < 1e-12) { q = 0; A = 0; } else if ((q > 0) !== (q0 > 0)) A = c;   // 방향이 뒤집히면 남은 물량은 그날 종가로 새로 시작
+      }
+    }
+    var last = S.rows[b].c, unreal = q * (last - A), ret = q > 0 ? last / A - 1 : q < 0 ? A / last - 1 : NaN;
+    var thin = gross > 0 && Math.abs(q * A) < gross * 0.05;                    // 남은 물량이 거래 규모에 비해 아주 적으면 평단 의미 약함
+    return { t: t, net: net, q: q, A: A, last: last, ret: ret, unreal: unreal, real: real, cor: corr(xs, ys), thin: thin };
+  }
+  function drawAnalysis(a, b){
+    var list = TYPES.filter(function(t){ return !(t === "개인" && !P); }).map(function(t){ return analyze(t, a, b); });
+    var ok = list.filter(function(x){ return !isNaN(x.cor); }), lead = null;
+    ok.forEach(function(x){ if (x.cor > 0.15 && (!lead || x.cor > lead.cor)) lead = x; });
+    var big = list.slice().sort(function(x, y){ return Math.abs(y.net) - Math.abs(x.net); })[0];
+    var hd;
+    if (!ok.length) hd = "구간이 너무 짧아(10거래일 미만) 동행도를 계산하지 않았습니다.";
+    else if (lead) hd = "이 구간 주가와 가장 같이 움직인 주체는 <b>" + lead.t + "</b>입니다 (동행도 " + (lead.cor > 0 ? "+" : "") + lead.cor.toFixed(2) + ")" +
+      " · " + lead.t + " 추정 평균" + (lead.q >= 0 ? "매수" : "매도") + "단가 <b>" + (lead.A ? num(lead.A, lead.A < 100 ? 2 : 0) + "원" : "-") + "</b>" +
+      (isNaN(lead.ret) || lead.thin ? "" : ", 지금 <b style=\"color:" + colorUD(lead.ret) + "\">" + sg(lead.ret * 100) + (lead.ret * 100).toFixed(1) + "%</b>" + (lead.q >= 0 ? "" : " (판 뒤 주가 하락 = +)"));
+    else hd = "이 구간에는 주가와 뚜렷하게 같이 움직인 주체가 없습니다 (모두 동행도 0.15 이하).";
+    if (big && ok.length) hd += "<br><span class=\"sub2\" style=\"margin:0\">순매수·순매도 규모가 가장 큰 주체: " + big.t + " " + eokF(big.net) + "</span>";
+    var rows = list.map(function(x){
+      var dir = x.q > 0 ? "매수 보유" : x.q < 0 ? "매도 우위" : "없음";
+      return '<tr' + (S.on[x.t] ? "" : ' class="off"') + '><td><i style="background:var(' + VAR[x.t] + ')"></i>' + x.t + (lead && lead.t === x.t ? '<span class="lead">주도</span>' : "") + "</td>" +
+        "<td>" + (isNaN(x.cor) ? "-" : '<span style="color:' + colorUD(x.cor) + '">' + (x.cor > 0 ? "+" : "") + x.cor.toFixed(2) + "</span>") + "</td>" +
+        '<td style="color:' + colorUD(x.net) + '">' + eokF(x.net) + "</td>" +
+        "<td>" + dir + "</td>" +
+        "<td>" + (x.A ? num(x.A, x.A < 100 ? 2 : 0) + (x.thin ? '<span class="sub2">물량 적음</span>' : "") : "-") + "</td>" +
+        "<td>" + (isNaN(x.ret) ? "-" : '<span style="color:' + colorUD(x.ret) + '">' + sg(x.ret * 100) + (x.ret * 100).toFixed(1) + "%</span>") + "</td>" +
+        '<td style="color:' + colorUD(x.unreal) + '">' + (x.q ? eokF(x.unreal) : "-") + "</td>" +
+        '<td style="color:' + colorUD(x.real) + '">' + eokF(x.real) + "</td></tr>";
+    }).join("");
+    $("pana").innerHTML = '<p class="hd">' + hd + "</p>" +
+      '<div class="tw"><table><thead><tr><th>주체</th><th>주가 동행도</th><th>구간 순매수</th><th>남은 물량</th><th>추정 평균단가</th><th>수익률</th><th>평가손익</th><th>실현손익</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
+      '<p class="ft">구간 ' + ymd(S.rows[a].dn) + " ~ " + ymd(S.rows[b].dn) + ", 현재가 = 구간 마지막 날 종가 " + num(S.rows[b].c, S.rows[b].c < 100 ? 2 : 0) + "원 · " +
+      "주가 동행도 = 일별 순매수와 그날 주가 등락률의 상관계수(−1~+1). +일수록 그 주체가 살 때 오르고 팔 때 내림 · " +
+      "추정 평균단가 = 구간 첫날부터 쌓은 물량의 평단(순매수 금액 ÷ 그날 종가로 주식 수 추정, 이동평균법). 매도 우위면 평균 매도단가이고, 판 뒤 주가가 내렸으면 수익률 + · " +
+      "실현손익 = 구간 안에서 되판(되산) 물량의 손익 · 종가 기준 추정이라 실제 체결 단가와 다릅니다</p>";
   }
   function drawStats(a, b, prof){
     var f = S.rows[a], l = S.rows[b], chg = (l.c / f.c - 1) * 100, tot = {};
