@@ -125,6 +125,10 @@ details.interp .ib{margin-top:10px;font-size:14px;line-height:1.7}
 details.interp .ib h3{font-size:13.5px;margin:12px 0 2px}
 details.interp .ib p{margin:0}
 details.interp .ib ul{margin:4px 0 0;padding-left:20px}
+details.gblk summary{flex-wrap:wrap}
+details.gblk .gsum{display:inline-flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;font-weight:400;color:var(--mu)}
+details.gblk .gsum b{font-weight:700}
+details.gblk .gg{margin-top:12px}
 .newsbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:16px 0 0}
 .nbtn{font:inherit;font-size:13.5px;font-weight:700;border:0;border-radius:980px;padding:8px 16px;cursor:pointer;background:var(--pill-on,#1d1d1f);color:var(--pill-on-fg,#fff)}
 .nbtn:disabled{opacity:.55;cursor:default}
@@ -223,7 +227,7 @@ table.hm th{font-weight:600;color:var(--mu);font-size:11px;white-space:nowrap;pa
 table.hm th.l, table.hm td.l{text-align:left;position:sticky;left:0;background:var(--card);z-index:1;white-space:nowrap;padding-right:8px}
 table.hm td{padding:0;text-align:center;font-variant-numeric:tabular-nums}
 table.hm td.c{height:24px;min-width:30px;border-radius:3px;font-size:10.5px;cursor:pointer}
-table.hm td.c.top{box-shadow:inset 0 0 0 2px var(--fg)}
+table.hm td.c.d1{box-shadow:inset 0 0 0 2px var(--fg)}
 table.hm td.n{padding:0 6px;white-space:nowrap;text-align:right}
 table.hm tr.sel td.l{box-shadow:inset 3px 0 0 var(--acc)}
 table.hm tr.row{cursor:pointer}
@@ -355,7 +359,10 @@ textarea{width:100%;min-height:64px;font:inherit;border:1px solid var(--line);bo
   <div class="legend" id="bandLegend"></div>
 </section>
 
-<div class="gg" id="gauges"></div>
+<details class="card interp gblk" id="gaugeBlk">
+  <summary>계기 1 · 2 · 3 — 판정의 근거 숫자 <span class="gsum" id="gsum"></span> <span class="small" style="font-weight:400">(눌러서 펼치기)</span></summary>
+  <div class="gg" id="gauges"></div>
+</details>
 
 <section class="card" id="heatCard">
   <div class="hmhead">
@@ -586,6 +593,7 @@ const panels = [
   {g: G3, t: "계기 3 · 쏠림인가 순환인가", q: "→ 주도 집중 vs 순환·대기", x: g3x},
 ];
 $("gauges").innerHTML = panels.map(p => `<section class="card"><h2>${p.t}</h2><p class="q">${p.q} · 판정 <b class="t-${VC[p.g.verdict]}">${p.g.verdict}</b></p><div class="mets">${p.g.metrics.map(metHTML).join("")}</div><div class="exs">${p.x}</div></section>`).join("");
+$("gsum").innerHTML = panels.map((p, i) => `<span>계기 ${i + 1} <b class="t-${VC[p.g.verdict]}">${p.g.verdict}</b></span>`).join("");
 
 /* ---------- 섹터 히트맵 ---------- */
 const H = G3.heat, hd = G3.heat_dates;
@@ -605,7 +613,7 @@ function renderHM() {
   idx.forEach(i => {
     const s = H[i];
     h += `<tr class="row ${selSec === s.n ? "sel" : ""}" data-s="${esc(s.n)}"><td class="l" title="${esc(s.n)}">${esc(short(s.n))}</td>` +
-      s.d.map((v, j) => { const a = v == null ? 0 : Math.min(1, Math.abs(v) / 4) * 0.9; return `<td class="c ${topDay[j] === i ? "top" : ""}" style="background:${heatBg(v)};color:${a > .55 ? "#fff" : "var(--fg)"}" title="${esc(short(s.n))} ${md(hd[j])} ${sgn(v, 2)}%">${v == null ? "" : (Math.abs(v) >= 1 ? sgn(v, 0) : "")}</td>`; }).join("") +
+      s.d.map((v, j) => { const a = v == null ? 0 : Math.min(1, Math.abs(v) / 4) * 0.9; return `<td class="c ${topDay[j] === i ? "d1" : ""}" style="background:${heatBg(v)};color:${a > .55 ? "#fff" : "var(--fg)"}" title="${esc(short(s.n))} ${md(hd[j])} ${sgn(v, 2)}%">${v == null ? "" : (Math.abs(v) >= 1 ? sgn(v, 0) : "")}</td>`; }).join("") +
       `<td class="n ${cls(s.rel5)}">${sgn(s.rel5)}</td><td class="n ${cls(s.rel20)}">${sgn(s.rel20)}</td><td class="n">${s.part == null ? "–" : s.part + "%"}</td>` + "</tr>";
     if (openSec === s.n) {
       h += `<tr class="det"><td colspan="${hd.length + 4}"><b>${esc(s.n)}</b> — 5일 등락: ${s.mem.map(m => `${esc(m.n)} <span class="${cls(m.r5)}">${sgn(m.r5)}%</span>`).join(" · ")}</td></tr>`;
