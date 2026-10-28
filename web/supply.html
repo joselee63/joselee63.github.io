@@ -401,6 +401,13 @@ header .lnk,header .status{color:var(--hd-mu)}
   .uwrap{padding:10px 10px 60px;gap:10px} .uhead{padding:12px 12px 10px} .ubody{padding:12px 10px 14px}
   .urow input.q{width:100%} .ustats{grid-template-columns:repeat(2,minmax(0,1fr))} .ugo{margin-left:0;width:100%} #uc{height:min(480px,62vh)}
 }
+/* 수급 하위 탭: 수급 오실레이터 · 수급 매물대 차트 */
+.subtabs{display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--soft);align-self:flex-start;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.subtabs::-webkit-scrollbar{display:none}
+.subtabs a{font-size:13.5px;font-weight:600;text-decoration:none;color:var(--muted);border-radius:999px;padding:8px 18px;white-space:nowrap}
+.subtabs a.on{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+@media (hover:hover){ .subtabs a:not(.on):hover{color:var(--fg)} }
+@media (max-width:520px){ .subtabs{align-self:stretch} .subtabs a{flex:1;text-align:center;padding:8px 10px} }
 /* 퀀트 탭 */
 .tab.qnt{text-decoration:none;box-shadow:inset 0 0 0 1px var(--line)}
 .tab.qnt.on{box-shadow:none}
@@ -455,6 +462,10 @@ header .lnk,header .status{color:var(--hd-mu)}
   </div>
 </nav>
 <div class="uwrap">
+  <nav class="subtabs" aria-label="수급 보기">
+    <a class="on" href="supply.html" id="subO" aria-current="page">수급 오실레이터</a>
+    <a href="supply-profile.html" id="subP">수급 매물대 차트</a>
+  </nav>
   <section class="card">
     <div class="uhead">
       <h2>수급 오실레이터</h2>
@@ -602,6 +613,8 @@ header .lnk,header .status{color:var(--hd-mu)}
 
   function select(k){
     K = k; T = snap(); noteDate();
+    try { history.replaceState(null, "", "#" + U.stocks[k].c); } catch (e) {}
+    $("subP").href = "supply-profile.html#" + U.stocks[k].c;            // 하위 탭을 옮겨도 같은 종목
     var s = U.stocks[k], t = T, sc = SC[k][t], ls = lastSignal(k, t), recent = ls >= 0 && t - ls <= 5;
     $("uname").innerHTML = esc(s.n) + "<small>" + esc(s.c) + " · " + esc(s.s) + "</small>" + (recent ? '<span class="usig">▲ 수급 바닥 반등 ' + (t === ls ? "오늘" : (t - ls) + "일 전") + "</span>" : "");
     $("ustats").innerHTML =

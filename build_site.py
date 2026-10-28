@@ -952,12 +952,12 @@ def write_supply_data(data, sections, listing, build_id):
     files = sorted(glob.glob(os.path.join(inv_dir, "*", "*.csv")))
     if not files:
         return 0
-    use = ["날짜", "코드", "외국인_순매수", "기타외국인_순매수", "기관계_순매수"]
+    use = ["날짜", "코드", "개인_순매수", "외국인_순매수", "기타외국인_순매수", "기관계_순매수"]
     inv = pd.concat([pd.read_csv(f, usecols=use, dtype={"코드": str}, encoding="utf-8-sig") for f in files], ignore_index=True)
     inv["날짜"] = pd.to_datetime(inv["날짜"])
     cal = pd.DatetimeIndex(sorted(inv["날짜"].unique()))
     names = {c: (nm, s) for s, it in sections for c, nm, _ in it}
-    stocks, rows = [], {"c": [], "f": [], "i": []}
+    stocks, rows, prow = [], {"c": [], "f": [], "i": []}, []
     for code, g in inv.groupby("코드"):
         if code not in data or listing is None or code not in listing.index:
             continue
@@ -970,12 +970,16 @@ def write_supply_data(data, sections, listing, build_id):
         cl = data[code]["df"]["Close"].reindex(cal)
         q = lambda ser, d=0: [None if pd.isna(v) else (int(round(v)) if d == 0 else round(float(v), d)) for v in ser.values]
         rows["c"].append(q(cl)); rows["f"].append(q(f5, 2)); rows["i"].append(q(i5, 2))
+        prow.append(q(g["개인_순매수"] / 1e8, 2))
         nm, sec = names.get(code, (code, ""))
         stocks.append({"c": code, "n": nm, "s": sec, "sh": int(shares)})
     os.makedirs(os.path.join(SITE_DIR, "supply"), exist_ok=True)
     with open(os.path.join(SITE_DIR, "supply", "index.json"), "w", encoding="utf-8") as f:
         json.dump({"build": build_id, "window": SUPPLY_WINDOW, "daily": True, "dates": [int(x.strftime("%Y%m%d")) for x in cal],
                    "stocks": stocks, **rows}, f, ensure_ascii=False, separators=(",", ":"))
+    # 수급 매물대 차트용 개인 순매수 (억원) — index.json과 같은 종목 순서. 오실레이터 페이지가 받지 않도록 따로 저장
+    with open(os.path.join(SITE_DIR, "supply", "profile.json"), "w", encoding="utf-8") as f:
+        json.dump({"build": build_id, "codes": [s["c"] for s in stocks], "p": prow}, f, ensure_ascii=False, separators=(",", ":"))
     return len(stocks)
 
 
@@ -1153,7 +1157,7 @@ def render_page(src, page):
         here = MARKETS[MARKET]["site"]                       # 지금 페이지 위치에서 상대 경로
         there = MARKETS[m]["site"]
         href = ("../" if here else "") + (there + "/" if there else "")
-        kr_only = page in ("briefing.html",) and m != "kr"        # 한국에만 있는 페이지 → 다른 시장은 첫 화면으로
+        kr_only = page in ("briefing.html", "supply.html", "supply-profile.html", "temp.html", "track.html") and m != "kr"        # 한국에만 있는 페이지 → 다른 시장은 첫 화면으로
         href = (href or "./") + ("" if page == "index.html" or kr_only else page)
         links.append(f'<a href="{href}"{" class=\"on\" aria-current=\"page\"" if m == MARKET else ""}>'
                      f'{FLAG_SVG[m]}<span>{label}</span></a>')
@@ -1351,7 +1355,7 @@ def main():
     print("[3/3] 페이지 생성")
     with open(os.path.join(SITE_DIR, "data", "summary.js"), "w", encoding="utf-8") as f:
         f.write("window.__krsc_summary && window.__krsc_summary(" + js + ");\n")
-    for page in ("index.html", "game.html", "similar.html", "screener.html", "quant.html") + (("supply.html", "temp.html", "track.html", "briefing.html") if MARKET == "kr" else ()):
+    for page in ("index.html", "game.html", "similar.html", "screener.html", "quant.html") + (("supply.html", "supply-profile.html", "temp.html", "track.html", "briefing.html") if MARKET == "kr" else ()):
         with open(os.path.join(WEB_DIR, page), encoding="utf-8") as f:
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:
