@@ -528,6 +528,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         <button class="upill" type="button" data-p="250">1년</button>
         <button class="upill" type="button" data-p="500">2년</button>
         <button class="upill" type="button" data-p="0">전체</button>
+        <button class="upill on" type="button" id="pcost" style="margin-left:8px">평균단가선</button>
         <span class="lbl" style="margin-left:8px">확대</span>
         <button class="upill" type="button" id="zin" aria-label="확대">＋</button>
         <button class="upill" type="button" id="zout" aria-label="축소">－</button>
@@ -540,7 +541,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       </div>
       <div class="povwrap"><canvas id="pov" aria-label="전체 기간 미니맵"></canvas></div>
       <div class="pana" id="pana"></div>
-      <p class="unote">마우스 휠 = 확대·축소 · 드래그 = 기간 이동 · 더블클릭 = 전체 보기 · 아래 미니맵을 눌러 구간 이동 · 왼쪽 매물대에 마우스를 올리면 가격대별 합계, 종가선·아래 막대에 올리면 그날 값 · 아래 막대 = 일별 주체별 순매수 (1년·전체처럼 막대가 좁으면 순매수는 위로·순매도는 아래로 쌓아서 표시)<br>
+      <p class="unote">마우스 휠 = 확대·축소 · 드래그 = 기간 이동 · 더블클릭 = 전체 보기 · 아래 미니맵을 눌러 구간 이동 · 평균단가선 = 화면 첫날부터 쌓은 주체별 평단(실선 매수·점선 매도 우위), 오른쪽 축 색 꼬리표가 지금 평단 · 왼쪽 매물대에 마우스를 올리면 가격대별 합계, 종가선·아래 막대에 올리면 그날 값 · 아래 막대 = 일별 주체별 순매수 (1년·전체처럼 막대가 좁으면 순매수는 위로·순매도는 아래로 쌓아서 표시)<br>
         매물대는 화면에 보이는 기간만 집계합니다 · 가격대는 그 기간 종가의 최저~최고를 같은 폭으로 나눈 것 · 매매주체 데이터는 KRX(2021-10~), ETF 제외</p>
     </div>
   </section>
@@ -551,7 +552,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   "use strict";
   var TYPES = ["개인", "기관", "외국인"], VAR = { "개인": "--cP", "기관": "--cI", "외국인": "--cF" }, MINBARS = 5;
   var U = null, P = null, K = -1;
-  var S = { rows: [], on: { "개인": true, "기관": true, "외국인": true }, bins: 10, view: { s: 0, n: 0 }, hover: null, per: 120 };
+  var S = { rows: [], cost: true, on: { "개인": true, "기관": true, "외국인": true }, bins: 10, view: { s: 0, n: 0 }, hover: null, per: 120 };
 
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -703,6 +704,28 @@ header .lnk,header .status{color:var(--hd-mu)}
     ctx.lineTo(X(b), B); ctx.lineTo(X(a), B); ctx.closePath(); ctx.fillStyle = C.fg; ctx.globalAlpha = .045; ctx.fill(); ctx.globalAlpha = 1;
     ctx.strokeStyle = C.line; ctx.strokeRect(L + .5, T + .5, pw, ph);
 
+    // 주체별 평균단가 누적선 (구간 첫날부터, 실선 = 평균 매수단가 · 점선 = 매도 우위일 때 평균 매도단가)
+    var costs = [];
+    if (S.cost) TYPES.forEach(function(t){ if (S.on[t] && !(t === "개인" && !P)) costs.push(analyze(t, a, b)); });
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+    costs.forEach(function(cs){
+      ctx.strokeStyle = COL[cs.t]; ctx.lineWidth = 1.8; ctx.lineJoin = "round";
+      var on = false, dir = 0;
+      for (var j = a; j <= b; j++) {
+        var v = cs.AS[j - a], d = cs.DS[j - a];
+        if (v === null || d !== dir) { if (on) ctx.stroke(); on = false; }
+        if (v === null) { dir = 0; continue; }
+        if (!on) { ctx.setLineDash(d < 0 ? [5, 4] : []); ctx.beginPath(); ctx.moveTo(X(j), Y(v)); on = true; dir = d; } else ctx.lineTo(X(j), Y(v));
+      }
+      if (on) ctx.stroke();
+      ctx.setLineDash([]);
+    });
+    ctx.restore(); ctx.lineWidth = 1;
+    if (costs.length) {
+      ctx.font = "10.5px -apple-system,'Malgun Gothic',sans-serif"; ctx.textAlign = "right"; ctx.fillStyle = C.mu;
+      ctx.fillText("평균단가선: ━ 매수 평단 · ┅ 매도 우위(평균 매도단가) · 구간 첫날부터 누적", R - 6, T + 10);
+    }
+
     // 일별 주체별 순매수 (아래 패널) — 막대 폭이 넉넉하면 주체별로 나란히, 좁으면 순매수는 위로·순매도는 아래로 쌓기
     var grouped = act.length > 0 && bw / act.length >= 3, fm = 0;
     for (i = a; i <= b; i++) {
@@ -741,10 +764,23 @@ header .lnk,header .status{color:var(--hd-mu)}
     // 마지막 종가 라벨
     var last = S.rows[b], ly = Y(last.c);
     ctx.fillStyle = C.fg; ctx.beginPath(); ctx.arc(X(b), ly, 2.8, 0, 6.3); ctx.fill();
+    var occ = [ly];
+    costs.forEach(function(cs){
+      var v = cs.AS[b - a]; if (v === null) return;
+      var y0 = Y(v), yy = y0;
+      for (var dd = 0; dd < 400; dd += 2) {
+        var c1 = y0 + dd, c2 = y0 - dd, ok1 = c1 <= B - 9 && occ.every(function(o){ return Math.abs(o - c1) >= 20; }), ok2 = c2 >= T + 9 && occ.every(function(o){ return Math.abs(o - c2) >= 20; });
+        if (ok1) { yy = c1; break; } if (ok2) { yy = c2; break; }
+      }
+      occ.push(yy);
+      ctx.fillStyle = COL[cs.t]; ctx.fillRect(R + 2, yy - 9, Rp - 4, 18);
+      ctx.fillStyle = "#fff"; ctx.font = "600 10.5px -apple-system,'Malgun Gothic',sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText(num(v, v < 100 ? 2 : 0), R + 6, yy);
+    });
     ctx.fillStyle = C.ac; ctx.fillRect(R + 2, ly - 10, Rp - 4, 20);
     ctx.fillStyle = C.acf; ctx.font = "600 11px -apple-system,'Malgun Gothic',sans-serif"; ctx.textAlign = "left"; ctx.fillText(num(last.c, last.c < 100 ? 2 : 0), R + 7, ly);
 
-    G = { L: L, R: R, T: T, B: B, FT: FT, FB: FB, pw: pw, ph: ph, bw: bw, vMin: vMin, vMax: vMax, X: X, Y: Y, profW: profW, prof: prof, act: act };
+    G = { costs: costs, a0: a, L: L, R: R, T: T, B: B, FT: FT, FB: FB, pw: pw, ph: ph, bw: bw, vMin: vMin, vMax: vMax, X: X, Y: Y, profW: profW, prof: prof, act: act };
 
     // 크로스헤어
     if (S.hover && S.hover.i !== null && S.hover.i >= a && S.hover.i <= b) {
@@ -779,23 +815,25 @@ header .lnk,header .status{color:var(--hd-mu)}
   }
   function analyze(t, a, b){
     // 추정 평균단가: 그날 순매수 금액 ÷ 종가 = 추정 주식 수, 이동평균법(증권사 평단과 같은 방식). 구간 시작일 보유 0에서 출발
-    var q = 0, A = 0, real = 0, gross = 0, net = 0, xs = [], ys = [], i;
+    var q = 0, A = 0, real = 0, gross = 0, net = 0, xs = [], ys = [], AS = [], DS = [], i;
     for (i = a; i <= b; i++) {
       var r = S.rows[i], amt = r.v[t], c = r.c;
       net += amt; gross += Math.abs(amt);
       if (i > a) { xs.push(amt); ys.push(c / S.rows[i - 1].c - 1); }
-      if (!amt) continue;
-      var sh = amt / c;
-      if (q === 0 || (q > 0) === (sh > 0)) { A = (A * Math.abs(q) + Math.abs(amt)) / (Math.abs(q) + Math.abs(sh)); q += sh; }
-      else {
-        var cl = Math.min(Math.abs(sh), Math.abs(q)), q0 = q;
-        real += (q0 > 0 ? 1 : -1) * cl * (c - A); q += sh;
-        if (Math.abs(q) < 1e-12) { q = 0; A = 0; } else if ((q > 0) !== (q0 > 0)) A = c;   // 방향이 뒤집히면 남은 물량은 그날 종가로 새로 시작
+      if (amt) {
+        var sh = amt / c;
+        if (q === 0 || (q > 0) === (sh > 0)) { A = (A * Math.abs(q) + Math.abs(amt)) / (Math.abs(q) + Math.abs(sh)); q += sh; }
+        else {
+          var cl = Math.min(Math.abs(sh), Math.abs(q)), q0 = q;
+          real += (q0 > 0 ? 1 : -1) * cl * (c - A); q += sh;
+          if (Math.abs(q) < 1e-12) { q = 0; A = 0; } else if ((q > 0) !== (q0 > 0)) A = c;   // 방향이 뒤집히면 남은 물량은 그날 종가로 새로 시작
+        }
       }
+      AS.push(q ? A : null); DS.push(q > 0 ? 1 : q < 0 ? -1 : 0);          // 날짜별 누적 평단 (차트 겹쳐 그리기용)
     }
     var last = S.rows[b].c, unreal = q * (last - A), ret = q > 0 ? last / A - 1 : q < 0 ? A / last - 1 : NaN;
     var thin = gross > 0 && Math.abs(q * A) < gross * 0.05;                    // 남은 물량이 거래 규모에 비해 아주 적으면 평단 의미 약함
-    return { t: t, net: net, q: q, A: A, last: last, ret: ret, unreal: unreal, real: real, cor: corr(xs, ys), thin: thin };
+    return { t: t, net: net, q: q, A: A, last: last, ret: ret, unreal: unreal, real: real, cor: corr(xs, ys), thin: thin, AS: AS, DS: DS };
   }
   function drawAnalysis(a, b){
     var list = TYPES.filter(function(t){ return !(t === "개인" && !P); }).map(function(t){ return analyze(t, a, b); });
@@ -882,6 +920,14 @@ header .lnk,header .status{color:var(--hd-mu)}
     S.hover = { i: i };
     h = '<div class="t">' + ymd(r.dn) + '</div><div class="r"><i>종가</i><span><b>' + num(r.c, r.c < 100 ? 2 : 0) + "</b>" + (pv ? ' <span style="color:' + colorUD(dc) + '">' + sg(dc) + dc.toFixed(2) + "%</span>" : "") + "</span></div>";
     TYPES.forEach(function(t){ h += row(t, r.v[t], !S.on[t]); });
+    if (G.costs && G.costs.length) {
+      h += '<div class="t" style="margin-top:5px">구간 첫날부터 평균단가</div>';
+      G.costs.forEach(function(cs){
+        var v = cs.AS[i - G.a0], d = cs.DS[i - G.a0];
+        h += '<div class="r"><i><span class="dot" style="background:var(' + VAR[cs.t] + ')"></span>' + cs.t + (d < 0 ? " 매도" : " 매수") + "</i><span>" +
+          (v === null || v === undefined ? "-" : num(v, v < 100 ? 2 : 0) + ' <span style="color:' + colorUD(d > 0 ? r.c / v - 1 : v / r.c - 1) + '">' + sg((d > 0 ? r.c / v - 1 : v / r.c - 1) * 100) + ((d > 0 ? r.c / v - 1 : v / r.c - 1) * 100).toFixed(1) + "%</span>") + "</span></div>";
+      });
+    }
     showTip(h, px, py); draw();
   }
   function row(t, v, dim){
@@ -929,6 +975,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   $("pbins").addEventListener("input", function(){ var v = parseInt(this.value, 10); if (!isFinite(v)) return; S.bins = clamp(v, 2, 60); draw(); });
   $("pbins").addEventListener("blur", function(){ this.value = S.bins; });
   [].forEach.call(document.querySelectorAll("[data-p]"), function(btn){ btn.addEventListener("click", function(){ setPeriod(+btn.getAttribute("data-p")); }); });
+  $("pcost").addEventListener("click", function(){ S.cost = !S.cost; this.classList.toggle("on", S.cost); draw(); });
   $("zin").addEventListener("click", function(){ if (G) zoomAt(G.L + G.pw / 2, 1 / 1.3); });
   $("zout").addEventListener("click", function(){ if (G) zoomAt(G.L + G.pw / 2, 1.3); });
   if (window.ResizeObserver) new ResizeObserver(function(){ draw(); }).observe($("pwrap")); else window.addEventListener("resize", draw);
