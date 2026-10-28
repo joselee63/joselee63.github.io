@@ -427,7 +427,7 @@ header .lnk,header .status{color:var(--hd-mu)}
 .pstats span i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:0}
 .pstats .who-p span i{background:var(--cP)} .pstats .who-i span i{background:var(--cI)} .pstats .who-f span i{background:var(--cF)}
 .pstats div:not([class^="who"]) span i{display:none}
-.pwrap{position:relative;height:min(600px,66vh)}
+.pwrap{position:relative;height:min(760px,80vh)}
 #pc{width:100%;height:100%;cursor:crosshair}
 .povwrap{height:52px;margin-top:6px}
 #pov{width:100%;height:100%;cursor:ew-resize}
@@ -437,7 +437,7 @@ header .lnk,header .status{color:var(--hd-mu)}
 .ptip .r{display:flex;justify-content:space-between;gap:16px}
 .ptip .r i{font-style:normal;color:var(--muted)}
 .ptip .dot{display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:2px;vertical-align:0}
-@media (max-width:1000px){ .pwrap{height:min(520px,62vh)} .who{order:2} }
+@media (max-width:1000px){ .pwrap{height:min(620px,76vh)} .who{order:2} }
 </style>
 </head>
 <body>
@@ -524,7 +524,7 @@ header .lnk,header .status{color:var(--hd-mu)}
         <div class="ptip" id="ptip"></div>
       </div>
       <div class="povwrap"><canvas id="pov" aria-label="전체 기간 미니맵"></canvas></div>
-      <p class="unote">마우스 휠 = 확대·축소 · 드래그 = 기간 이동 · 더블클릭 = 전체 보기 · 아래 미니맵을 눌러 구간 이동 · 왼쪽 매물대에 마우스를 올리면 가격대별 합계, 오른쪽 종가선에 올리면 그날 값<br>
+      <p class="unote">마우스 휠 = 확대·축소 · 드래그 = 기간 이동 · 더블클릭 = 전체 보기 · 아래 미니맵을 눌러 구간 이동 · 왼쪽 매물대에 마우스를 올리면 가격대별 합계, 종가선·아래 막대에 올리면 그날 값 · 아래 막대 = 일별 주체별 순매수 (1년·전체처럼 막대가 좁으면 순매수는 위로·순매도는 아래로 쌓아서 표시)<br>
         매물대는 화면에 보이는 기간만 집계합니다 · 가격대는 그 기간 종가의 최저~최고를 같은 폭으로 나눈 것 · 매매주체 데이터는 KRX(2021-10~), ETF 제외</p>
     </div>
   </section>
@@ -621,7 +621,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     clampView();
     var C = { fg: css("--fg"), mu: css("--muted"), grid: css("--grid") || css("--line"), line: css("--line"), card: css("--card"), ac: css("--accent"), acf: css("--accent-fg") };
     var COL = {}; TYPES.forEach(function(t){ COL[t] = css(VAR[t]); });
-    var Lp = 8, Rp = 66, Tp = 18, Bp = 24, L = Lp, R = w - Rp, T = Tp, B = h - Bp, pw = R - L, ph = B - T;
+    var Lp = 8, Rp = 66, Tp = 18, Bp = 24, L = Lp, R = w - Rp, T = Tp, FB = h - Bp, fh = Math.round((FB - T) * 0.27), FT = FB - fh, B = FT - 16, pw = R - L, ph = B - T;   // 위: 종가·매물대 / 아래: 일별 순매수
     if (pw < 40 || ph < 40) return;
     var ab = visRange(), a = ab[0], b = ab[1], lo = Infinity, hi = -Infinity, i;
     for (i = a; i <= b; i++) { var c = S.rows[i].c; if (c < lo) lo = c; if (c > hi) hi = c; }
@@ -675,9 +675,9 @@ header .lnk,header .status{color:var(--hd-mu)}
     for (i = a; i <= b; i++) {
       if ((i - a) % gapN) continue;
       var x0 = X(i), dn = S.rows[i].dn, mo = Math.floor(dn / 100) % 100; if (x0 < L - 4 || x0 > R + 4) continue;
-      ctx.strokeStyle = C.grid; ctx.beginPath(); ctx.moveTo(Math.round(x0) + .5, T); ctx.lineTo(Math.round(x0) + .5, B); ctx.stroke();
+      ctx.strokeStyle = C.grid; ctx.beginPath(); ctx.moveTo(Math.round(x0) + .5, T); ctx.lineTo(Math.round(x0) + .5, B); ctx.moveTo(Math.round(x0) + .5, FT); ctx.lineTo(Math.round(x0) + .5, FB); ctx.stroke();
       var lab = mo !== prevM ? (mo === 1 ? String(Math.floor(dn / 1e4)) : mo + "월") : String(dn % 100).padStart(2, "0"); prevM = mo;
-      ctx.fillStyle = C.mu; ctx.fillText(lab, x0, B + 16);
+      ctx.fillStyle = C.mu; ctx.fillText(lab, x0, FB + 16);
     }
     ctx.textBaseline = "middle";
 
@@ -687,18 +687,53 @@ header .lnk,header .status{color:var(--hd-mu)}
     ctx.lineTo(X(b), B); ctx.lineTo(X(a), B); ctx.closePath(); ctx.fillStyle = C.fg; ctx.globalAlpha = .045; ctx.fill(); ctx.globalAlpha = 1;
     ctx.strokeStyle = C.line; ctx.strokeRect(L + .5, T + .5, pw, ph);
 
+    // 일별 주체별 순매수 (아래 패널) — 막대 폭이 넉넉하면 주체별로 나란히, 좁으면 순매수는 위로·순매도는 아래로 쌓기
+    var grouped = act.length > 0 && bw / act.length >= 3, fm = 0;
+    for (i = a; i <= b; i++) {
+      var ps = 0, ng = 0;
+      act.forEach(function(t){ var v = S.rows[i].v[t]; if (grouped) fm = Math.max(fm, Math.abs(v)); else if (v > 0) ps += v; else ng += v; });
+      if (!grouped) fm = Math.max(fm, ps, -ng);
+    }
+    fm = fm * 1.08 || 1;
+    var FY = function(v){ return FT + (fm - v) / (2 * fm) * fh; };
+    ctx.strokeStyle = C.grid; [fm / 2, -fm / 2].forEach(function(v){ var yy = Math.round(FY(v)) + .5; ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(R, yy); ctx.stroke(); });
+    ctx.font = "10.5px -apple-system,'Malgun Gothic',sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = C.mu;
+    [fm / 2, 0, -fm / 2].forEach(function(v){ ctx.fillText(v ? (v > 0 ? "+" : "") + eokK(v) : "0", R + 8, FY(v)); });
+    ctx.save(); ctx.beginPath(); ctx.rect(L, FT, pw, fh); ctx.clip();
+    for (i = a; i <= b; i++) {
+      var xc = X(i), up = 0, dn = 0;
+      act.forEach(function(t, j){
+        var v = S.rows[i].v[t]; if (!v) return;
+        ctx.fillStyle = COL[t]; ctx.globalAlpha = .85;
+        if (grouped) {
+          var gw = bw * 0.84 / act.length, bx = xc - bw * 0.42 + j * gw;
+          ctx.fillRect(bx, FY(Math.max(v, 0)), Math.max(1, gw - .6), Math.max(.8, Math.abs(FY(v) - FY(0))));
+        } else {
+          var sw2 = Math.max(1, bw * 0.78), y0 = v > 0 ? up : dn, y1 = y0 + v;
+          ctx.fillRect(xc - sw2 / 2, FY(Math.max(y0, y1)), sw2, Math.max(.5, Math.abs(FY(y1) - FY(y0))));
+          if (v > 0) up = y1; else dn = y1;
+        }
+      });
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = C.mu; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(L, Math.round(FY(0)) + .5); ctx.lineTo(R, Math.round(FY(0)) + .5); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = C.line; ctx.strokeRect(L + .5, FT + .5, pw, fh);
+    var ft = act.length ? "일별 순매수 (억원)" + (grouped ? "" : " · 쌓아서 표시") : "위에서 매매주체를 선택하세요";
+    ctx.textAlign = "left"; ctx.fillStyle = C.card; ctx.globalAlpha = .85; ctx.fillRect(L + 1, FT + 1, ctx.measureText(ft).width + 10, 17); ctx.globalAlpha = 1;
+    ctx.fillStyle = C.mu; ctx.fillText(ft, L + 6, FT + 10);
+
     // 마지막 종가 라벨
     var last = S.rows[b], ly = Y(last.c);
     ctx.fillStyle = C.fg; ctx.beginPath(); ctx.arc(X(b), ly, 2.8, 0, 6.3); ctx.fill();
     ctx.fillStyle = C.ac; ctx.fillRect(R + 2, ly - 10, Rp - 4, 20);
     ctx.fillStyle = C.acf; ctx.font = "600 11px -apple-system,'Malgun Gothic',sans-serif"; ctx.textAlign = "left"; ctx.fillText(num(last.c, last.c < 100 ? 2 : 0), R + 7, ly);
 
-    G = { L: L, R: R, T: T, B: B, pw: pw, ph: ph, bw: bw, vMin: vMin, vMax: vMax, X: X, Y: Y, profW: profW, prof: prof, act: act };
+    G = { L: L, R: R, T: T, B: B, FT: FT, FB: FB, pw: pw, ph: ph, bw: bw, vMin: vMin, vMax: vMax, X: X, Y: Y, profW: profW, prof: prof, act: act };
 
     // 크로스헤어
     if (S.hover && S.hover.i !== null && S.hover.i >= a && S.hover.i <= b) {
       var hx = Math.round(X(S.hover.i)) + .5, hy = Y(S.rows[S.hover.i].c);
-      ctx.strokeStyle = C.mu; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(hx, T); ctx.lineTo(hx, B); ctx.moveTo(L, Math.round(hy) + .5); ctx.lineTo(R, Math.round(hy) + .5); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = C.mu; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(hx, T); ctx.lineTo(hx, FB); ctx.moveTo(L, Math.round(hy) + .5); ctx.lineTo(R, Math.round(hy) + .5); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = C.fg; ctx.beginPath(); ctx.arc(hx, hy, 3.6, 0, 6.3); ctx.fill();
     }
     drawOverview(C); drawStats(a, b, prof);
@@ -758,9 +793,9 @@ header .lnk,header .status{color:var(--hd-mu)}
 
   function hover(px, py){
     if (!G) return;
-    if (px < G.L || px > G.R || py < G.T || py > G.B) { S.hover = null; hideTip(); draw(); return; }
+    if (px < G.L || px > G.R || py < G.T || py > G.FB) { S.hover = null; hideTip(); draw(); return; }
     var h;
-    if (px <= G.L + G.profW && G.act.length) {               // 매물대 위
+    if (px <= G.L + G.profW && G.act.length && py <= G.B) {               // 매물대 위
       var p = G.vMin + (G.B - py) / G.ph * (G.vMax - G.vMin), k = -1;
       G.prof.bins.forEach(function(bn, j){ if (p >= bn.lo && p <= bn.hi) k = j; });
       S.hover = { i: null };
