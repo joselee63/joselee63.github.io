@@ -134,7 +134,7 @@ def push(days=2, log=print, dispatch=True):
             continue
         body = to_jsonl(items).encode("utf-8")
         path = f"news/tg/{day:%Y-%m-%d}.jsonl"
-        r = subprocess.run([g, "api", f"repos/{REPO}/contents/{path}?ref=data"], capture_output=True, text=True, timeout=60)
+        r = subprocess.run([g, "api", f"repos/{REPO}/contents/{path}?ref=data"], capture_output=True, encoding="utf-8", errors="replace", timeout=60)
         sha = None
         if r.returncode == 0:
             cur = json.loads(r.stdout)
@@ -152,7 +152,7 @@ def push(days=2, log=print, dispatch=True):
             json.dump(req, tf)
         try:
             r = subprocess.run([g, "api", "-X", "PUT", f"repos/{REPO}/contents/{path}", "--input", tf.name],
-                               capture_output=True, text=True, timeout=120)
+                               capture_output=True, encoding="utf-8", errors="replace", timeout=120)
         finally:
             os.unlink(tf.name)
         if r.returncode == 0:
@@ -160,7 +160,7 @@ def push(days=2, log=print, dispatch=True):
         else:
             log(f"뉴스 올리기 실패 {path}: {(r.stderr or r.stdout).strip()[:150]}")
     if changed and dispatch:
-        r = subprocess.run([g, "workflow", "run", "news.yml", "-R", REPO], capture_output=True, text=True, timeout=60)
+        r = subprocess.run([g, "workflow", "run", "news.yml", "-R", REPO], capture_output=True, encoding="utf-8", errors="replace", timeout=60)
         log("사이트 뉴스 갱신 시작: " + ("성공" if r.returncode == 0 else "실패 " + (r.stderr or r.stdout).strip()[:150]))
     return changed
 
