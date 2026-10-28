@@ -1171,6 +1171,8 @@ def render_page(src, page):
         out = re.sub(r'\s*<a class="tab (mkb|sup|tmp|trk|brf)[^"]*"[^>]*>[\s\S]*?</a>', "", out)
     else:                                                 # 한국: 사이트 제목을 누르면 시황판(홈)으로
         out = out.replace('<h1><a href="./"', '<h1><a href="market.html"', 1)
+        if page == "index.html":                          # 한국 첫 화면 = 시황판 (섹터 차트는 ./#sector 같은 메뉴 링크로 그대로 열림)
+            out = out.replace("<head>", '<head>\n<script>if(!location.hash&&!location.search)location.replace("market.html")</script>', 1)
     return out
 
 
