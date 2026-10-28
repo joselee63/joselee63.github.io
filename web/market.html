@@ -125,6 +125,11 @@ details.interp .ib{margin-top:10px;font-size:14px;line-height:1.7}
 details.interp .ib h3{font-size:13.5px;margin:12px 0 2px}
 details.interp .ib p{margin:0}
 details.interp .ib ul{margin:4px 0 0;padding-left:20px}
+.newsbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:16px 0 0}
+.nbtn{font:inherit;font-size:13.5px;font-weight:700;border:0;border-radius:980px;padding:8px 16px;cursor:pointer;background:var(--pill-on,#1d1d1f);color:var(--pill-on-fg,#fff)}
+.nbtn:disabled{opacity:.55;cursor:default}
+#newsStat.run{color:var(--warn)} #newsStat.ok{color:var(--ok)} #newsStat.err{color:var(--up)}
+#newsStat a{color:inherit}
 .brl{list-style:none;margin:0;padding:0}
 .brl li{padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
 .brl li:last-child{border-bottom:0}
@@ -364,6 +369,11 @@ textarea{width:100%;min-height:64px;font:inherit;border:1px solid var(--line);bo
   <div class="statrow" id="hmStats"></div>
 </section>
 
+<div class="newsbar">
+  <button type="button" class="nbtn" id="newsUpd">↻ 뉴스 새로고침</button>
+  <span class="small" id="newsStat">뉴스 × 반응 · 이야기 온도 · 뉴스 피드만 새로 모읍니다 (1~3분)</span>
+  <a href="#" class="small" id="newsTok" style="display:none">토큰 다시 입력</a>
+</div>
 <div class="ng">
   <section class="card">
     <h2>뉴스 × 반응 — 뉴스가 먹히는 섹터는?</h2>
@@ -682,7 +692,8 @@ function selectSector(n, scroll) {
   if (scroll) $("feed").scrollIntoView({behavior: "smooth", block: "nearest"});
 }
 
-fetch("news.json?t=" + Date.now(), {cache: "no-cache"}).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(N => {
+function loadNews(keepSel) {
+ return fetch("news.json?t=" + Date.now(), {cache: "no-cache"}).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(N => {
   NW = N;
   $("kwq").textContent = `최근 5거래일(오늘 포함) 헤드라인 ${N.n_rec.toLocaleString()}건 vs 직전 20거래일 ${N.n_base.toLocaleString()}건 · 규칙으로 센 단어라 거침`;
   $("kwHot").innerHTML = N.rising.length ? N.rising.map(k => `<span title="이번 ${k.c}건 · 직전 ${k.b}건">${esc(k.w)}<em>×${k.r.toFixed(1)}</em></span>`).join("") : `<span class="mu">없음</span>`;
@@ -690,10 +701,84 @@ fetch("news.json?t=" + Date.now(), {cache: "no-cache"}).then(r => { if (!r.ok) t
   $("kwTop").innerHTML = N.top.map(k => `<span>${esc(k.w)}<em>${k.c}</em></span>`).join("");
   $("newsSrc").textContent = `출처: 텔레그램 속보 채널의 기사 제목·원문 링크(수집 ${N.tg_last || "–"}까지) + 연합뉴스·한국경제·전자신문 RSS · 갱신 ${N.built}` + (N.basis === "all" ? " · 텔레그램 기록이 적어 RSS 포함 기준" : "");
   const top = N.quad.slice().sort((a, b) => (b.today - a.today) || (b.cnt - a.cnt))[0];
-  if (top) { selSec = top.n; renderQuad(); renderFeed(); }
-}).catch(e => {
+  if (!(keepSel && selSec && N.quad.some(q => q.n === selSec)) && top) selSec = top.n;
+  if (selSec) { renderQuad(); renderFeed(); }
+  return N;
+ });
+}
+loadNews().catch(e => {
   ["quad", "kwHot", "feed"].forEach(id => $(id).innerHTML = `<span class="mu">뉴스 데이터를 아직 만들지 못했습니다 (${esc(e.message)})</span>`);
 });
+
+/* ---------- 뉴스 새로고침 버튼: GitHub 작업 news.yml 실행 → 끝나면 news.json 만 다시 읽음 ---------- */
+(function () {
+  const REPO = location.hostname.endsWith(".github.io") ? location.hostname.split(".")[0] + "/" + location.hostname : "joselee63/joselee63.github.io";
+  const WF = "news.yml", TOKEN_KEY = "krsc_gh_token";             // 섹터 차트의 '업데이트' 버튼과 같은 토큰 (이 브라우저에만 저장)
+  let memTok = "", busy = false;
+  const getTok = () => { try { return localStorage.getItem(TOKEN_KEY) || memTok; } catch (e) { return memTok; } };
+  const setTok = t => { memTok = t || ""; try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch (e) {} $("newsTok").style.display = getTok() ? "" : "none"; };
+  const now = () => Date.now(), mmss = ms => { const s = Math.round(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  function stat(text, kind, url) {
+    $("newsStat").className = "small " + (kind || "");
+    $("newsStat").innerHTML = esc(text) + (url ? ` <a href="${esc(url)}" target="_blank" rel="noopener">실행 기록</a>` : "");
+  }
+  function done(text, kind, url) { busy = false; $("newsUpd").disabled = false; stat(text, kind, url); }
+  function gh(method, path, body) {
+    const h = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"};
+    if (getTok()) h.Authorization = "Bearer " + getTok();
+    if (body) h["Content-Type"] = "application/json";
+    return fetch("https://api.github.com" + path, {method, headers: h, body: body ? JSON.stringify(body) : undefined})
+      .then(r => r.text().then(t => ({st: r.status, j: (() => { try { return JSON.parse(t); } catch (e) { return null; } })()})));
+  }
+  function waitPages(oldBuilt, url) {
+    const t0 = now();
+    stat("사이트에 반영 중… (보통 1분)", "run", url);
+    (function chk() {
+      loadNews(true).then(N => {
+        if (N.built !== oldBuilt) return done(`뉴스 갱신 완료 · ${N.built}` + (N.tg_last ? ` · 텔레그램 ${N.tg_last}까지` : ""), "ok");
+        if (now() - t0 > 6 * 60000) return done("작업은 끝났지만 사이트 반영이 늦습니다. 잠시 뒤 페이지를 새로고침하세요.", "err", url);
+        setTimeout(chk, 10000);
+      }).catch(() => setTimeout(chk, 10000));
+    })();
+  }
+  function watch(since, oldBuilt) {
+    const t0 = now(); let runId = null, url = null;
+    (function tick() {
+      if (now() - t0 > 12 * 60000) return done("시간 초과 — 실행 기록을 확인하세요.", "err", url);
+      const p = runId ? gh("GET", `/repos/${REPO}/actions/runs/${runId}`) : gh("GET", `/repos/${REPO}/actions/workflows/${WF}/runs?per_page=5`);
+      p.then(({st, j}) => {
+        let r = null;
+        if (runId) r = st === 200 ? j : null;
+        else r = ((j && j.workflow_runs) || []).find(x => Date.parse(x.created_at) >= since - 90000) || null;
+        if (r) { runId = r.id; url = r.html_url; }
+        if (!r || r.status !== "completed") {
+          stat((!r || ["queued", "waiting", "pending", "requested"].includes(r.status) ? "실행 대기 중" : "뉴스 모으는 중") + ` · ${mmss(now() - t0)} (보통 1분)`, "run", url);
+          return setTimeout(tick, 6000);
+        }
+        if (r.conclusion === "success") return waitPages(oldBuilt, url);
+        done(`뉴스 갱신 실패 (${r.conclusion})`, "err", url);
+      }).catch(() => setTimeout(tick, 8000));
+    })();
+  }
+  $("newsUpd").onclick = () => {
+    if (busy) return;
+    if (!getTok()) {
+      const t = window.prompt("GitHub 토큰을 붙여넣으세요.\n(fine-grained 토큰 · 이 저장소 · Actions: Read and write)\n이 기기의 브라우저에만 저장됩니다.");
+      if (!t) return;
+      setTok(t.trim());
+    }
+    busy = true; $("newsUpd").disabled = true;
+    const since = now(), oldBuilt = NW ? NW.built : null;
+    stat("요청 중…", "run");
+    gh("POST", `/repos/${REPO}/actions/workflows/${WF}/dispatches`, {ref: "main"}).then(({st}) => {
+      if (st === 204 || st === 200) return watch(since, oldBuilt);
+      if (st === 401 || st === 403 || st === 404) { setTok(""); return done("토큰이 올바르지 않거나 권한(Actions: Read and write)이 없습니다. 다시 눌러 입력하세요.", "err"); }
+      done(`요청 실패 (HTTP ${st})`, "err");
+    }).catch(() => done("GitHub에 연결하지 못했습니다. 네트워크를 확인하세요.", "err"));
+  };
+  $("newsTok").onclick = e => { e.preventDefault(); setTok(""); stat("토큰을 지웠습니다. 버튼을 누르면 다시 입력합니다.", ""); };
+  setTok(getTok());
+})();
 
 /* ---------- 메모 ---------- */
 const SEG = [["비중", ["공격", "보통", "방어"], G1.verdict], ["매수 방식", ["불타기", "중립", "눌림 대기", "눌림 금지"], G2.verdict], ["섹터", ["주도 집중", "혼합", "순환·대기"], G3.verdict]];

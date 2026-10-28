@@ -1347,14 +1347,14 @@ def site_dispatch(wf):
         log(f"사이트 워크플로 {wf} 실패: {e!r}"[:160])
 
 
-def news_push():
+def news_push(dispatch=True):
     """텔레그램 속보 중 '기사 제목 + 원문 링크'만 저장소 data 브랜치 news/tg/ 로 올리고 news.yml 시작 (끄려면 RADAR_SITE_TRIGGER=0)"""
     if os.environ.get("RADAR_SITE_TRIGGER") == "0" or not (OUT / "telegram").exists():
         return
     try:
         sys.path.insert(0, str(ROOT / "tools" / "market"))
         import news_tg
-        news_tg.push(log=log)
+        news_tg.push(log=log, dispatch=dispatch)
     except Exception as e:  # noqa: BLE001
         log(f"뉴스 올리기 실패: {e!r}"[:160])
 
@@ -1395,6 +1395,11 @@ def scheduler():
                     continue
                 fired.add(key)
                 threading.Thread(target=news_push, daemon=True).start()
+            if "08:00" <= hm <= "20:00" and t.minute % 30 == 0:      # 30분마다 텔레그램 기사만 올림 (사이트 '뉴스 새로고침' 버튼용, 작업 시작은 안 함)
+                key = (str(t.date()), "newsq", hm)
+                if key not in fired:
+                    fired.add(key)
+                    threading.Thread(target=news_push, args=(False,), daemon=True).start()
             for x, wf in SITE_JOBS:
                 key = (str(t.date()), "site", x)
                 if key in fired or hm < x or hm > _plus(x, 5):
