@@ -5,6 +5,7 @@ name: closebet-data
 #     ohlcv.npz · universe.csv · index.csv · frozen.txt  ← tools/closebet/daily_data.py 의 일봉 저장소
 #     closebet.json · asof.txt              ← tools/closebet/export_web.py 결과 (daily.yml 이 받아 한국 사이트에 넣음)
 #     radar_base.json                       ← tools/closebet/radar_base.py (내 PC의 종베 레이더 tools/radar 가 장중에 받아 씀)
+#     market.json                           ← tools/market/market_board.py (사이트 시황판, daily.yml 이 받아 넣음)
 #   시총은 data 브랜치 alpha/cap (alpha-data.yml) — 신호 '전날' 시총만 쓰므로 오늘 시총이 아직 없어도 됨
 on:
   schedule:
@@ -95,3 +96,10 @@ jobs:
       - name: closebet.json 올리기
         if: steps.chk.outputs.skip != 'true'
         run: gh release upload "$TAG" out/closebet.json out/asof.txt out/track.json out/radar_base.json --clobber
+
+      - name: 시황판 데이터 (market.json — 사이트 market.html) 만들기 · 올리기
+        if: steps.chk.outputs.skip != 'true'
+        continue-on-error: true            # 실패해도 종가베팅 데이터는 그대로 (사이트는 전날 시황판 유지)
+        run: |
+          python -W ignore tools/market/market_board.py store out/market.json
+          gh release upload "$TAG" out/market.json --clobber
