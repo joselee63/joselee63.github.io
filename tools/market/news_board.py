@@ -1,0 +1,283 @@
+"""시황판 뉴스 (사이트 news.json) — GitHub 워크플로 news.yml 이 하루 여러 번 실행
+
+입력
+  · 언론사 RSS (연합뉴스 경제·마켓+ · 한국경제 증권 · 전자신문) — 실행 때마다 받아 data 브랜치 news/rss/날짜.jsonl 에 쌓음
+  · 텔레그램 속보의 '기사 제목 + 원문 링크' — 내 PC 레이더가 data 브랜치 news/tg/날짜.jsonl 에 올림 (tools/market/news_tg.py)
+  · market.json (tools/market/market_board.py) — 섹터 구성 종목, 최근 거래일, 종목·섹터 등락 (반응 표시용)
+출력 news.json
+  · quad: 섹터별 최근 5거래일 뉴스량(평소 60거래일 대비) × 5일 주가(시장 대비) — 뉴스가 먹히는 섹터
+  · rising / cool / top: 헤드라인 단어 온도 (최근 5거래일 vs 직전 20거래일, 규칙 기반 단어 세기)
+  · feed: 섹터별·전체 최신 기사 (제목 · 매체 · 원문 링크 · 그 뒤 주가 반응)
+사용: python tools/market/news_board.py NEWS_DIR market.json OUT.json
+"""
+import datetime as dt
+import email.utils
+import json
+import math
+import re
+import sys
+import xml.etree.ElementTree as ET
+from collections import Counter, defaultdict
+from pathlib import Path
+
+import requests
+
+NEWS = Path(sys.argv[1] if len(sys.argv) > 1 else "news")
+MKT = Path(sys.argv[2] if len(sys.argv) > 2 else "market.json")
+OUT = Path(sys.argv[3] if len(sys.argv) > 3 else "news.json")
+KST = dt.timezone(dt.timedelta(hours=9))
+NOW = dt.datetime.now(KST).replace(tzinfo=None)
+
+RSS = [("연합뉴스", "https://www.yna.co.kr/rss/economy.xml"), ("연합뉴스", "https://www.yna.co.kr/rss/market.xml"),
+       ("한국경제", "https://www.hankyung.com/feed/finance"), ("전자신문", "https://rss.etnews.com/Section901.xml")]
+
+KW = {
+    "반도체 대형 · 메모리": ["HBM", "D램", "디램", "낸드", "메모리"], "반도체 장비 (전공정 · HBM · 후공정)": ["반도체 장비", "TC본더", "하이브리드 본딩", "본더"],
+    "반도체 소재 · 부품 · 테스트": ["반도체 소재", "프로브카드", "테스트 소켓"], "시스템반도체 · 디자인하우스": ["파운드리", "팹리스", "NPU", "디자인하우스"],
+    "전자부품 · AI 기판 · 광통신": ["MLCC", "기판", "광통신", "유리기판", "광모듈"], "AI 데이터센터 · 클라우드 · 통신": ["데이터센터", "클라우드", "통신3사"],
+    "전력기기 · 전선 (AI 전력 인프라)": ["변압기", "전력기기", "전선", "송전", "전력망"], "원자력 · SMR": ["원전", "SMR", "원자력"],
+    "2차전지 셀": ["배터리", "2차전지", "이차전지"], "2차전지 소재 · 장비": ["양극재", "음극재", "리튬", "전해액", "분리막"],
+    "ESS · 태양광 · 풍력 · 수소": ["ESS", "태양광", "풍력", "수소"], "조선 · 조선기자재": ["조선", "LNG선", "선박", "MASGA", "마스가", "함정"],
+    "방산": ["방산", "K9", "K2전차", "무기", "천궁", "레드백"], "우주항공": ["우주", "위성", "발사체", "누리호", "스페이스X"],
+    "로봇 · 휴머노이드": ["로봇", "휴머노이드"], "자동차 · 부품": ["자동차", "완성차", "전기차"],
+    "AI 소프트웨어 · 플랫폼 · 보안": ["소버린", "AI 에이전트", "해킹", "보안주", "사이버"], "양자 · 보안 통신": ["양자"],
+    "디지털자산 · 스테이블코인 · 결제": ["스테이블코인", "비트코인", "가상자산", "코인", "원화 스테이블"],
+    "제약 · 바이오 대형": ["바이오시밀러", "제약"], "바이오 플랫폼 · 비만 · 신약 (미국 피어 연동)": ["비만", "신약", "임상", "기술이전", "FDA", "GLP"],
+    "의료기기 · 미용 · 의료AI": ["의료기기", "미용기기", "보톡스", "톡신", "의료AI"], "K-뷰티": ["화장품", "K뷰티", "K-뷰티"],
+    "K-푸드 · 음식료": ["라면", "불닭", "식품", "K푸드", "K-푸드"], "엔터 · 미디어": ["엔터", "아이돌", "K팝", "콘서트", "드라마"],
+    "게임": ["게임", "신작"], "은행 · 금융지주 (밸류업)": ["은행", "금융지주", "밸류업"], "증권 · 보험": ["증권사", "보험사"],
+    "지주사 (지배구조 · 상법개정)": ["지주사", "상법", "자사주 소각", "지배구조"], "건설 · 인프라": ["건설", "재건", "주택"],
+    "철강 · 비철 · 화학 · 정유": ["철강", "석유화학", "정유", "구리", "아연"], "해운 · 항공 · 여행 · 카지노": ["해운", "항공", "여행", "카지노", "운임"],
+    "유통 · 의류 · 가전": ["유통", "백화점", "면세", "가전"],
+}
+ALIAS = {"SK하이닉스": ["하이닉스"], "한화에어로스페이스": ["한화에어로"], "LG에너지솔루션": ["LG엔솔"], "현대자동차": ["현대차"]}
+STOP = set("""속보 단독 종합 기자 오늘 내일 어제 관련 종목 주가 상승 하락 급등 급락 대비 억원 조원 만원 증가 감소 전망 발표 시장 투자 정부 한국 미국 기업
+이번 올해 내년 예정 추진 개최 위해 대한 통해 대해 있다 없다 한다 했다 된다 밝혀 밝혔다 지난 최대 최고 최저 사상 가능성 전년 분기 매출 영업이익 실적 확대 강화 지원
+공개 계약 체결 기록 돌파 진행 결정 검토 우려 기대 영향 효과 주식 증시 코스피 코스닥 거래 국내 해외 글로벌 세계 업계 시간 이후 이전 현재 가운데 중국 일본 뉴스 경제
+특징주 관련주 테마 테마주 수혜 수혜주 보도 소식 논의 회의 참석 출시 개발 선정 협력 협약 업무 사업 제품 서비스 기술 산업 신규 대표 회장 사장 장관 대통령 의원 국회
+연합뉴스 뉴스1 뉴시스 머니투데이 이데일리 한국경제 매일경제 서울경제 헤럴드경제 아이뉴스24 파이낸셜뉴스 조선비즈 전자신문 디지털타임스 비즈니스포스트 아시아경제 에너지경제 데일리안
+TOP10 TOP KRX KST 상승률 하락률 상향 대응 억달러 성장 SK EPS 거래대금 통과 완료 공급 수요 공략 확보 선언 가속 본격 주목 공식 없어 분석 최초 만에 확인 기반 종합2보 1보 2보
+the and for of to in on with""".split())
+PART = ("으로", "에서", "에게", "까지", "부터", "에도", "에는", "이다", "하는", "했다", "한다", "된다", "들", "에", "의", "은", "는", "이", "가", "을", "를", "과", "와", "도", "로", "만")
+
+
+def f(x, n=2):
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        return None
+    return round(x, n) if math.isfinite(x) else None
+
+
+def norm(h):
+    return re.sub(r"[\W_]+", "", re.sub(r"^\[[^\]]+\]", "", h))[:40]
+
+
+# ---------------------------------------------------------------- RSS 받아 쌓기
+def fetch_rss():
+    got = 0
+    for media, url in RSS:
+        try:
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (kr-sector-charts news)"}, timeout=20)
+            r.raise_for_status()
+            root = ET.fromstring(r.content)
+        except Exception as e:  # noqa: BLE001
+            print(f"::warning::RSS 실패 {media} {url}: {e!r}"[:200]); continue
+        by_day = defaultdict(list)
+        for it in root.iter("item"):
+            title = (it.findtext("title") or "").strip(); link = (it.findtext("link") or "").strip()
+            pd_ = it.findtext("pubDate") or it.findtext("{http://purl.org/dc/elements/1.1/}date")
+            if not title or not link or not pd_:
+                continue
+            try:
+                t = email.utils.parsedate_to_datetime(pd_)
+            except (TypeError, ValueError):
+                try:
+                    t = dt.datetime.fromisoformat(pd_.strip().replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=KST)
+            t = t.astimezone(KST).replace(tzinfo=None)
+            by_day[t.date()].append({"t": f"{t:%H:%M}", "m": media, "h": re.sub(r"\s+", " ", title)[:160], "u": link})
+        for day, items in by_day.items():
+            p = NEWS / "rss" / f"{day:%Y-%m-%d}.jsonl"
+            old = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()] if p.exists() else []
+            have = {x["u"] for x in old}
+            new = [x for x in items if x["u"] not in have]
+            if new:
+                p.parent.mkdir(parents=True, exist_ok=True)
+                allx = sorted(old + new, key=lambda x: x["t"])
+                p.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in allx), encoding="utf-8", newline="\n")
+                got += len(new)
+    print("RSS 새 기사", got)
+
+
+# ---------------------------------------------------------------- 불러오기
+def load(days=140):
+    recs = []
+    for src in ("tg", "rss"):
+        for p in sorted((NEWS / src).glob("*.jsonl")) if (NEWS / src).exists() else []:
+            try:
+                day = dt.date.fromisoformat(p.stem)
+            except ValueError:
+                continue
+            if (NOW.date() - day).days > days:
+                continue
+            for line in p.read_text(encoding="utf-8").splitlines():
+                try:
+                    x = json.loads(line)
+                    hh, mm = map(int, x["t"].split(":"))
+                except (ValueError, KeyError):
+                    continue
+                recs.append((dt.datetime(day.year, day.month, day.day, hh, mm), src, x["m"], x["h"], x["u"]))
+    recs.sort(key=lambda r: r[0])
+    seen, out = set(), []
+    for r in recs:                                       # 같은 기사(제목) 중복 제거 — 먼저 나온 것 유지
+        k = norm(r[3])
+        if k in seen:
+            continue
+        seen.add(k); out.append(r)
+    return out
+
+
+def toks(h):
+    h = re.sub(r"^\[[^\]]+\]", "", h)
+    out = set()
+    for w in re.findall(r"[가-힣]{2,}|[A-Za-z][A-Za-z0-9]{1,}", h):
+        if re.match(r"[가-힣]", w):
+            for p in PART:
+                if len(w) > len(p) + 1 and w.endswith(p):
+                    w = w[:-len(p)]; break
+        else:
+            if not (w.isupper() or len(w) >= 4):
+                continue
+            w = w.upper() if len(w) <= 5 else w
+        if len(w) >= 2 and w not in STOP:
+            out.add(w)
+    return out
+
+
+def main():
+    fetch_rss()
+    M = json.loads(MKT.read_text(encoding="utf-8"))
+    px = M.get("px") or {}
+    sessions = list(M.get("sessions") or M["band"]["dates"])
+    asof = M["asof"]
+    d0 = dt.datetime.strptime(sessions[-1], "%Y%m%d").date()       # 앞으로의 평일(공휴일 무시)을 거래일로 이어 붙임
+    target = len(sessions) + 8
+    while len(sessions) < target:
+        d0 += dt.timedelta(days=1)
+        if d0.weekday() < 5:
+            sessions.append(f"{d0:%Y%m%d}")
+    sidx = {d: i for i, d in enumerate(sessions)}
+
+    def sess(t):
+        d = f"{t:%Y%m%d}"
+        if d < sessions[0]:
+            return None
+        for i, s in enumerate(sessions):
+            if s > d or (s == d and t.hour * 60 + t.minute < 930):
+                return i
+        return None
+
+    members = px.get("members") or {h["n"]: [[m["c"], m["n"]] for m in h["mem"]] for h in M["G3"]["heat"]}
+    SECS = list(members.keys())
+    K = len(SECS)
+    pats = []
+    for s in SECS:
+        names = []
+        for c, n in members[s]:
+            names.append((n, c))
+            for a in ALIAS.get(n, []):
+                names.append((a, c))
+        pats.append((names, KW.get(s, [])))
+
+    def name_in(n, h):
+        if len(n) >= 4:
+            return n in h
+        return re.search(r"(?<![가-힣A-Za-z0-9])" + re.escape(n) + r"(?![가-힣A-Za-z0-9])", h) is not None
+
+    recs = load()
+    print("기사", len(recs), "(텔레그램", sum(1 for r in recs if r[1] == "tg"), "· RSS", sum(1 for r in recs if r[1] == "rss"), ")")
+    pxd = {d: i for i, d in enumerate(px.get("dates") or [])}
+    S5 = {h["n"]: h.get("rel5") for h in M["G3"]["heat"]}
+
+    cnt = {"tg": defaultdict(lambda: [0] * K), "all": defaultdict(lambda: [0] * K)}
+    tot = {"tg": Counter(), "all": Counter()}
+    feed = defaultdict(list); allfeed = []
+    tagged = []
+    for t, src, media, h, u in recs:
+        j = sess(t)
+        if j is None:
+            continue
+        hit = []
+        for k, (names, kws) in enumerate(pats):
+            stock = next(((n, c) for n, c in names if len(n) >= 2 and name_in(n, h)), None)
+            kw = next((w for w in kws if w in h), None)
+            if stock or kw:
+                hit.append((k, stock))
+        for key in (("tg", "all") if src == "tg" else ("all",)):
+            tot[key][j] += 1
+            for k, _ in hit:
+                cnt[key][j][k] += 1
+        tagged.append((t, src, h, j))
+        if (NOW - t).days <= 14:
+            sday = sessions[j]; done = sday <= asof
+            base = dict(t=f"{t:%m/%d %H:%M}", m=media, h=h, u=u, s="tg" if src == "tg" else "rss",
+                        sec=[SECS[k] for k, _ in hit][:2], live=not done, sd=f"{sday[4:6]}/{sday[6:]}")
+            if hit:
+                allfeed.append(base)
+            for k, stock in hit:
+                r = None; who = stock[0] if stock else "섹터"
+                if done and sday in pxd:
+                    arr = (px.get("stock") or {}).get(stock[1]) if stock else (px.get("sector") or {}).get(SECS[k])
+                    r = arr[pxd[sday]] if arr else None
+                feed[k].append(dict(base, who=who, r=r))
+
+    jT = sidx.get(asof)
+    use = "tg"
+    if jT is not None:
+        rt = sum(tot["tg"][j] for j in range(jT - 4, jT + 1)); bt = sum(tot["tg"][j] for j in range(jT - 64, jT - 4))
+        if rt < 150 or bt < 1500:
+            use = "all"
+    quad = []
+    if jT is not None:
+        C = cnt[use]; Tt = tot[use]
+        rec_t = sum(Tt[j] for j in range(jT - 4, jT + 1)); base_t = sum(Tt[j] for j in range(jT - 64, jT - 4))
+        nb = max(1, sum(1 for j in range(jT - 64, jT - 4) if Tt[j] > 0) / 5)          # 기준 기간을 5일 묶음 수로
+        jN = sess(NOW)
+        for k, s in enumerate(SECS):
+            rc = sum(C[j][k] for j in range(jT - 4, jT + 1)); bc = sum(C[j][k] for j in range(jT - 64, jT - 4))
+            a = (rc + 1) / (rec_t + 30); b = (bc + 12) / (base_t + 360)
+            quad.append(dict(n=s, x=f(math.log2(a / b), 3), y=f(S5.get(s)), cnt=rc, base=f(bc / nb, 1),
+                             today=C[jN][k] if jN is not None else 0))
+    # 단어 온도: 최근 5거래일(오늘 포함) vs 직전 20거래일
+    jN = sess(NOW) or (jT or 0)
+    rc_, bc_ = Counter(), Counter(); rt_ = bt_ = 0
+    for t, src, h, j in tagged:
+        if use == "tg" and src != "tg":
+            continue
+        if jN - 4 <= j <= jN:
+            rc_.update(toks(h)); rt_ += 1
+        elif jN - 24 <= j < jN - 4:
+            bc_.update(toks(h)); bt_ += 1
+    kw = [(w, c, bc_[w], ((c + 2) / (rt_ + 50)) / ((bc_[w] + 2) / (bt_ + 50))) for w, c in rc_.items() if c >= 6]
+    rising = sorted([x for x in kw if x[3] >= 1.6], key=lambda x: -x[3] * math.log(x[1]))[:16]
+    cool = sorted([(w, rc_[w], c, ((rc_[w] + 2) / (rt_ + 50)) / ((c + 2) / (bt_ + 50))) for w, c in bc_.items() if c >= 20],
+                  key=lambda x: x[3])
+    cool = [x for x in cool if x[3] <= 0.5][:10]
+    top = sorted(kw, key=lambda x: -x[1])[:12]
+    W = lambda L: [dict(w=w, c=c, b=b, r=f(r)) for w, c, b, r in L]
+    tg_last = max((r[0] for r in recs if r[1] == "tg"), default=None)
+    out = dict(built=f"{NOW:%Y-%m-%d %H:%M}", asof=asof, basis=use, n_rec=rt_, n_base=bt_,
+               tg_last=f"{tg_last:%m/%d %H:%M}" if tg_last else None,
+               last=f"{recs[-1][0]:%m/%d %H:%M}" if recs else None,
+               quad=quad, rising=W(rising), cool=W(cool), top=W(top),
+               feed={SECS[k]: list(reversed(v))[:20] for k, v in feed.items()}, all=list(reversed(allfeed))[:40])
+    OUT.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":"), allow_nan=False), encoding="utf-8")
+    print(f"news.json {OUT.stat().st_size:,} bytes · 기준 {use} · 텔레그램 마지막 {out['tg_last']} · 뜨는 단어 {[x['w'] for x in out['rising'][:8]]}")
+
+
+if __name__ == "__main__":
+    main()

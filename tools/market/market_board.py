@@ -430,9 +430,18 @@ if fomc_soon:
     badges.insert(2, dict(t=f"FOMC 발표 {fomc_soon[1]}", light="y", tag="일부 근거",
                           d="FOMC 발표 밤 종베 약세(전체 −0.22% vs +0.19%) → 그날 밤 종베 비중 절반"))
 
+# 뉴스 반응용 (tools/market/news_board.py 가 읽음): 섹터 구성 종목·섹터의 최근 25거래일 등락(%) · 최근 90거래일 날짜
+NP = 25
+mem_codes = sorted({c for _, _, mem in SECS for c, _ in mem})
+px = dict(dates=ds[T - NP + 1:T + 1],
+          stock={c: [f(v * 100, 2) for v in RET[T - NP + 1:T + 1, col[c]]] for c in mem_codes},
+          sector={nmS: [f(v * 100, 2) for v in SR[T - NP + 1:T + 1, k]] for k, (nmS, _, _) in enumerate(SECS)},
+          members={nmS: [[c, n] for c, n in mem] for nmS, _, mem in SECS})
+
 out = dict(asof=ds[T], built=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M"),
            idx=IDX, badges=badges, cal=[dict(d=c[1], t=c[2], note=c[3]) for c in cal],
-           G1=G1, G2=G2, G3=G3, band=band, ex1=ex1, ex2=ex2, cb_nights=cb_nights, toptv=toptv, tvsum=tvsum, adr=ADRJ)
+           G1=G1, G2=G2, G3=G3, band=band, ex1=ex1, ex2=ex2, cb_nights=cb_nights, toptv=toptv, tvsum=tvsum, adr=ADRJ,
+           sessions=ds[-90:], px=px)
 OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":"), allow_nan=False), encoding="utf-8")
 print(f"market.json {OUT.stat().st_size:,} bytes · 기준일 {ds[T]} · 판정 {vt1[0]} / {vt2[0]} / {vt3[0]}")
