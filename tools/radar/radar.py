@@ -1395,17 +1395,18 @@ def scheduler():
                     continue
                 fired.add(key)
                 threading.Thread(target=news_push, daemon=True).start()
-            if "08:00" <= hm <= "20:00" and t.minute % 30 == 0:      # 30분마다 텔레그램 기사만 올림 (사이트 '뉴스 새로고침' 버튼용, 작업 시작은 안 함)
-                key = (str(t.date()), "newsq", hm)
-                if key not in fired:
-                    fired.add(key)
-                    threading.Thread(target=news_push, args=(False,), daemon=True).start()
             for x, wf in SITE_JOBS:
                 key = (str(t.date()), "site", x)
                 if key in fired or hm < x or hm > _plus(x, 5):
                     continue
                 fired.add(key)
                 threading.Thread(target=site_dispatch, args=(wf,), daemon=True).start()
+        hm = f"{t:%H:%M}"
+        if "07:00" <= hm <= "23:30" and t.minute % 30 == 0:          # 30분마다 텔레그램 기사만 올림 — 사이트 '뉴스 새로고침' 버튼용
+            key = (str(t.date()), "newsq", hm)                       # 장 마감 뒤 미국 실적·지표 뉴스까지, 주말도 (작업 시작은 안 함)
+            if key not in fired:
+                fired.add(key)
+                threading.Thread(target=news_push, args=(False,), daemon=True).start()
         nx = [f"{x}" for times in SCHEDULE.values() for x in times if x > f"{t:%H:%M}"]
         STATE["next"] = min(nx) if nx and is_trading(t.date()) else None
         time.sleep(15)

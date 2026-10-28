@@ -43,6 +43,7 @@ MEDIA = {
 }
 TAGS = {"속보", "단독", "특징주", "컨콜", "종합", "1보", "2보", "3보", "공시", "마감", "개장", "장중", "시황", "긴급", "Breaking", "외신"}
 URL_RE = re.compile(r"https?://[^\s<>\]\)\"']+")
+AD_RE = re.compile(r"//(bit\.ly|han\.gl|vo\.la|url\.kr|buly\.kr|linktr\.ee)/|finup\.co\.kr/paid|/lecture/", re.I)   # 강의·유료방 광고 링크
 
 
 def media_of(url):
@@ -59,7 +60,7 @@ def parse(text):
     """글 → (제목, 링크, 매체) 또는 None (기사 링크가 없으면 버림)"""
     urls = [u.rstrip(".,") for u in URL_RE.findall(text or "")]
     urls = [u for u in urls if not re.search(r"//(t\.me|telegram\.me|telegram\.org|youtu|www\.youtube)", u)]
-    if not urls:
+    if not urls or any(AD_RE.search(u) for u in urls):
         return None
     title = None
     for line in str(text).splitlines():
