@@ -6,7 +6,7 @@
   · market.json (tools/market/market_board.py) — 섹터 구성 종목, 최근 거래일, 종목·섹터 등락 (반응 표시용)
 출력 news.json
   · quad: 섹터별 최근 5거래일 뉴스량(평소 60거래일 대비) × 5일 주가(시장 대비) — 뉴스가 먹히는 섹터
-  · rising / cool / top: 헤드라인 단어 온도 (최근 5거래일 vs 직전 20거래일, 규칙 기반 단어 세기)
+  · rising / cool / top: 헤드라인 단어 온도 (최근 5거래일 vs 직전 20거래일, 규칙 기반 단어 세기) · today: 오늘 vs 직전 3일 평균
   · feed: 섹터별·전체 최신 기사 (제목 · 매체 · 원문 링크 · 그 뒤 주가 반응)
 사용: python tools/market/news_board.py NEWS_DIR market.json OUT.json
 """
@@ -268,12 +268,36 @@ def main():
                   key=lambda x: x[3])
     cool = [x for x in cool if x[3] <= 0.5][:10]
     top = sorted(kw, key=lambda x: -x[1])[:12]
+    # 오늘 많이 나온 단어: 오늘(달력 날짜) 헤드라인 vs 직전 3일(기사 30건 이상인 날) 평균 — 하루 중간이라도 '비중'으로 비교
+    byday = defaultdict(list)
+    for t, src, h, j in tagged:
+        if use == "tg" and src != "tg":
+            continue
+        byday[t.date()].append(h)
+    days = sorted(d for d, hs in byday.items() if len(hs) >= 30 or d == NOW.date())
+    day_t = NOW.date() if len(byday.get(NOW.date(), [])) >= 30 else next((d for d in reversed(days) if len(byday[d]) >= 30), None)
+    today, today_n, day_b = [], 0, []
+    if day_t:
+        day_b = [d for d in days if d < day_t and len(byday[d]) >= 30][-3:]
+        tc, bc3 = Counter(), Counter()
+        for h in byday[day_t]:
+            tc.update(toks(h))
+        for d in day_b:
+            for h in byday[d]:
+                bc3.update(toks(h))
+        today_n = len(byday[day_t]); bn = sum(len(byday[d]) for d in day_b)
+        if day_b:
+            nd = len(day_b)
+            tw = [(w, c, f(bc3[w] / nd, 1), ((c + 1) / (today_n + 30)) / ((bc3[w] + 1) / (bn + 90))) for w, c in tc.items() if c >= 3]
+            today = sorted([x for x in tw if x[3] >= 1.8], key=lambda x: -x[3] * math.log(x[1] + 1))[:14]
     W = lambda L: [dict(w=w, c=c, b=b, r=f(r)) for w, c, b, r in L]
     tg_last = max((r[0] for r in recs if r[1] == "tg"), default=None)
     out = dict(built=f"{NOW:%Y-%m-%d %H:%M}", asof=asof, basis=use, n_rec=rt_, n_base=bt_,
                tg_last=f"{tg_last:%m/%d %H:%M}" if tg_last else None,
                last=f"{recs[-1][0]:%m/%d %H:%M}" if recs else None,
                quad=quad, rising=W(rising), cool=W(cool), top=W(top),
+               today=W(today), today_d=f"{day_t:%m/%d}" if day_t else None, today_n=today_n,
+               today_b=[f"{d:%m/%d}" for d in day_b],
                feed={SECS[k]: list(reversed(v))[:20] for k, v in feed.items()}, all=list(reversed(allfeed))[:40])
     OUT.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     print(f"news.json {OUT.stat().st_size:,} bytes · 기준 {use} · 텔레그램 마지막 {out['tg_last']} · 뜨는 단어 {[x['w'] for x in out['rising'][:8]]}")

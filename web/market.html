@@ -248,6 +248,7 @@ svg text{font-family:inherit}
 .kw span{font-size:12.5px;border-radius:999px;padding:2px 9px;background:var(--soft)}
 .kw span em{font-style:normal;font-size:11px;color:var(--mu);margin-left:4px}
 .kw.hot span{background:var(--t-no);color:var(--up)} .kw.cold span{background:var(--t-dn);color:var(--dn)}
+.kw.day span{background:var(--t-acc);color:var(--acc)}
 .feed{list-style:none;margin:0;padding:0;max-height:520px;overflow:auto}
 .feed a{text-decoration:none;color:inherit} .feed a:hover{text-decoration:underline}
 .feed li{padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.45}
@@ -396,6 +397,8 @@ textarea{width:100%;min-height:64px;font:inherit;border:1px solid var(--line);bo
     <div class="kw cold" id="kwCold"></div>
     <div class="small" style="font-weight:700;margin:12px 0 4px">이번 주 가장 많이 나온 단어</div>
     <div class="kw" id="kwTop"></div>
+    <div class="small" style="font-weight:700;margin:12px 0 4px" id="kwDayT">오늘 많이 나온 단어</div>
+    <div class="kw day" id="kwDay"></div>
   </section>
 </div>
 
@@ -707,6 +710,15 @@ function loadNews(keepSel) {
   $("kwHot").innerHTML = N.rising.length ? N.rising.map(k => `<span title="이번 ${k.c}건 · 직전 ${k.b}건">${esc(k.w)}<em>×${k.r.toFixed(1)}</em></span>`).join("") : `<span class="mu">없음</span>`;
   $("kwCold").innerHTML = N.cool.length ? N.cool.map(k => `<span title="이번 ${k.c}건 · 직전 ${k.b}건">${esc(k.w)}<em>×${k.r.toFixed(1)}</em></span>`).join("") : `<span class="mu">없음</span>`;
   $("kwTop").innerHTML = N.top.map(k => `<span>${esc(k.w)}<em>${k.c}</em></span>`).join("");
+  {                                                              // 오늘(달력 날짜) vs 직전 3일 평균 — 하루 중간이면 비중으로 비교
+    const isToday = N.today_d && N.built.slice(5, 10).replace("-", "/") === N.today_d;
+    const nb = (N.today_b || []).length;
+    $("kwDayT").innerHTML = `${isToday || !N.today_d ? "오늘" : N.today_d} 많이 나온 단어 <span style="font-weight:400">` +
+      (N.today_d ? `(${isToday ? "" : "오늘 기사가 적어 최근 날 · "}헤드라인 ${N.today_n}건 중 직전 ${nb}일 평균보다 두드러진 단어 · 숫자 = 건수)` : "") + "</span>";
+    $("kwDay").innerHTML = !N.today ? `<span class="mu">다음 뉴스 갱신부터 표시됩니다</span>`
+      : N.today.length ? N.today.map(k => `<span title="${esc(N.today_d)} ${k.c}건 · 직전 ${nb}일 하루 평균 ${k.b}건 (비중 ×${k.r.toFixed(1)})">${esc(k.w)}<em>${k.c}</em></span>`).join("")
+      : `<span class="mu">평소보다 두드러진 단어 없음</span>`;
+  }
   $("newsSrc").textContent = `출처: 텔레그램 속보 채널의 기사 제목·원문 링크(수집 ${N.tg_last || "–"}까지) + 연합뉴스·한국경제·전자신문 RSS · 갱신 ${N.built}` + (N.basis === "all" ? " · 텔레그램 기록이 적어 RSS 포함 기준" : "");
   const top = N.quad.slice().sort((a, b) => (b.today - a.today) || (b.cnt - a.cnt))[0];
   if (!(keepSel && selSec && N.quad.some(q => q.n === selSec)) && top) selSec = top.n;
