@@ -56,7 +56,7 @@ SCHEDULE = {"base": ["08:40", "19:40"], "results": ["09:06"],
 # 사이트(GitHub Actions) 워크플로를 정시에 시작 — GitHub 예약 실행은 이 저장소에서 매일 4~5시간씩 늦게 시작됨(2026-10 관찰)
 # 순서: 종가베팅 데이터 → 투자자별 수급 → 시총 등 → 사이트 빌드 → 리포트. 늦게 도는 GitHub 예약은 백업(이미 만든 날은 건너뜀)
 SITE_REPO = "joselee63/joselee63.github.io"
-NEWS_JOBS = ["08:45", "10:00", "11:30", "13:30", "15:45", "17:30", "19:50"]   # 사이트 시황판 뉴스 올리는 시각 (tools/market/news_tg.py)
+NEWS_LIVE = ("08:00", "20:00")   # 거래일 이 시간엔 사이트 시황판 뉴스를 10분마다 갱신 (아래 scheduler · tools/market/news_tg.py)
 SITE_JOBS = [("18:42", "closebet.yml"), ("20:10", "investor-data.yml"), ("20:50", "alpha-data.yml"),
              ("21:10", "daily.yml"), ("21:20", "alpha-reports.yml")]
 LOG = []
@@ -1347,14 +1347,14 @@ def site_dispatch(wf):
         log(f"사이트 워크플로 {wf} 실패: {e!r}"[:160])
 
 
-def news_push(dispatch=True):
-    """텔레그램 속보 중 '기사 제목 + 원문 링크'만 저장소 data 브랜치 news/tg/ 로 올리고 news.yml 시작 (끄려면 RADAR_SITE_TRIGGER=0)"""
+def news_push(dispatch=True, always=False):
+    """텔레그램 속보 중 '기사 제목 + 원문 링크'만 저장소 data 브랜치 news/tg/ 로 올리고, 바뀌었으면(always 면 늘) news.yml 시작 (끄려면 RADAR_SITE_TRIGGER=0)"""
     if os.environ.get("RADAR_SITE_TRIGGER") == "0" or not (OUT / "telegram").exists():
         return
     try:
         sys.path.insert(0, str(ROOT / "tools" / "market"))
         import news_tg
-        news_tg.push(log=log, dispatch=dispatch)
+        news_tg.push(log=log, dispatch=dispatch, always=always)
     except Exception as e:  # noqa: BLE001
         log(f"뉴스 올리기 실패: {e!r}"[:160])
 
@@ -1389,24 +1389,22 @@ def scheduler():
                         threading.Thread(target=refresh_am, args=(job,), daemon=True).start()
                     else:
                         threading.Thread(target=refresh, args=(job,), daemon=True).start()
-            for x in NEWS_JOBS:                                  # 사이트 시황판 뉴스: 텔레그램 기사 제목·링크 올리기
-                key = (str(t.date()), "news", x)
-                if key in fired or hm < x or hm > _plus(x, 5):
-                    continue
-                fired.add(key)
-                threading.Thread(target=news_push, daemon=True).start()
             for x, wf in SITE_JOBS:
                 key = (str(t.date()), "site", x)
                 if key in fired or hm < x or hm > _plus(x, 5):
                     continue
                 fired.add(key)
                 threading.Thread(target=site_dispatch, args=(wf,), daemon=True).start()
+        # 사이트 시황판 뉴스: 텔레그램 기사 제목·링크 올리기 (tools/market/news_tg.py)
+        #   거래일 08:00~20:00 → 10분마다 올리고 새 기사가 있으면 news.yml 시작 (30분마다는 새 기사 없어도 — 언론사 RSS 반영)
+        #   그 밖 07:00~23:30 · 주말 → 30분마다 올리기만 (장 마감 뒤 미국 실적·지표 뉴스, 다음 갱신 때 반영)
         hm = f"{t:%H:%M}"
-        if "07:00" <= hm <= "23:30" and t.minute % 30 == 0:          # 30분마다 텔레그램 기사만 올림 — 사이트 '뉴스 새로고침' 버튼용
-            key = (str(t.date()), "newsq", hm)                       # 장 마감 뒤 미국 실적·지표 뉴스까지, 주말도 (작업 시작은 안 함)
+        live = is_trading(t.date()) and NEWS_LIVE[0] <= hm <= NEWS_LIVE[1]
+        if (live and t.minute % 10 == 0) or ("07:00" <= hm <= "23:30" and t.minute % 30 == 0):
+            key = (str(t.date()), "newsq", hm)
             if key not in fired:
                 fired.add(key)
-                threading.Thread(target=news_push, args=(False,), daemon=True).start()
+                threading.Thread(target=news_push, args=(live, live and t.minute % 30 == 0), daemon=True).start()
         nx = [f"{x}" for times in SCHEDULE.values() for x in times if x > f"{t:%H:%M}"]
         STATE["next"] = min(nx) if nx and is_trading(t.date()) else None
         time.sleep(15)

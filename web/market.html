@@ -378,7 +378,7 @@ textarea{width:100%;min-height:64px;font:inherit;border:1px solid var(--line);bo
 
 <div class="newsbar">
   <button type="button" class="nbtn" id="newsUpd">↻ 뉴스 새로고침</button>
-  <span class="small" id="newsStat">뉴스 × 반응 · 이야기 온도 · 뉴스 피드만 새로 모읍니다 (1~3분)</span>
+  <span class="small" id="newsStat">장중엔 10분마다 자동 갱신 (열어 두면 5분마다 확인) · 버튼은 지금 바로 모으기 (1~3분)</span>
   <a href="#" class="small" id="newsTok" style="display:none">토큰 다시 입력</a>
 </div>
 <div class="ng">
@@ -786,6 +786,20 @@ loadNews().catch(e => {
   };
   $("newsTok").onclick = e => { e.preventDefault(); setTok(""); stat("토큰을 지웠습니다. 버튼을 누르면 다시 입력합니다.", ""); };
   setTok(getTok());
+
+  // 열어 둔 탭: 5분마다 news.json 의 갱신 시각만 확인 → 바뀌었으면 뉴스 3개 영역만 다시 그림 (레이더가 장중 10분마다 갱신)
+  let lastChk = now();
+  function autoChk() {
+    if (busy || document.hidden || !NW) return;
+    lastChk = now();
+    fetch("news.json?t=" + now(), {cache: "no-cache"}).then(r => r.ok ? r.json() : null).then(N => {
+      if (!N || !NW || N.built === NW.built || busy) return;
+      const sc = $("feed").scrollTop;                              // 읽던 피드 위치 유지
+      return loadNews(true).then(N2 => { $("feed").scrollTop = sc; stat(`자동 갱신 · ${N2.built}` + (N2.tg_last ? ` · 텔레그램 ${N2.tg_last}까지` : ""), "ok"); });
+    }).catch(() => {});
+  }
+  setInterval(autoChk, 5 * 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && now() - lastChk > 5 * 60000) autoChk(); });
 })();
 
 /* ---------- 메모 ---------- */

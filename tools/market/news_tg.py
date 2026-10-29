@@ -120,8 +120,8 @@ def gh_path():
     return None
 
 
-def push(days=2, log=print, dispatch=True):
-    """오늘(·어제) 파일을 data 브랜치 news/tg/ 에 올림 → 바뀐 게 있으면 news.yml 시작"""
+def push(days=2, log=print, dispatch=True, always=False):
+    """오늘(·어제) 파일을 data 브랜치 news/tg/ 에 올림 → 바뀐 게 있으면(always 면 늘) news.yml 시작"""
     g = gh_path()
     if not g:
         log("뉴스 올리기: gh(GitHub CLI)가 없어 건너뜀"); return 0
@@ -159,7 +159,7 @@ def push(days=2, log=print, dispatch=True):
             changed += 1; log(f"뉴스 올리기: {path} {len(items)}건")
         else:
             log(f"뉴스 올리기 실패 {path}: {(r.stderr or r.stdout).strip()[:150]}")
-    if changed and dispatch:
+    if dispatch and (changed or always):                                      # always: 새 기사 없어도 시작 (언론사 RSS 반영용)
         r = subprocess.run([g, "workflow", "run", "news.yml", "-R", REPO], capture_output=True, encoding="utf-8", errors="replace", timeout=60)
         log("사이트 뉴스 갱신 시작: " + ("성공" if r.returncode == 0 else "실패 " + (r.stderr or r.stdout).strip()[:150]))
     return changed
