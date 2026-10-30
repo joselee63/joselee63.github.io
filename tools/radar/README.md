@@ -87,6 +87,7 @@
 - `radar.py`: 수집·계산·예약·로컬 웹 서버
 - `kiwoom.py`: 키움 REST 조회 API만 씁니다(ka10027·ka10001·ka20001·ka90001·ka90002). 주문 기능은 없습니다.
 - `tg.py`: 텔레그램 수신(선택, 읽기 전용)
+- `min15.py`: 시총 1조 이상 종목의 15분봉(통합 KRX+NXT, 수정주가, 정규장)을 받아 `종목코드.js`로 저장 — 바탕화면 '이격도테스트' 폴더의 파동 눌림 타점 HTML용. 키움 ka10099(종목 목록)·ka10080(분봉). 키움은 약 13개월치만 주므로 다음부턴 새 봉만 덧붙입니다. 그 폴더의 `15분봉 업데이트.bat`으로 실행.
 - `board.html`: 화면
 - 기초 데이터: `tools/closebet/radar_base.py`가 closebet.yml(평일 18:37)에서 만들어 릴리스 `closebet-data/radar_base.json`에 올립니다.
 - `radar-out/`:
