@@ -51,14 +51,14 @@ KW = {
     "유통 · 의류 · 가전": ["유통", "백화점", "면세", "가전"],
 }
 ALIAS = {"SK하이닉스": ["하이닉스"], "한화에어로스페이스": ["한화에어로"], "LG에너지솔루션": ["LG엔솔"], "현대자동차": ["현대차"]}
-STOP = set("""속보 단독 종합 기자 오늘 내일 어제 관련 종목 주가 상승 하락 급등 급락 대비 억원 조원 만원 증가 감소 전망 발표 시장 투자 정부 한국 미국 기업
-이번 올해 내년 예정 추진 개최 위해 대한 통해 대해 있다 없다 한다 했다 된다 밝혀 밝혔다 지난 최대 최고 최저 사상 가능성 전년 분기 매출 영업이익 실적 확대 강화 지원
-공개 계약 체결 기록 돌파 진행 결정 검토 우려 기대 영향 효과 주식 증시 코스피 코스닥 거래 국내 해외 글로벌 세계 업계 시간 이후 이전 현재 가운데 중국 일본 뉴스 경제
-특징주 관련주 테마 테마주 수혜 수혜주 보도 소식 논의 회의 참석 출시 개발 선정 협력 협약 업무 사업 제품 서비스 기술 산업 신규 대표 회장 사장 장관 대통령 의원 국회
-연합뉴스 뉴스1 뉴시스 머니투데이 이데일리 한국경제 매일경제 서울경제 헤럴드경제 아이뉴스24 파이낸셜뉴스 조선비즈 전자신문 디지털타임스 비즈니스포스트 아시아경제 에너지경제 데일리안
-TOP10 TOP KRX KST 상승률 하락률 상향 대응 억달러 성장 SK EPS 거래대금 통과 완료 공급 수요 공략 확보 선언 가속 본격 주목 공식 없어 분석 최초 만에 확인 기반 종합2보 1보 2보
-the and for of to in on with""".split())
-PART = ("으로", "에서", "에게", "까지", "부터", "에도", "에는", "이다", "하는", "했다", "한다", "된다", "들", "에", "의", "은", "는", "이", "가", "을", "를", "과", "와", "도", "로", "만")
+# 이야기 온도에서 빼는 일반 단어 — 실적 용어·동작·정도·시간처럼 '무엇에 대한 이야기인지' 말해 주지 않는 말 (별도 파일, 직접 고쳐도 됨)
+STOP = set(re.sub(r"#.*", "", (Path(__file__).with_name("news_stopwords.txt")).read_text(encoding="utf-8")).split())
+STOP |= {"관련", "업계", "가운데", "밝혔다", "없어", "만에"}
+KEEP_END = {"캐나다", "키트루다", "라이다", "플로리다", "혼다", "아이다"}     # '~다' 로 끝나도 남길 이름
+MIXED = ("오픈AI", "챗GPT", "스페이스X")                                  # 한글+영문 붙은 이름은 통째로
+PART = ("으로", "에서", "에게", "까지", "부터", "에도", "에는", "이다", "하는", "했다", "한다", "된다",
+        "들", "에", "의", "은", "는", "이", "가", "을", "를", "과", "와", "도", "로", "만", "서")
+RAW = Counter()     # 헤드라인 단어를 조사 떼기 전 모양 그대로 센 수 — main() 에서 채움
 
 
 def f(x, n=2):
@@ -141,14 +141,34 @@ def load(days=140):
     return out
 
 
+WORD = r"[가-힣]{2,}|[A-Za-z][A-Za-z0-9]{1,}"
+
+
+def strip_part(w):
+    """조사 떼기. 한 글자 조사(이·가·로·서 …)는 떼고 남은 말이 따로도 자주 쓰일 때만 뗀다
+    → '삼성전자가'→'삼성전자', 하지만 '디스플레이'·'제미나이'·'마운자로'·'국제유가'·'김정은' 은 그대로."""
+    for p in PART:
+        if len(w) > len(p) + 1 and w.endswith(p):
+            stem = w[:-len(p)]
+            if len(p) >= 2 or not RAW or RAW[stem] * 2 >= RAW[w]:
+                return stem
+            return w
+    return w
+
+
 def toks(h):
     h = re.sub(r"^\[[^\]]+\]", "", h)
     out = set()
-    for w in re.findall(r"[가-힣]{2,}|[A-Za-z][A-Za-z0-9]{1,}", h):
+    for m in MIXED:
+        if m in h:
+            out.add(m); h = h.replace(m, " ")
+    for w in re.findall(WORD, h):
         if re.match(r"[가-힣]", w):
-            for p in PART:
-                if len(w) > len(p) + 1 and w.endswith(p):
-                    w = w[:-len(p)]; break
+            w = strip_part(w)
+            if w.endswith(("다", "까")) and w not in KEEP_END:      # 한다·나선다·뚫었다·될까 … 같은 서술어
+                continue
+            if w.endswith("는"):                                     # 만드는·노리는·커지는 … 꾸밈말 (명사+는 은 위에서 이미 뗌)
+                continue
         else:
             if not (w.isupper() or len(w) >= 4):
                 continue
@@ -199,6 +219,8 @@ def main():
         return re.search(r"(?<![가-힣A-Za-z0-9])" + re.escape(n) + r"(?![가-힣A-Za-z0-9])", h) is not None
 
     recs = load()
+    for r in recs:
+        RAW.update(re.findall(WORD, re.sub(r"^\[[^\]]+\]", "", r[3])))
     print("기사", len(recs), "(텔레그램", sum(1 for r in recs if r[1] == "tg"), "· RSS", sum(1 for r in recs if r[1] == "rss"), ")")
     pxd = {d: i for i, d in enumerate(px.get("dates") or [])}
     S5 = {h["n"]: h.get("rel5") for h in M["G3"]["heat"]}
