@@ -144,7 +144,24 @@ def update(k, code, out, full=False):
         return 0, 0, "봉 없음"
     nnew = len(set(merged) - set(oldb))
     obj = {"code": code, **pack(merged)}
+    # 국면(일봉 20·60일선)을 15분봉 첫날부터 판정하려고, 그 앞 일봉 종가를 같이 둠 — 한 번 받으면 재사용
+    keep = old and old.get("pre") and not note.startswith("수정주가") and old.get("d", [None])[0] == obj["d"][0]
+    obj["pre"] = old["pre"] if keep else daily_pre(k, code, obj["d"][0])
     return obj, nnew, note
+
+
+def daily_pre(k, code, first, n=90):
+    """first(YYYY-MM-DD) 이전 n거래일 일봉 종가(수정주가) → [[날짜, 종가], …]. 실패하면 [] (다음 갱신 때 다시)"""
+    try:
+        d, _ = k.call("ka10081", "/api/dostk/chart", {"stk_cd": code, "base_dt": first.replace("-", ""), "upd_stkpc_tp": "1"})
+    except KiwoomError:
+        return []
+    out = []
+    for r in d.get("stk_dt_pole_chart_qry") or []:
+        dt, c = str(r.get("dt") or ""), num(r.get("cur_prc"), True)
+        if len(dt) == 8 and c and f"{dt[:4]}-{dt[4:6]}-{dt[6:]}" < first:
+            out.append([f"{dt[:4]}-{dt[4:6]}-{dt[6:]}", round(c)])
+    return sorted(out)[-n:]
 
 
 class Store:
