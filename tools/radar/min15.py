@@ -13,10 +13,13 @@ python min15.py OUT                 # 시총 1조 이상 전체 (새 종목은 �
 python min15.py OUT --codes 005930  # 특정 종목만
 python min15.py OUT --full          # 처음부터 다시
 python min15.py OUT --min-cap 5000  # 기준 바꾸기 (억 원)
+python min15.py OUT --serve 8792 --page "JH존_파동 눌림 타점_v2.html"   # 화면의 '갱신' 버튼용 로컬 서버
 """
 import argparse
 import json
+import os
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -144,60 +147,207 @@ def update(k, code, out, full=False):
     return obj, nnew, note
 
 
+class Store:
+    """data15 폴더 + index.js 목록 — 명령줄 갱신과 화면 갱신 서버가 같이 씀"""
+
+    def __init__(self, out, min_cap=10000):
+        self.out, self.min_cap = Path(out), min_cap
+        self.out.mkdir(parents=True, exist_ok=True)
+        self.lock = threading.Lock()                         # 파일 쓰기는 한 번에 하나
+        self._k = None
+        idx = read_js(self.out / "index.js") or {}
+        self.upd = idx.get("upd")
+        self.info = {u["c"]: u for u in idx.get("list", [])}
+
+    @property
+    def k(self):
+        if self._k is None:
+            self._k = Kiwoom()
+        return self._k
+
+    def refresh_universe(self):
+        """시총 기준 종목 다시 확인 → 받을 코드 목록. 기준 아래로 내려간 종목도 목록엔 남김"""
+        uni = universe(self.k, self.min_cap)
+        new = {u["c"]: u for u in uni}
+        for c, u in self.info.items():
+            if c in new:
+                new[c].update({x: u[x] for x in ("f", "t", "last", "nb", "u") if x in u})
+            else:
+                new[c] = dict(u, below=True)
+        self.info = new
+        return [u["c"] for u in uni]
+
+    def update_code(self, code, full=False):
+        """한 종목 받기 → (새 봉 수, 메모, 목록 항목). 실패하면 KiwoomError"""
+        with self.lock:                                      # 같은 종목을 화면·전체 갱신이 동시에 고쳐 쓰지 않게
+            obj, nnew, note = update(self.k, code, self.out, full)
+            if not obj:
+                raise KiwoomError(f"{code} {note}")
+            u = self.info.setdefault(code, {"c": code, "n": code, "m": "", "cap": None, "s": ""})
+            obj.update(name=u["n"], mk=u["m"])
+            write_js(self.out / f"{code}.js", "W15", obj)
+            u.update(f=obj["d"][0], t=obj["d"][-1], last=SLOTS[obj["b"][-1][1]], nb=len(obj["b"]),
+                     u=datetime.now().strftime("%Y-%m-%d %H:%M"))
+        return nnew, note, u
+
+    def save_index(self, full_run=False):
+        with self.lock:
+            if full_run or not self.upd:
+                self.upd = datetime.now().strftime("%Y-%m-%d %H:%M")
+            have = {p.stem for p in self.out.glob("*.js") if p.stem != "index"}
+            lst = sorted((u for c, u in self.info.items() if c in have), key=lambda u: -(u.get("cap") or 0))
+            write_js(self.out / "index.js", "W15_INDEX", {"upd": self.upd, "min_cap": self.min_cap, "list": lst})
+            return len(lst)
+
+    def run(self, codes, full=False, log=print, progress=None):
+        """여러 종목 받기. 키움 일시 오류(1631 등)는 맨 끝에서 한 번 더 → 실패 코드 목록"""
+        t0, fails, queue, retried = time.time(), [], list(codes), set()
+        for n, code in enumerate(queue, 1):
+            if progress:
+                progress(min(n, len(codes)), len(codes), self.info.get(code, {}).get("n", code))
+            try:
+                nnew, note, u = self.update_code(code, full)
+            except KiwoomError as e:
+                if code not in retried:
+                    retried.add(code); queue.append(code)
+                    log(f"[{n}/{len(codes)}] {code} 일시 오류 — 나중에 다시: {e}")
+                else:
+                    fails.append(code)
+                    log(f"[{n}/{len(codes)}] {code} 실패: {e}")
+                continue
+            if n % 20 == 0 or note or n == len(codes):
+                log(f"[{n}/{len(codes)}] {code} {u['n']} {u['nb']}봉 (+{nnew}) {u['f']}~{u['t']} {note} · {time.time() - t0:.0f}초")
+        return fails
+
+
+# ====================================================================== 화면 갱신 서버
+def serve(store, port, page):
+    """이 폴더를 http://127.0.0.1:port 로 보여 주고, 화면의 '갱신' 버튼 요청을 받아 키움에서 새 봉을 받는다.
+    키 값은 브라우저로 가지 않는다(서버가 자격 증명 관리자에서 읽어 키움에만 보냄)."""
+    import re
+    import webbrowser
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.parse import parse_qs, quote, urlparse
+
+    import requests
+    url = f"http://127.0.0.1:{port}/" + quote(page)
+    try:                                                     # 이미 켜져 있으면 브라우저만
+        if requests.get(f"http://127.0.0.1:{port}/api/ping", timeout=2).ok:
+            print(f"이미 실행 중입니다 → {url}")
+            webbrowser.open(url)
+            return
+    except Exception:  # noqa: BLE001
+        pass
+
+    job = {"running": False, "done": 0, "total": 0, "cur": "", "fails": [], "started": None, "finished": None, "msg": ""}
+
+    def log(s):
+        print(time.strftime("%H:%M:%S"), s, flush=True)
+
+    def run_all():
+        job.update(done=0, total=0, cur="", fails=[], started=time.strftime("%H:%M:%S"), finished=None, msg="종목 목록 확인 중")
+        try:
+            codes = store.refresh_universe()
+            job.update(total=len(codes), msg="")
+            log(f"전체 갱신 시작 — {len(codes)}종목")
+
+            def prog(n, total, name):
+                job.update(done=n - 1, total=total, cur=name)
+            fails = store.run(codes, log=log, progress=prog)
+            job.update(done=len(codes), fails=fails)
+            store.save_index(full_run=True)
+            log(f"전체 갱신 끝 — 실패 {len(fails)}")
+        except Exception as e:  # noqa: BLE001
+            job["msg"] = f"오류: {e}"[:300]
+            log(job["msg"])
+        finally:
+            job.update(running=False, finished=time.strftime("%Y-%m-%d %H:%M:%S"), cur="")
+
+    root = str(store.out.parent)
+
+    class H(SimpleHTTPRequestHandler):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, directory=root, **kw)
+
+        def log_message(self, fmt, *args):                   # 파일 요청은 조용히
+            pass
+
+        def end_headers(self):
+            self.send_header("Cache-Control", "no-store")
+            super().end_headers()
+
+        def _json(self, code, obj):
+            b = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+
+        def do_GET(self):
+            p = urlparse(self.path).path
+            if p == "/api/ping":
+                return self._json(200, {"ok": True})
+            if p == "/api/status":
+                return self._json(200, job)
+            return super().do_GET()
+
+        def do_POST(self):
+            if self.headers.get("X-Wave") != "1":            # 다른 사이트가 몰래 부르는 것 차단 (사용자 지정 헤더는 교차 출처에서 못 붙임)
+                return self._json(403, {"error": "forbidden"})
+            u = urlparse(self.path)
+            q = parse_qs(u.query)
+            if u.path == "/api/update":
+                code = (q.get("code") or [""])[0].upper()
+                if not re.fullmatch(r"[0-9A-Z]{6}", code):
+                    return self._json(400, {"error": "종목코드가 이상합니다"})
+                try:
+                    nnew, note, it = store.update_code(code)
+                    store.save_index()
+                except Exception as e:  # noqa: BLE001
+                    log(f"{code} 갱신 실패: {e}")
+                    return self._json(502, {"error": str(e)[:300]})
+                log(f"{code} {it['n']} 갱신 — 새 봉 {nnew}개, 마지막 {it['t']} {it['last']}")
+                return self._json(200, {"code": code, "nnew": nnew, "t": it["t"], "last": it["last"], "note": note})
+            if u.path == "/api/update-all":
+                if not job["running"]:
+                    job["running"] = True
+                    threading.Thread(target=run_all, daemon=True).start()
+                return self._json(200, job)
+            return self._json(404, {"error": "없는 주소"})
+
+    ThreadingHTTPServer.allow_reuse_address = False           # Windows 는 기본값이면 같은 포트를 두 프로그램이 같이 열 수 있음
+    srv = ThreadingHTTPServer(("127.0.0.1", port), H)
+    log(f"파동 눌림 타점 → {url}  (이 창을 닫으면 '갱신' 버튼이 멈춥니다)")
+    if os.environ.get("WAVE_NO_BROWSER") != "1":
+        try:
+            webbrowser.open(url)
+        except Exception:  # noqa: BLE001
+            pass
+    srv.serve_forever()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
     ap.add_argument("--codes", default="")
     ap.add_argument("--full", action="store_true")
     ap.add_argument("--min-cap", type=float, default=10000, help="억 원 (기본 1조)")
+    ap.add_argument("--serve", type=int, default=0, help="화면 갱신 서버 포트 (예: 8792)")
+    ap.add_argument("--page", default="", help="--serve 때 열 HTML 파일 이름")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
+    store = Store(a.out, a.min_cap)
+    if a.serve:
+        return serve(store, a.serve, a.page)
 
-    k = Kiwoom()
-    uni = universe(k, a.min_cap)
-    info = {u["c"]: u for u in uni}
-    idx_old = read_js(out / "index.js") or {}
-    for u in idx_old.get("list", []):                       # 시총이 기준 아래로 내려간 종목도 계속 찾을 수 있게
-        if u["c"] in info:
-            info[u["c"]].update({x: u[x] for x in ("f", "t", "last", "nb") if x in u})
-        else:
-            info[u["c"]] = dict(u, below=True)
-    codes = [c.strip() for c in a.codes.split(",") if c.strip()] or [u["c"] for u in uni]
+    t0 = time.time()
+    uni = store.refresh_universe()
+    codes = [c.strip() for c in a.codes.split(",") if c.strip()] or uni
     print(f"시총 {a.min_cap / 1e4:g}조 이상 {len(uni)}종목 · 이번에 받을 {len(codes)}종목", flush=True)
-
-    t0, fails = time.time(), []
-    queue = list(codes)
-    retried = set()
-    for n, code in enumerate(queue, 1):
-        try:
-            obj, nnew, note = update(k, code, out, a.full)
-        except KiwoomError as e:
-            if code not in retried:                          # 키움 일시 오류(1631 등) → 맨 끝에서 한 번 더
-                retried.add(code); queue.append(code)
-                print(f"[{n}/{len(codes)}] {code} 일시 오류 — 나중에 다시: {e}", flush=True)
-            else:
-                fails.append(code)
-                print(f"[{n}/{len(codes)}] {code} 실패: {e}", flush=True)
-            continue
-        if not obj:
-            fails.append(code)
-            print(f"[{n}/{len(codes)}] {code} {note}", flush=True)
-            continue
-        u = info.setdefault(code, {"c": code, "n": code, "m": "", "cap": None, "s": ""})
-        obj.update(name=u["n"], mk=u["m"])
-        write_js(out / f"{code}.js", "W15", obj)
-        u.update(f=obj["d"][0], t=obj["d"][-1], last=SLOTS[obj["b"][-1][1]], nb=len(obj["b"]))
-        if n % 20 == 0 or note or n == len(codes):
-            print(f"[{n}/{len(codes)}] {code} {u['n']} {len(obj['b'])}봉 (+{nnew}) {obj['d'][0]}~{obj['d'][-1]} {note}"
-                  f" · {time.time() - t0:.0f}초", flush=True)
-
-    have = {p.stem for p in out.glob("*.js") if p.stem != "index"}
-    lst = sorted((u for c, u in info.items() if c in have), key=lambda u: -(u.get("cap") or 0))
-    write_js(out / "index.js", "W15_INDEX", {"upd": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                             "min_cap": a.min_cap, "list": lst})
-    print(f"끝 — {len(lst)}종목 저장 · 실패 {len(fails)}{' ' + ','.join(fails) if fails else ''} · {time.time() - t0:.0f}초")
+    fails = store.run(codes, a.full, log=lambda s: print(s, flush=True))
+    n = store.save_index(full_run=not a.codes)
+    print(f"끝 — {n}종목 저장 · 실패 {len(fails)}{' ' + ','.join(fails) if fails else ''} · {time.time() - t0:.0f}초")
     if fails:
         print("실패한 종목은 다시 실행하면 이어서 받습니다.")
 
