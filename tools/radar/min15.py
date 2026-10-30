@@ -168,12 +168,18 @@ def main():
     print(f"시총 {a.min_cap / 1e4:g}조 이상 {len(uni)}종목 · 이번에 받을 {len(codes)}종목", flush=True)
 
     t0, fails = time.time(), []
-    for n, code in enumerate(codes, 1):
+    queue = list(codes)
+    retried = set()
+    for n, code in enumerate(queue, 1):
         try:
             obj, nnew, note = update(k, code, out, a.full)
         except KiwoomError as e:
-            fails.append(code)
-            print(f"[{n}/{len(codes)}] {code} 실패: {e}", flush=True)
+            if code not in retried:                          # 키움 일시 오류(1631 등) → 맨 끝에서 한 번 더
+                retried.add(code); queue.append(code)
+                print(f"[{n}/{len(codes)}] {code} 일시 오류 — 나중에 다시: {e}", flush=True)
+            else:
+                fails.append(code)
+                print(f"[{n}/{len(codes)}] {code} 실패: {e}", flush=True)
             continue
         if not obj:
             fails.append(code)
