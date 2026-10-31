@@ -1364,7 +1364,7 @@ def main():
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:
             f.write(render_page(src, page))
-    for extra in ("secret.js", "secret.json") + (("closebet.json",) if MARKET == "kr" else ()):   # 숨은 사진 · 종가베팅 백테스트 데이터(한국)
+    for extra in ("secret.js", "secret.json") + (("closebet.json", "maangle.json") if MARKET == "kr" else ()):   # 숨은 사진 · 종가베팅·이평각도 백테스트 데이터(한국)
         if os.path.exists(os.path.join(WEB_DIR, extra)):
             shutil.copy(os.path.join(WEB_DIR, extra), os.path.join(SITE_DIR, extra))
     if MARKET == "kr" and os.path.isdir(os.path.join(ROOT, "briefing")):   # Daily briefing 리포트 (모닝·마감)

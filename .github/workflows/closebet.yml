@@ -4,6 +4,7 @@ name: closebet-data
 #   저장 위치: 릴리스 'closebet-data' 첨부 파일 (매일 덮어써서 git 기록이 쌓이지 않음)
 #     ohlcv.npz · universe.csv · index.csv · frozen.txt  ← tools/closebet/daily_data.py 의 일봉 저장소
 #     closebet.json · asof.txt              ← tools/closebet/export_web.py 결과 (daily.yml 이 받아 한국 사이트에 넣음)
+#     maangle.json                          ← tools/closebet/export_maangle.py (퀀트 페이지 '이평각도 눌림 돌파', daily.yml 이 받아 넣음)
 #     radar_base.json                       ← tools/closebet/radar_base.py (내 PC의 종베 레이더 tools/radar 가 장중에 받아 씀)
 #     market.json                           ← tools/market/market_board.py (사이트 시황판, daily.yml 이 받아 넣음)
 #   시총은 data 브랜치 alpha/cap (alpha-data.yml) — 신호 '전날' 시총만 쓰므로 오늘 시총이 아직 없어도 됨
@@ -78,11 +79,14 @@ jobs:
           TRACK_IN: ${{ github.workspace }}/trackin/track.json
           TRACK_OUT: ${{ github.workspace }}/out/track.json
           RADAR_OUT: ${{ github.workspace }}/out/radar_base.json
+          MAANGLE_OUT: ${{ github.workspace }}/out/maangle.json
         run: |
           gh release download "$TAG" -p track.json -D trackin 2>/dev/null || echo "실전 추적 기록 없음 → 새로 시작"
           python tools/closebet/daily_data.py materialize store
           mkdir -p out
           (cd tools/closebet && python -W ignore export_web.py)
+          # 퀀트 페이지 '이평각도 눌림 돌파' 데이터 (같은 패널 캐시 사용) — 실패해도 종가베팅 데이터는 그대로 올림
+          (cd tools/closebet && python -W ignore export_maangle.py) || echo "::warning::이평각도 데이터(maangle.json) 만들기 실패 — 사이트는 이전 것 유지"
           python - <<'EOF'
           import json
           d = json.load(open("out/closebet.json", encoding="utf-8"))
@@ -95,7 +99,9 @@ jobs:
 
       - name: closebet.json 올리기
         if: steps.chk.outputs.skip != 'true'
-        run: gh release upload "$TAG" out/closebet.json out/asof.txt out/track.json out/radar_base.json --clobber
+        run: |
+          gh release upload "$TAG" out/closebet.json out/asof.txt out/track.json out/radar_base.json --clobber
+          if [ -f out/maangle.json ]; then gh release upload "$TAG" out/maangle.json --clobber; fi
 
       - name: 시황판 데이터 (market.json — 사이트 market.html) 만들기 · 올리기
         if: steps.chk.outputs.skip != 'true'
