@@ -237,6 +237,30 @@ tr.det td{background:var(--soft);padding:8px 10px;text-align:left;border-radius:
 .mtabs button{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:3px 11px;cursor:pointer}
 .mtabs button.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .hmhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+/* 날짜별 1·2위 섹터 흐름 */
+.flowbox{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.flowh{font-size:13.5px;margin-bottom:8px}
+.flowh .small b{font-weight:700}
+.flow{display:flex;flex-wrap:wrap;row-gap:10px;padding-bottom:4px}
+.fd{display:flex;align-items:center;flex:none}
+.fd .ar{width:18px;text-align:center;color:var(--hoverline);font-size:14px;padding-top:15px}
+.fd .ar.keep{color:var(--acc);font-weight:900;font-size:17px}
+.fdb{min-width:100px;display:flex;flex-direction:column;gap:3px}
+.fdt{font-size:11px;color:var(--mu);text-align:center;font-variant-numeric:tabular-nums}
+.fdt.last{color:var(--fg);font-weight:700}
+.fp{font:inherit;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;white-space:nowrap;
+  padding:3px 7px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer;text-align:left;transition:opacity .15s}
+.fp .nm{white-space:nowrap}
+.fp .v{font-size:10.5px;flex:none;font-variant-numeric:tabular-nums}
+.fp.p1{font-weight:700;border-color:transparent;background:var(--soft);background:color-mix(in srgb,var(--up) 13%,var(--card))}
+.fp.p1.neg{background:var(--soft);background:color-mix(in srgb,var(--dn) 13%,var(--card))}
+.flow.dim .fp:not(.hl){opacity:.28}
+.fp.hl{box-shadow:inset 0 0 0 1.5px var(--fg)}
+#hmFlowSum{margin-top:6px}
+#hmFlowSum button{font:inherit;font-size:12px;border:0;background:none;padding:0;color:var(--fg);font-weight:700;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+@media (max-width:700px){
+  .flow{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px}
+}
 .statrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
 .stat{background:var(--soft);border-radius:10px;padding:8px 11px}
 .stat .k{font-size:11.5px;color:var(--mu)} .stat .v{font-size:16px;font-weight:800}
@@ -374,6 +398,11 @@ textarea{width:100%;min-height:64px;font:inherit;border:1px solid var(--line);bo
     <div class="mtabs" id="hmSort"></div>
   </div>
   <div class="hm-wrap"><table class="hm" id="hm"></table></div>
+  <div class="flowbox">
+    <div class="flowh"><b>날짜별 1·2위 섹터</b> <span class="small">위 칸 1위 · 아래 칸 2위 · <b class="accc">진한 화살표</b> = 전날 1·2위 섹터가 다시 들어옴 · 섹터를 누르면 같은 섹터만 표시</span></div>
+    <div class="flow" id="hmFlow"></div>
+    <div class="small" id="hmFlowSum"></div>
+  </div>
   <div class="statrow" id="hmStats"></div>
 </section>
 
@@ -623,7 +652,53 @@ function renderHM() {
     }
   });
   $("hm").innerHTML = h + "</tbody>";
-  $("hm").querySelectorAll("tr.row").forEach(tr => tr.onclick = () => { const n = tr.dataset.s; openSec = openSec === n ? null : n; selectSector(n, false); renderHM(); });
+  $("hm").querySelectorAll("tr.row").forEach(tr => tr.onclick = () => { const n = tr.dataset.s; openSec = openSec === n ? null : n; flowPin = openSec; selectSector(n, false); renderHM(); flowHL(flowPin); });
+}
+
+/* ---------- 날짜별 1·2위 섹터 흐름 (히트맵 아래) ---------- */
+const top2 = hd.map((_, j) => H.map((s, i) => [s.d[j], i]).filter(x => x[0] != null).sort((a, b) => b[0] - a[0]).slice(0, 2));
+let flowPin = null;
+function flowHL(n) {                                   // 같은 섹터만 진하게, 나머지는 흐리게
+  const f = $("hmFlow");
+  f.classList.toggle("dim", !!n);
+  f.querySelectorAll(".fp").forEach(p => p.classList.toggle("hl", p.dataset.s === n));
+}
+function renderFlow() {
+  const pill = (x, r, d) => {
+    if (!x) return "";
+    const s = H[x[1]];
+    return `<button type="button" class="fp p${r}${x[0] < 0 ? " neg" : ""}" data-s="${esc(s.n)}" title="${md(d)} ${r}위 · ${esc(s.n)} ${sgn(x[0], 2)}%">` +
+      `<span class="nm">${esc(short(s.n))}</span><span class="v ${cls(x[0])}">${sgn(x[0])}</span></button>`;
+  };
+  let keepN = 0;
+  $("hmFlow").innerHTML = hd.map((d, j) => {
+    const prev = j ? new Set(top2[j - 1].map(x => x[1])) : null;
+    const keep = !!prev && top2[j].some(x => prev.has(x[1]));
+    if (keep) keepN++;
+    return `<div class="fd">${j ? `<span class="ar${keep ? " keep" : ""}"${keep ? ' title="전날 1·2위 섹터가 다시 들어옴"' : ""}>→</span>` : ""}` +
+      `<div class="fdb"><div class="fdt${j === hd.length - 1 ? " last" : ""}">${md(d)}</div>${pill(top2[j][0], 1, d)}${pill(top2[j][1], 2, d)}</div></div>`;
+  }).join("");
+  // 한 줄 요약: 자주 들어온 섹터 · 이어진 날 수
+  const cnt = new Map();
+  top2.forEach(t => t.forEach(x => cnt.set(x[1], (cnt.get(x[1]) || 0) + 1)));
+  const freq = [...cnt].filter(e => e[1] >= 2).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  $("hmFlowSum").innerHTML = (freq.length ? `자주 들어온 섹터: ${freq.map(([i, c]) => `<button type="button" data-s="${esc(H[i].n)}">${esc(short(H[i].n))}</button> ${c}번`).join(" · ")} · ` : "") +
+    `${hd.length}일 중 1·2위에 오른 섹터 ${cnt.size}개 · 전날 섹터가 이어진 날 ${keepN}번`;
+  const f = $("hmFlow");
+  f.onmouseover = e => { const p = e.target.closest(".fp"); if (p) flowHL(p.dataset.s); };
+  f.onmouseleave = () => flowHL(flowPin);
+  const pick = e => {
+    const p = e.target.closest("[data-s]"); if (!p) return;
+    const n = p.dataset.s;
+    flowPin = flowPin === n ? null : n;
+    flowHL(flowPin);
+    if (flowPin) selectSector(n, false);
+  };
+  f.onclick = pick;
+  $("hmFlowSum").onclick = pick;
+  $("hmFlowSum").onmouseover = e => { const b = e.target.closest("[data-s]"); if (b) flowHL(b.dataset.s); };
+  $("hmFlowSum").onmouseleave = () => flowHL(flowPin);
+  f.scrollLeft = f.scrollWidth;                          // 휴대폰(한 줄)에선 최근 날짜부터 보이게
 }
 $("hmSort").innerHTML = [["r5", "5일 강한 순"], ["r20", "20일 강한 순"]].map(([k, t]) => `<button type="button" data-k="${k}" class="${k === hmSort ? "on" : ""}">${t}</button>`).join("");
 $("hmSort").querySelectorAll("button").forEach(b => b.onclick = () => { hmSort = b.dataset.k; $("hmSort").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); renderHM(); });
@@ -638,6 +713,7 @@ $("hmStats").innerHTML = [
 /* ---------- 일정 ---------- */
 $("cal").innerHTML = D.cal.map(c => `<li><span class="d">${c.d}</span><span>${esc(c.t)}${c.note ? ` <span class="small">· ${esc(c.note)}</span>` : ""}</span></li>`).join("");
 
+renderFlow();
 renderHM();
 
 /* ---------- 뉴스 (news.json: 텔레그램 속보의 기사 제목·원문 링크 + 언론사 RSS) ---------- */
