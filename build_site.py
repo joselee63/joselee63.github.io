@@ -1157,7 +1157,7 @@ def render_page(src, page):
         here = MARKETS[MARKET]["site"]                       # 지금 페이지 위치에서 상대 경로
         there = MARKETS[m]["site"]
         href = ("../" if here else "") + (there + "/" if there else "")
-        kr_only = page in ("market.html", "briefing.html", "supply.html", "supply-profile.html", "temp.html", "track.html") and m != "kr"        # 한국에만 있는 페이지 → 다른 시장은 첫 화면으로
+        kr_only = page in ("market.html", "briefing.html", "reports.html", "supply.html", "supply-profile.html", "temp.html", "track.html") and m != "kr"        # 한국에만 있는 페이지 → 다른 시장은 첫 화면으로
         href = (href or "./") + ("" if page == "index.html" or kr_only else page)
         links.append(f'<a href="{href}"{" class=\"on\" aria-current=\"page\"" if m == MARKET else ""}>'
                      f'{FLAG_SVG[m]}<span>{label}</span></a>')
@@ -1168,7 +1168,7 @@ def render_page(src, page):
     for a, b in MK.get("replace", {}).items():
         out = out.replace(a, b)
     if MARKET != "kr":                                    # 시황판·브리핑·수급 등은 한국 데이터만 있음
-        out = re.sub(r'\s*<a class="tab (mkb|sup|tmp|trk|brf)[^"]*"[^>]*>[\s\S]*?</a>', "", out)
+        out = re.sub(r'\s*<a class="tab (mkb|sup|tmp|trk|brf|rpt)[^"]*"[^>]*>[\s\S]*?</a>', "", out)
     else:                                                 # 한국: 사이트 제목을 누르면 시황판(홈)으로
         out = out.replace('<h1><a href="./"', '<h1><a href="market.html"', 1)
         if page == "index.html":                          # 한국 첫 화면 = 시황판 (섹터 차트는 ./#sector 같은 메뉴 링크로 그대로 열림)
@@ -1359,7 +1359,7 @@ def main():
     print("[3/3] 페이지 생성")
     with open(os.path.join(SITE_DIR, "data", "summary.js"), "w", encoding="utf-8") as f:
         f.write("window.__krsc_summary && window.__krsc_summary(" + js + ");\n")
-    for page in ("index.html", "game.html", "similar.html", "screener.html", "quant.html") + (("market.html", "supply.html", "supply-profile.html", "temp.html", "track.html", "briefing.html") if MARKET == "kr" else ()):
+    for page in ("index.html", "game.html", "similar.html", "screener.html", "quant.html") + (("market.html", "supply.html", "supply-profile.html", "temp.html", "track.html", "briefing.html", "reports.html") if MARKET == "kr" else ()):
         with open(os.path.join(WEB_DIR, page), encoding="utf-8") as f:
             src = f.read()
         with open(os.path.join(SITE_DIR, page), "w", encoding="utf-8") as f:

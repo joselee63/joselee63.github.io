@@ -1,0 +1,45 @@
+name: reports
+# 리포트 요약(reports.html) 데이터만 사이트에 바로 반영 — 전체 빌드(daily.yml)를 기다리지 않음
+#   내 PC 의 tools/report_digest 가 하루 두 번(10:00·20:40, Claude 예약 작업) 또는 '지금 업데이트' 때
+#   릴리스 reports-data 에 data.json · ai.json 을 덮어쓰고 이 워크플로를 시작한다 → gh-pages 의 reports/ 만 교체
+#   (daily.yml 전체 빌드 때도 같은 릴리스에서 받아 넣으므로 사라지지 않음)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: reports-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: 릴리스 reports-data 받기
+        run: |
+          gh release download reports-data -p data.json -p ai.json -D rp -R "$GITHUB_REPOSITORY"
+          python3 -c "import json; d=json.load(open('rp/data.json')); print('리포트', len(d['recs']), '건 ·', d['built'])"
+
+      - name: gh-pages 에 reports/ 만 반영
+        run: |
+          for i in 1 2 3; do
+            rm -rf pages
+            git clone -q --depth 1 --filter=blob:none --sparse -b gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages
+            git -C pages sparse-checkout set reports
+            mkdir -p pages/reports && cp rp/data.json rp/ai.json pages/reports/
+            cd pages
+            git add -A reports
+            if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -q -m "reports $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+            if git push -q origin gh-pages; then echo "리포트 데이터 반영 완료"; exit 0; fi
+            cd ..
+            echo "push 실패(전체 빌드와 겹침?) — ${i}번째 재시도"; sleep 15
+          done
+          exit 1
