@@ -32,7 +32,7 @@ START = "20140101"          # 일봉 시작 (2015년부터 252일 비교가 되�
 PDF_START = "2015-01-01"    # 분기 PDF 시작
 SLEEP = 0.6
 T0 = time.time()            # 시간 한도(Actions 6시간)는 프로세스 시작부터 잼
-DEADLINE_MIN = 320
+DEADLINE_MIN = float(os.environ.get("ETF_DEADLINE_MIN", 320))   # 워크플로가 남은 시간을 넘겨줌
 
 EXCLUDE = re.compile(
     r"레버리지|인버스|2X|3X|선물|채권|국채|국고채|회사채|크레딧|금리|CD|KOFR|SOFR|머니마켓|MMF|단기|통안|"

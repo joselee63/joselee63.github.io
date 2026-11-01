@@ -1,7 +1,10 @@
 name: etf-data
 
-# 업종·테마 ETF 월별 목록 · 일봉 · 구성종목(분기 스냅샷) → data 브랜치 etf/ (신고가 섹터 ETF판 백테스트용)
-# 구성종목은 오래 걸림(수 시간) → 시간 한도에 걸리면 받은 분기까지 저장하고, 다시 돌리면 이어받음
+# 업종·테마 ETF 일봉 · 구성종목(분기 스냅샷) → data 브랜치 etf/ (신고가 섹터 ETF판 백테스트용)
+# 일봉(약 1시간)을 받으면 바로 한 번 저장 → 구성종목(약 4시간)을 받고 다시 저장
+# 시간 한도에 걸리면 받은 분기까지 저장하고, 다시 돌리면 이어받음
+# 저장 중 다른 작업(수급·알파 데이터)이 먼저 data 브랜치에 올렸으면 최신 내용을 받아 합친 뒤 다시 저장
+# 그래도 실패하면 받은 데이터는 아티팩트 etf-data 로 7일 보관
 on:
   workflow_dispatch:
     inputs:
@@ -20,8 +23,13 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 355
+    env:
+      MODE: ${{ github.event.inputs.mode || 'all' }}
     steps:
+      - name: 시작 시각 기록
+        run: echo "JOB_T0=$(date +%s)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
@@ -32,28 +40,69 @@ jobs:
       - name: 패키지 설치
         run: pip install pandas pykrx lxml
 
-      - name: data 브랜치 가져오기
+      - name: data 브랜치 가져오기 · 저장 스크립트 준비
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git clone -q --depth 1 -b data "$URL" datadir
-
-      - name: ETF 데이터 수집
-        env:
-          KRX_ID: ${{ secrets.KRX_ID }}
-          KRX_PW: ${{ secrets.KRX_PW }}
-          PYTHONUNBUFFERED: "1"
-        run: python tools/etf_data.py datadir "${{ github.event.inputs.mode || 'all' }}"
-
-      - name: data 브랜치에 저장 (중간 실패해도 받은 만큼 저장)
-        if: always()
-        run: |
+          git -C datadir config user.name "github-actions[bot]"
+          git -C datadir config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cat > "$RUNNER_TEMP/save.sh" <<'EOS'
           cd datadir
           [ -d etf ] || { echo "저장할 데이터 없음"; exit 0; }
           git add -A etf
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
-          git -c user.name="github-actions[bot]" \
-              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -q -m "etf $(TZ=Asia/Seoul date +%Y-%m-%d) (${{ github.event.inputs.mode || 'all' }})"
-          git push -q origin data
+          git commit -q -m "etf $(TZ=Asia/Seoul date +%Y-%m-%d) ($1)"
+          for k in 1 2 3 4 5 6; do
+            if git push -q origin data; then echo "저장 완료 ($1)"; exit 0; fi
+            echo "다른 작업이 먼저 저장함 → 최신 data 를 받아 합친 뒤 다시 저장 ($k)"
+            sleep $((k * 5))
+            git pull -q --rebase origin data || git rebase --abort || true
+          done
+          echo "저장 실패 → 아티팩트 etf-data 에서 받을 수 있음"; exit 1
+          EOS
+
+      - name: 일봉 수집
+        id: daily
+        if: env.MODE == 'all' || env.MODE == 'daily'
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+          PYTHONUNBUFFERED: "1"
+        run: python tools/etf_data.py datadir daily
+
+      - name: 일봉 저장
+        if: always() && (env.MODE == 'all' || env.MODE == 'daily')
+        run: bash "$RUNNER_TEMP/save.sh" daily
+
+      - name: 구성종목 수집
+        if: "!cancelled() && (env.MODE == 'all' || env.MODE == 'pdf') && steps.daily.outcome != 'failure'"
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          LEFT=$(( 335 - ( $(date +%s) - JOB_T0 ) / 60 ))
+          echo "구성종목에 쓸 수 있는 시간 ${LEFT}분"
+          ETF_DEADLINE_MIN=$LEFT python tools/etf_data.py datadir pdf
+
+      - name: 구성종목 저장
+        if: always() && (env.MODE == 'all' || env.MODE == 'pdf')
+        run: bash "$RUNNER_TEMP/save.sh" pdf
+
+      - name: 탐색 · 점검
+        if: env.MODE == 'probe' || env.MODE == 'verify'
+        env:
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+        run: python tools/etf_data.py datadir "$MODE"
+
+      - name: 백업 아티팩트 (7일 보관)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: etf-data
+          path: datadir/etf
+          retention-days: 7
+          if-no-files-found: ignore
