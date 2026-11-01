@@ -758,7 +758,9 @@ $("updBtn").onclick = () => {
       }).catch(() => setTimeout(poll, 3000));
     })();
   }).catch(() => {
-    stat(`이 PC의 리포트 도우미가 꺼져 있습니다. 자동 업데이트는 하루 두 번(10:00·20:40) — 지금 받으려면 PC에서 tools\\report_digest\\reports.bat 실행 뒤 다시 누르세요.`, "mu");
+    stat("", "mu");
+    $("updStat").innerHTML = `이 PC의 리포트 도우미에 닿지 못했습니다(꺼져 있거나 브라우저가 막음). 자동 업데이트는 하루 두 번(10:00·20:40)입니다.
+      지금 받으려면 PC에서 <b>tools\\report_digest\\reports.bat</b> 를 실행하고 <a href="${HELPER}/" target="_blank" rel="noopener">PC 페이지(127.0.0.1:8792)</a>에서 누르세요.`;
     b.disabled = false;
   });
 };
