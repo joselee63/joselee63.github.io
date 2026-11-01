@@ -150,14 +150,15 @@ def per_trade(cd, ex, mkt="both60", busy=True):
 
 
 def sim(cd, ex, slots=10, prio="tv", asc=False, mkt="both60", sizing="eq", risk=0.01, cap=0.2, maxpos=None,
-        max_new=None, cash_rate=0.0, overlay=False, stair=False, t0=0, t1=None, cost=COST, seed=None, ret_eq=False):
+        max_new=None, cash_rate=0.0, overlay=False, stair=False, t0=0, t1=None, cost=COST, seed=None, ret_eq=False, group=None):
     """퀀트 페이지 maRun 과 같은 계좌 시뮬레이션 + 손잡이
     sizing='eq'  : 종목당 평가액/slots (현금 한도)
     sizing='risk': 종목당 평가액 × risk ÷ 손절폭, 최대 평가액×cap · 보유 종목 수는 maxpos(기본 slots)까지
     max_new      : 하루 신규 매수 한도
     cash_rate    : 쉬는 현금 연이자 (예: 0.02)
     overlay      : 쉬는 현금을 KODEX 200 에 — True: 시장 필터가 켜진 날만 (꺼지면 현금) · "always": 늘
-    stair        : 시장 필터 대신 계단식 비중 (6개 이평선 중 위에 있는 비율 × 목표 비중)"""
+    stair        : 시장 필터 대신 계단식 비중 (6개 이평선 중 위에 있는 비율 × 목표 비중)
+    group        : 우선순위 열 이름 — 값이 큰 신호를 먼저 사고, 같은 값 안에서는 prio 순서 (예: 신고가 섹터 주도주 먼저)"""
     t1 = T - 1 if t1 is None else t1
     maxpos = maxpos or slots
     gate = MKT[mkt]
@@ -169,6 +170,9 @@ def sim(cd, ex, slots=10, prio="tv", asc=False, mkt="both60", sizing="eq", risk=
         key = np.where(np.isfinite(key), key, -np.inf if not asc else np.inf)
         if asc:
             key = -key
+    if group is not None:
+        rk = np.argsort(np.argsort(key, kind="stable"), kind="stable") / max(len(key), 1)
+        key = cd[group].to_numpy(float) * 10 + rk
     valid = np.isfinite(ex[:, 0])
     by_t = {}
     for n in np.nonzero(valid)[0]:
