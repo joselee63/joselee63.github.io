@@ -355,7 +355,7 @@ mark{background:var(--t-warn);color:inherit;border-radius:3px;padding:0 1px}
 
 <script>
 "use strict";
-/* 데이터: reports/data.json(사실 정보·숫자 정리·우리 말 정리) · reports/ai.json(Claude 해석) — 하루 두 번(10:00·20:40) 갱신 */
+/* 데이터: reports/data.json(사실 정보·숫자 정리·우리 말 정리) · reports/ai.json(AI 해석) — 하루 두 번(10:00·20:40) 갱신 */
 const $ = id => document.getElementById(id);
 const BASE = window.REPORTS_BASE || "reports/";
 let RD, AIX, R, BYID;
@@ -445,7 +445,7 @@ function renderTop() {
   $("dateWrap").style.display = showDates ? "" : "none";
   if (showDates) $("dates").innerHTML = DATES.slice().reverse().map(d => {
     const D = RD.days[d], t = new Date(d + "T00:00:00"), we = t.getDay() === 0 || t.getDay() === 6;
-    return `<div class="dc${d === ST.date ? " on" : ""}${we ? " we" : ""}" data-d="${d}"><div class="d1">${dlabel(d)}${AIX.days[d] ? '<span class="ai" title="Claude 해석 있음"></span>' : ""}</div><div class="d2">${D.n}건</div></div>`;
+    return `<div class="dc${d === ST.date ? " on" : ""}${we ? " we" : ""}" data-d="${d}"><div class="d1">${dlabel(d)}${AIX.days[d] ? '<span class="ai" title="AI 해석 있음"></span>' : ""}</div><div class="d2">${D.n}건</div></div>`;
   }).join("");
 }
 
@@ -477,7 +477,7 @@ function viewToday() {
   </div>`;
   let head;
   if (A) {
-    head = `<span class="src">● Claude 해석</span><div class="headline">${esc(A.headline)}</div><ul class="pts">${(A.summary || []).map(s => `<li>${esc(s)}</li>`).join("")}</ul>${A.watch ? `<div class="watch"><b>다음에 볼 것</b> ${esc(A.watch)}</div>` : ""}`;
+    head = `<span class="src">● AI 해석</span><div class="headline">${esc(A.headline)}</div><ul class="pts">${(A.summary || []).map(s => `<li>${esc(s)}</li>`).join("")}</ul>${A.watch ? `<div class="watch"><b>다음에 볼 것</b> ${esc(A.watch)}</div>` : ""}`;
   } else {
     const topInd = Object.entries(recs.filter(r => r.k === "종목" || r.k === "산업").reduce((a, r) => (r.ind && (a[r.ind] = (a[r.ind] || 0) + 1), a), {})).sort((a, b) => b[1] - a[1]).slice(0, 3);
     const multi = Object.entries(recs.filter(r => r.k === "종목" && r.s).reduce((a, r) => (a[r.s] = (a[r.s] || 0) + 1, a), {})).filter(x => x[1] >= 3).sort((a, b) => b[1] - a[1]).slice(0, 3);
@@ -485,7 +485,7 @@ function viewToday() {
       <ul class="pts"><li>리포트가 몰린 업종: ${topInd.map(([k, v]) => `${esc(k)} ${v}건`).join(", ") || "-"}</li>
       <li>여러 증권사가 같은 날 다룬 종목: ${multi.map(([k, v]) => `${sLink(k)} ${v}건`).join(", ") || "없음"}</li>
       <li>투자의견 변경 ${D.opup + D.opdn}건 · 신규 커버리지 ${D.new}건</li></ul>
-      <div class="note">이 날은 아직 Claude 해석이 없어 숫자 집계로만 정리했습니다. 해석은 하루 두 번(10:00·20:40) 붙습니다.</div>`;
+      <div class="note">이 날은 아직 AI 해석이 없어 숫자 집계로만 정리했습니다. 해석은 하루 두 번(10:00·20:40) 붙습니다.</div>`;
   }
   // 꼭 볼 리포트
   let must = [];
@@ -508,7 +508,7 @@ function viewToday() {
   const bigT = big.length ? `<section class="card"><h2>목표가가 크게 바뀐 종목</h2><table class="t"><tr><th>종목</th><th>증권사</th><th class="n">직전 → 새 목표가</th><th class="n">변화</th><th>의견</th></tr>${big.map(x =>
       `<tr><td>${sLink(x.s)}</td><td>${esc(x.b)}</td><td class="n">${won(x.prev)} → ${won(x.tp)}<div class="mu small">${x.prevd ? "직전 " + x.prevd.slice(5).replace("-", "/") : "본문 기준"}</div></td><td class="n ${x.pct > 0 ? "up" : "dn"}">${pctS(x.pct)}</td><td>${x.opm ? `<span class="${x.opm === "상향" ? "up" : "dn"}">${x.prevop || "?"}→${x.op}</span>` : (x.op || "-")}</td></tr>`).join("")}</table></section>` : "";
   $("main").innerHTML = `<section class="card"><div class="hero"><div>${head}</div>${tiles}</div></section>
-    <section class="card"><h2>오늘 꼭 볼 리포트 <span class="sub">${A ? "Claude가 고른 이유와 함께" : "규칙 점수 순 (의견 변경 · 큰 목표가 변화 · 여러 종목 산업 리포트 · 연간 전망)"}</span></h2><div class="rlist">${must.map(x => card(x.r, {why: x.why})).join("")}</div></section>
+    <section class="card"><h2>오늘 꼭 볼 리포트 <span class="sub">${A ? "AI가 고른 이유와 함께" : "규칙 점수 순 (의견 변경 · 큰 목표가 변화 · 여러 종목 산업 리포트 · 연간 전망)"}</span></h2><div class="rlist">${must.map(x => card(x.r, {why: x.why})).join("")}</div></section>
     ${themes}<div class="g2">${multiT}${bigT}</div>`;
 }
 
@@ -516,7 +516,7 @@ function viewToday() {
 function viewStock() {
   const list = Object.entries(RD.stk).filter(([, v]) => v.n > 0).sort((a, b) => b[1].n - a[1].n || (b[1].mc || 0) - (a[1].mc || 0));
   if (!ST.stock || !RD.stk[ST.stock]) ST.stock = list[0][0];
-  $("main").innerHTML = `<div class="split"><section class="card"><input class="finput" id="sf" placeholder="종목 이름 찾기" value=""><div class="small mu" style="margin:8px 4px 0">기간 안 리포트 ${list.length}종목 · 리포트 많은 순 · <span style="color:var(--acc)">●</span> 의견 합쳐 보기(Claude)</div><div class="slist" id="slist"></div></section>
+  $("main").innerHTML = `<div class="split"><section class="card"><input class="finput" id="sf" placeholder="종목 이름 찾기" value=""><div class="small mu" style="margin:8px 4px 0">기간 안 리포트 ${list.length}종목 · 리포트 많은 순 · <span style="color:var(--acc)">●</span> 의견 합쳐 보기(AI)</div><div class="slist" id="slist"></div></section>
     <section class="card" id="sdet"></section></div>`;
   const drawList = f => {
     $("slist").innerHTML = list.filter(([n]) => !f || n.toLowerCase().includes(f.toLowerCase())).slice(0, 300).map(([n, v]) =>
@@ -563,13 +563,13 @@ function drawStock(n) {
       <div class="mk" style="left:${P(px)}%"><span>종가 ${won(px)}</span></div><div class="mk av" style="left:${P(v.avg)}%"><span>평균 목표가 ${won(v.avg)}</span></div></div>
       <div class="small mu" style="display:flex;justify-content:space-between;margin-top:14px"><span>최저 ${won(lo)}</span><span>최고 ${won(hi)}</span></div>`;
   }
-  const cons = A ? `<div class="cons"><span class="src">● Claude 해석 · 증권사 ${v.nb}곳 의견 합쳐 보기</span> <span class="tone ${esc(A.tone)}">${esc(A.tone)}</span>
+  const cons = A ? `<div class="cons"><span class="src">● AI 해석 · 증권사 ${v.nb}곳 의견 합쳐 보기</span> <span class="tone ${esc(A.tone)}">${esc(A.tone)}</span>
       <div class="hl" style="margin-top:8px">${esc(A.headline)}</div>
       <div class="col"><div><h4>공통 의견</h4><ul class="pts">${(A.agree || []).map(s => `<li>${esc(s)}</li>`).join("")}</ul></div>
       <div><h4>엇갈리는 점 · 걱정</h4><ul class="pts">${(A.split || []).map(s => `<li>${esc(s)}</li>`).join("")}</ul></div></div>
       <h4>목표가 흐름</h4><div>${esc(A.tp)}</div>${A.check ? `<div class="watch"><b>앞으로 확인할 것</b> ${esc(A.check)}</div>` : ""}</div>`
     : `<div class="cons"><span class="src auto">자동 정리</span><div class="hl" style="margin-top:8px">${v.n}건 · 증권사 ${v.nb}곳 · 목표가 ▲${v.nup} ▼${v.ndn}</div>
-      <div class="small mu">의견: ${Object.entries(v.cons.reduce((a, c) => (c.op && (a[c.op] = (a[c.op] || 0) + 1), a), {})).map(([k, c]) => `${k} ${c}`).join(" · ") || "-"} — Claude 해석은 최근 리포트가 많은 종목부터 하루 두 번 붙습니다.</div></div>`;
+      <div class="small mu">의견: ${Object.entries(v.cons.reduce((a, c) => (c.op && (a[c.op] = (a[c.op] || 0) + 1), a), {})).map(([k, c]) => `${k} ${c}`).join(" · ") || "-"} — AI 해석은 최근 리포트가 많은 종목부터 하루 두 번 붙습니다.</div></div>`;
   $("sdet").innerHTML = `<div class="sh"><span class="nm">${esc(n)}</span><span class="mu">${esc(v.c || "")} · ${esc(v.mk || "")} · ${esc(v.ind || "")}</span>
       ${v.c ? `<a class="small" href="https://finance.naver.com/research/company_list.naver?searchType=itemCode&itemCode=${esc(v.c)}" target="_blank" rel="noopener" style="margin-left:auto">이 종목 리포트 원문 (네이버 금융 리서치) ↗</a>` : ""}</div>
     <div class="kv"><div class="tile"><div class="k">${md(RD.px_asof)} 종가</div><div class="v">${won(px)}<small>원</small></div></div>
@@ -609,7 +609,7 @@ function drawInd(name) {
   sr.forEach(r => (byS[r.s] = byS[r.s] || []).push(r));
   const rows = Object.entries(byS).sort((a, b) => b[1].length - a[1].length).slice(0, 20);
   $("idet").innerHTML = `<section class="card" id="indCard"><h2>${esc(name)} <span class="sub">산업 리포트 ${ir.length}건 · 종목 리포트 ${sr.length}건</span></h2>
-    ${A ? `<div class="cons"><span class="src">● Claude 해석</span> <span class="tone ${esc(A.tone)}">${esc(A.tone)}</span><div class="hl" style="margin-top:8px">${esc(A.headline)}</div><ul class="pts">${(A.points || []).map(s => `<li>${esc(s)}</li>`).join("")}</ul></div>` : ""}
+    ${A ? `<div class="cons"><span class="src">● AI 해석</span> <span class="tone ${esc(A.tone)}">${esc(A.tone)}</span><div class="hl" style="margin-top:8px">${esc(A.headline)}</div><ul class="pts">${(A.points || []).map(s => `<li>${esc(s)}</li>`).join("")}</ul></div>` : ""}
     <div class="g2"><div><h3>종목별 이번 주 리포트</h3><table class="t"><tr><th>종목</th><th class="n">건수</th><th>목표가</th><th class="n">평균 여력</th></tr>${rows.map(([n, v]) => {
       const st = RD.stk[n] || {};
       return `<tr><td>${sLink(n)}</td><td class="n">${v.length}</td><td><span class="up">${v.filter(r => r.ch === "상향").length ? "▲" + v.filter(r => r.ch === "상향").length : ""}</span> <span class="dn">${v.filter(r => r.ch === "하향").length ? "▼" + v.filter(r => r.ch === "하향").length : ""}</span></td><td class="n">${st.up_avg != null ? pctS(st.up_avg) : "-"}</td></tr>`;
@@ -625,7 +625,7 @@ function viewMacro() {
   const wk = R.filter(r => r.k === "매크로" && r.d >= RD.wk0);
   const order = ["통화정책", "금리·채권", "환율·외환", "경제지표", "증시 전략·시황", "원자재·유가", "자산배분·퀀트·ETF"];
   const daily = r => /Daily|데일리|Forex|모닝|Morning|아침|마감/i.test(r.t + r.tg.join(" "));
-  $("main").innerHTML = `${W ? `<section class="card"><span class="src">● Claude 해석 · 이번 주(${md(RD.wk0)}~${md(RD.w1)}) 매크로</span><div class="headline" style="margin-top:8px">${esc(W.headline)}</div><ul class="pts">${(W.points || []).map(s => `<li>${esc(s)}</li>`).join("")}</ul></section>` : ""}
+  $("main").innerHTML = `${W ? `<section class="card"><span class="src">● AI 해석 · 이번 주(${md(RD.wk0)}~${md(RD.w1)}) 매크로</span><div class="headline" style="margin-top:8px">${esc(W.headline)}</div><ul class="pts">${(W.points || []).map(s => `<li>${esc(s)}</li>`).join("")}</ul></section>` : ""}
     <div class="g2">${order.map(t => {
       const A = T[t], xs = wk.filter(r => r.ind === t), nd = xs.filter(r => !daily(r));
       const rep = (A && A.ids ? A.ids.map(i => BYID.get(+i)).filter(Boolean) : []);
@@ -729,7 +729,7 @@ $("q").addEventListener("input", e => {
 });
 
 /* ---------- 지금 업데이트: 이 PC의 리포트 도우미(127.0.0.1:8792)가 새 글 받기 · 숫자 정리 · 사이트 올리기 ----------
-   해석(Claude)은 다음 예약(10:00·20:40) 때 붙음. 도우미가 꺼져 있으면 안내만 함 */
+   해석(AI)은 다음 예약(10:00·20:40) 때 붙음. 도우미가 꺼져 있으면 안내만 함 */
 const HELPER = "http://127.0.0.1:8792";
 function stat(text, kind) { $("updStat").className = kind || "mu"; $("updStat").textContent = text; }
 function loadData() {
@@ -775,7 +775,7 @@ function setData(d, a) {
   const nrw = R.filter(r => r.rw).length;
   $("pubNote").innerHTML = `리포트의 저작권은 각 증권사·기관에 있습니다. 이 페이지의 정리·해석은 이 사이트가 리포트의 공개 정보(제목·투자의견·목표가·핵심 내용)를 바탕으로 직접 쓴 것이며, 리포트 원문이나 PDF를 옮기거나 다시 배포하지 않습니다. 원문은 '원문 찾기' 링크(네이버 금융 리서치)나 각 증권사 홈페이지에서 확인하세요.
     목표가 변화는 리포트 본문 문구를 먼저 보고, 없으면 같은 증권사의 직전 리포트와 비교한 값입니다(액면분할 등으로 비교가 어려우면 '확인 필요'). 상승여력은 ${md(RD.px_asof)} 종가 기준입니다.
-    '<span class="src">● Claude 해석</span>'은 Claude가 쓴 요약·해석, '<span class="src auto">자동 정리</span>'는 숫자 집계만으로 만든 화면입니다. 최근 ${DATES.length}일 리포트 ${R.length.toLocaleString()}건 중 ${nrw.toLocaleString()}건에 정리가 붙어 있고, 하루 두 번(10:00·20:40) 최신 리포트부터 채웁니다. 투자 권유가 아니며 판단의 책임은 본인에게 있습니다.`;
+    '<span class="src">● AI 해석</span>'은 AI가 쓴 요약·해석, '<span class="src auto">자동 정리</span>'는 숫자 집계만으로 만든 화면입니다. 최근 ${DATES.length}일 리포트 ${R.length.toLocaleString()}건 중 ${nrw.toLocaleString()}건에 정리가 붙어 있고, 하루 두 번(10:00·20:40) 최신 리포트부터 채웁니다. 투자 권유가 아니며 판단의 책임은 본인에게 있습니다.`;
 }
 
 (function init() {
