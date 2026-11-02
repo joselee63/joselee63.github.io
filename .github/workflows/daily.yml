@@ -52,6 +52,7 @@ jobs:
           gh release download closebet-data -p closebet.json -p track.json -D cbnew
           gh release download closebet-data -p market.json -D cbnew || echo "시황판 데이터(market.json) 없음"
           gh release download closebet-data -p maangle.json -D cbnew || echo "이평각도 데이터(maangle.json) 없음"
+          gh release download closebet-data -p turtle.bin -D cbnew || echo "터틀 데이터(turtle.bin) 없음"
           gh release download reports-data -p data.json -p ai.json -D rpnew || echo "리포트 요약 데이터 없음 (내 PC 의 tools/report_digest 가 하루 두 번 올림)"
 
       - name: 배포된 기준일 읽기
@@ -143,6 +144,7 @@ jobs:
           fi
           [ -f cbnew/track.json ] && cp cbnew/track.json site/track.json && echo "실전 추적 기록 반영"
           [ -f cbnew/maangle.json ] && cp cbnew/maangle.json site/maangle.json && echo "이평각도 데이터 반영"
+          [ -f cbnew/turtle.bin ] && cp cbnew/turtle.bin site/turtle.bin && echo "터틀 데이터 반영"
           [ -f cbnew/market.json ] && cp cbnew/market.json site/market.json && echo "시황판 데이터 반영"
           [ -f prev/news.json ] && [ ! -f site/news.json ] && cp prev/news.json site/news.json && echo "시황판 뉴스 유지 (news.yml 이 따로 갱신)"
           if [ -f rpnew/data.json ]; then mkdir -p site/reports && cp rpnew/*.json site/reports/ && echo "리포트 요약 데이터 반영 (릴리스 reports-data)" || true;

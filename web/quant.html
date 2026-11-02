@@ -508,6 +508,8 @@ header .lnk,header .status{color:var(--hd-mu)}
           <button type="button" data-s="cb" id="qstrat-cb">종가베팅</button>
           <button type="button" data-s="panic" id="qstrat-pn">패닉 낙주</button>
           <button type="button" data-s="ma" id="qstrat-ma">이평각도 눌림 돌파</button>
+          <button type="button" data-s="tt" id="qstrat-tt">터틀 트레이딩</button>
+          <button type="button" data-s="ts" id="qstrat-ts">터틀 수프</button>
           <button type="button" disabled title="준비 중">밸류 (준비 중)</button>
           <button type="button" disabled title="준비 중">저변동성 (준비 중)</button>
         </div>
@@ -629,6 +631,88 @@ header .lnk,header .status{color:var(--hd-mu)}
         <div class="krow" style="margin-top:12px">
           <p class="kdesc" id="madesc" style="flex:1;min-width:260px;margin:0"></p>
           <button class="kgo" id="mago" type="button">백테스트 실행</button>
+        </div>
+      </div>
+      <div id="box-tt" hidden>
+        <p class="cbnote" style="margin:0 0 10px">리처드 데니스의 <b>터틀 트레이딩</b>(돈키언 채널 돌파)입니다. <b>N일 최고가를 넘는 순간 사고</b>, 최근 20일 평균 진폭(N)으로 크기를 정해
+        <b>½N 오를 때마다 불타기</b>, <b>마지막 매수가 −2N 손절</b>, <b>M일 최저가를 깨면 전량 매도</b>합니다. 대상은 <b>상장폐지 종목까지 포함한 코스피·코스닥 전 종목</b>(2015~, 전날 20일 평균 거래대금 30억↑)이고
+        매수만 합니다(공매도 제외). 처음 누르면 전 종목 일봉(약 9MB)을 내려받아 이 브라우저에서 계산합니다.</p>
+        <div class="cbpre" id="ttpre">
+          <button type="button" data-p="s1"><b>원조 시스템 1</b> (20일 돌파 · 10일 청산 · 건너뛰기 규칙)</button>
+          <button type="button" data-p="s2"><b>원조 시스템 2</b> (55일 돌파 · 20일 청산)</button>
+          <button type="button" data-p="dc"><b>돈키언 4주 규칙</b> (20일 돌파 · 20일 청산 · 손절·불타기 없음)</button>
+          <button type="button" data-p="kr"><b>한국형</b> (시스템 2 + 두 지수 120일선 위 + 깊은 눌림 제외 + 종목당 25%)</button>
+        </div>
+        <div class="qbox">
+          <h3>매수 — 채널 돌파</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">돌파 기간 — 이 기간 최고가(고가)를 넘으면 매수</span><div class="line"><select id="tte"><option value="20">20일</option><option value="55" selected>55일</option></select>
+              <label id="ttskipw"><input type="checkbox" id="ttskip"> 시스템 1 건너뛰기 규칙</label></div>
+              <span class="kdesc">건너뛰기: 직전 20일 돌파(샀든 안 샀든)가 수익으로 끝났으면 이번 돌파는 건너뛰고, 대신 55일 돌파가 나오면 매수 (20일 돌파일 때만)</span></div>
+            <div class="qf"><span class="lbl">체결</span><div class="line"><select id="ttfill" style="max-width:100%"><option value="i" selected>장중 — 돌파 가격에 바로 (자동감시 주문, 원조)</option><option value="c">종가 — 종가로 확인하고 종가에 (손절·청산·불타기도 종가로)</option></select></div></div>
+            <div class="qf"><span class="lbl">20일 평균 거래대금 (장중 체결은 전날 기준)</span><div class="line"><select id="tttv"><option value="1" selected>30억 원 이상</option><option value="2">50억 원 이상</option><option value="3">100억 원 이상</option><option value="4">300억 원 이상</option><option value="5">1,000억 원 이상</option></select></div></div>
+            <div class="qf"><span class="lbl">시장 필터 (장중 체결은 전날 종가로 확인)</span><div class="line"><select id="ttmkt" style="max-width:100%"><option value="none" selected>없음</option><option value="b60">코스피·코스닥 둘 다 60일선 위일 때만 신규 매수</option><option value="b120">코스피·코스닥 둘 다 120일선 위일 때만 신규 매수</option></select></div></div>
+            <div class="qf"><span class="lbl">종목 추세 필터</span><div class="line"><select id="tttr" style="max-width:100%"><option value="none" selected>없음</option><option value="ema">장기 추세 — 25일 지수이평 &gt; 350일 지수이평 (커티스 페이스)</option><option value="ma200">종가 &gt; 200일선</option></select></div></div>
+            <div class="qf"><span class="lbl">깊은 눌림 제외</span><div class="line"><label><input type="checkbox" id="ttnear"> 52주 최고 종가보다 12.5% 넘게 낮으면 사지 않음</label></div></div>
+          </div>
+        </div>
+        <div class="qbox">
+          <h3>매도 · 불타기 · 크기</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">청산 — 이 기간 최저가(저가)를 깨면 전량 매도</span><div class="line"><select id="ttx"><option value="10">10일</option><option value="20" selected>20일</option></select></div></div>
+            <div class="qf"><span class="lbl">손절 (마지막 매수가 기준)</span><div class="line"><select id="ttstop"><option value="2" selected>−2N (원조)</option><option value="0.5">−½N (휩소 방식)</option><option value="0">없음 (채널 청산만)</option></select></div></div>
+            <div class="qf"><span class="lbl">불타기 — ½N 오를 때마다 1유닛 추가 · 추가할 때마다 손절도 올림</span><div class="line"><span>최대</span><select id="ttu"><option value="1">1유닛 (불타기 없음)</option><option value="2">2유닛</option><option value="3">3유닛</option><option value="4" selected>4유닛 (원조)</option></select></div></div>
+            <div class="qf"><span class="lbl">1유닛 크기</span><div class="line"><select id="ttsz"><option value="risk" selected>위험 기준 — 1N 움직이면 계좌의</option><option value="eq">동일 금액 — 계좌의</option></select><input type="number" id="ttszv" min="0.1" max="100" step="0.1" value="1" style="width:64px"><span>%</span></div>
+              <span class="kdesc" id="ttszd"></span></div>
+            <div class="qf"><span class="lbl">한도 (계좌 대비 · 빚 없이)</span><div class="line"><span>종목당</span><input type="number" id="ttcaps" min="5" max="100" step="5" value="100" style="width:58px"><span>%</span><span>전체</span><input type="number" id="ttcapt" min="10" max="100" step="10" value="100" style="width:58px"><span>%</span><span>유닛</span><input type="number" id="ttmaxu" min="1" max="100" value="12" style="width:52px"><span>개</span></div>
+              <span class="kdesc">원조는 종목당 4유닛 · 전체 12유닛 (선물이라 빚을 썼지만 여기선 전체 100% 이내)</span></div>
+            <div class="qf"><span class="lbl">낙폭 축소 (원조 규칙)</span><div class="line"><label><input type="checkbox" id="ttddr" checked> 계좌가 고점보다 10% 빠질 때마다 크기 계산용 자본을 20%씩 줄임</label></div></div>
+            <div class="qf"><span class="lbl">매매 비용 (왕복)</span><div class="line"><input type="number" id="ttcost" min="0" max="2" step="0.05" value="0.5"><span>% (돌파 매수는 미끄러짐이 큼)</span></div></div>
+            <div class="qf"><span class="lbl">백테스트 기간</span><div class="line"><input type="date" id="ttfrom"><span>~</span><input type="date" id="ttto"></div></div>
+            <div class="qf"><span class="lbl">벤치마크</span><div class="line"><select id="ttbench"><option value="ks" selected>코스피</option><option value="kq">코스닥</option></select></div></div>
+          </div>
+        </div>
+        <div class="krow" style="margin-top:12px">
+          <p class="kdesc" id="ttdesc" style="flex:1;min-width:260px;margin:0"></p>
+          <button class="kgo" id="ttgo" type="button">백테스트 실행</button>
+        </div>
+      </div>
+      <div id="box-ts" hidden>
+        <p class="cbnote" style="margin:0 0 10px">린다 래쉬키·래리 코너스의 <b>터틀 수프</b> — 터틀 돌파가 실패하는 순간을 노리는 역추세 전략입니다. <b>20일 신저가가 나와 돌파 매매자들이 손절한 뒤
+        가격이 바로 직전 20일 최저가 위로 돌아오면 삽니다</b>(남이 던진 손절 물량을 받는 심리 역이용). 직전 최저가는 4거래일 이상 전이어야 하고, 손절은 신호 날 저가입니다.
+        대상·데이터는 터틀 트레이딩과 같습니다(상장폐지 포함 전 종목 · 매수만).</p>
+        <div class="cbpre" id="tspre">
+          <button type="button" data-p="a"><b>터틀 수프</b> (그날 종가 회복 · 2R 익절 · 최대 5일)</button>
+          <button type="button" data-p="b"><b>수프 플러스 원</b> (신저가 마감 다음 날 회복 순간 · 2R · 5일)</button>
+          <button type="button" data-p="o1"><b>하룻밤 반등</b> (종가 회복 매수 → 다음 날 시가 매도)</button>
+          <button type="button" data-p="tr"><b>추세 속 수프</b> (200일선 위 · 두 지수 60일선 위 · 2R · 5일)</button>
+        </div>
+        <div class="qbox">
+          <h3>신호 · 매수</h3>
+          <div class="qgrid">
+            <div class="qf" style="grid-column:1/-1"><span class="lbl">방식</span><div class="line"><select id="tsm" style="max-width:100%"><option value="a" selected>터틀 수프 — 20일 신저가를 낸 날 종가가 직전 20일 최저가 위로 돌아오면 그날 종가에 매수</option><option value="b">플러스 원 — 20일 신저가로 마감한 다음 날, 직전 20일 최저가를 다시 넘는 순간 매수</option></select></div></div>
+            <div class="qf"><span class="lbl">20일 평균 거래대금 (신호 날)</span><div class="line"><select id="tstv"><option value="1" selected>30억 원 이상</option><option value="2">50억 원 이상</option><option value="3">100억 원 이상</option><option value="4">300억 원 이상</option><option value="5">1,000억 원 이상</option></select></div></div>
+            <div class="qf"><span class="lbl">시장 필터 (신호 날 종가)</span><div class="line"><select id="tsmkt" style="max-width:100%"><option value="none" selected>없음</option><option value="b60">코스피·코스닥 둘 다 60일선 위일 때만</option><option value="b120">코스피·코스닥 둘 다 120일선 위일 때만</option></select></div></div>
+            <div class="qf"><span class="lbl">종목 추세 필터 (신호 날)</span><div class="line"><select id="tstr" style="max-width:100%"><option value="none" selected>없음</option><option value="ma200">종가 &gt; 200일선 (상승 추세 속 투매만)</option><option value="ema">25일 지수이평 &gt; 350일 지수이평</option></select></div></div>
+            <div class="qf"><span class="lbl">거래량 확인</span><div class="line"><label><input type="checkbox" id="tsvol"> 신호 날 거래량이 직전 20일 평균의 2배 이상 (손절 물량이 쏟아진 날만)</label></div></div>
+          </div>
+        </div>
+        <div class="qbox">
+          <h3>매도 · 크기</h3>
+          <div class="qgrid">
+            <div class="qf"><span class="lbl">손절 (고정)</span><div class="line"><span>신호 날 저가 (플러스 원은 신호 날·매수 날 저가 중 낮은 쪽) · R = 매수가 − 손절가</span></div></div>
+            <div class="qf"><span class="lbl">익절</span><div class="line"><select id="tsk"><option value="0">없음</option><option value="1">1R</option><option value="2" selected>2R</option><option value="3">3R</option></select></div></div>
+            <div class="qf"><span class="lbl">최대 보유</span><div class="line"><select id="tsh"><option value="0">다음 날 시가에 매도</option><option value="1">1거래일 (다음 날 종가)</option><option value="2">2거래일</option><option value="3">3거래일</option><option value="5" selected>5거래일</option><option value="10">10거래일</option><option value="20">20거래일</option></select></div></div>
+            <div class="qf"><span class="lbl">1회 크기</span><div class="line"><select id="tssz"><option value="eq" selected>동일 금액 — 계좌의</option><option value="risk">위험 기준 — 손절 시 계좌의</option></select><input type="number" id="tsszv" min="0.1" max="100" step="0.1" value="10" style="width:64px"><span>%</span></div></div>
+            <div class="qf"><span class="lbl">한도 (계좌 대비 · 빚 없이)</span><div class="line"><span>종목당</span><input type="number" id="tscaps" min="1" max="100" step="1" value="10" style="width:60px"><span>% · 전체</span><input type="number" id="tscapt" min="10" max="100" step="10" value="100" style="width:60px"><span>%</span></div></div>
+            <div class="qf"><span class="lbl">매매 비용 (왕복)</span><div class="line"><input type="number" id="tscost" min="0" max="2" step="0.05" value="0.5"><span>%</span></div></div>
+            <div class="qf"><span class="lbl">백테스트 기간</span><div class="line"><input type="date" id="tsfrom"><span>~</span><input type="date" id="tsto"></div></div>
+            <div class="qf"><span class="lbl">벤치마크</span><div class="line"><select id="tsbench"><option value="ks" selected>코스피</option><option value="kq">코스닥</option></select></div></div>
+          </div>
+        </div>
+        <div class="krow" style="margin-top:12px">
+          <p class="kdesc" id="tsdesc" style="flex:1;min-width:260px;margin:0"></p>
+          <button class="kgo" id="tsgo" type="button">백테스트 실행</button>
         </div>
       </div>
       <div id="box-cb" hidden>
@@ -763,6 +847,54 @@ header .lnk,header .status{color:var(--hd-mu)}
       <button type="button" class="cbmore" id="mamore" hidden>더 보기</button>
       <p class="qnote">· '매매당 평균'은 연구와 같이 신호를 전부 따랐을 때(같은 종목은 보유 중 새 신호 무시) · 계좌 곡선은 동시 보유 N종목 한도 안에서 산 것만(자리가 없으면 그날 거래대금 큰 순) · 보유 중에는 매일 종가로 평가<br>
       · 상장폐지 종목은 마지막 종가로 청산 · 거래정지 날은 건너뛰고 재개 후 첫 시가로 판단 · 손절·익절이 같은 날 둘 다 닿으면 손절로 봄(보수적)</p>
+    </div>
+  </section>
+
+  <section class="card" id="ttres" hidden>
+    <div class="khead"><h2>터틀 트레이딩 백테스트 결과</h2><p class="sub" id="ttrsub"></p></div>
+    <div class="kbody">
+      <div class="qverdict" id="ttverdict"></div>
+      <div class="qmetrics" id="ttmetrics"></div>
+      <div class="qchart">
+        <div class="qi" id="ttinfo"></div>
+        <canvas id="ttc" aria-label="터틀 계좌와 지수 누적 수익률 · 낙폭 차트" style="width:100%;height:340px;display:block"></canvas>
+      </div>
+      <div class="q2">
+        <div><h3>연도별 수익률 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">연도를 누르면 월별 수익률 · 매매 열은 신호 전부 기준</span></h3><div class="qscroll"><table class="qtbl qyear" id="ttyear"></table></div></div>
+        <div><h3 id="ttmtitle">월별 수익률</h3><div class="mchart" id="ttmonth"></div></div>
+      </div>
+      <h3 class="qlogh" id="ttnowh">오늘 기준</h3>
+      <div id="ttnow"></div>
+      <h3 class="qlogh">계좌 매매 내역 <span class="c" id="ttlogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
+      <div class="qscroll"><table class="qtbl" id="ttlog"></table></div>
+      <button type="button" class="cbmore" id="ttmore" hidden>더 보기</button>
+      <p class="qnote">· '신호 전부'는 자리 제한 없이 모든 돌파를 1유닛씩(불타기 포함) 따랐을 때의 매매당 수익 — 규칙 자체의 힘 · 계좌 곡선은 크기·한도 안에서 실제로 산 매매만 (같은 날 후보가 많으면 거래대금 등급 큰 순, 같으면 무작위 고정 순서)<br>
+      · N = 최근 20거래일 평균 진폭(TR) · 장중 체결은 하루 안 가격 순서를 '시가에서 가까운 극단 먼저'로 가정(시가→고가→저가→종가 또는 시가→저가→고가→종가) · 시가가 돌파·손절 가격을 건너뛰면 시가 체결<br>
+      · 상한가 근처(+28.5%↑)에서는 사지 못함 · 하한가에 종일 묶이면 그날 못 팔고 다음 날 · 상장폐지는 마지막 종가로 청산 · 가격은 0.2% 단위로 압축(오차 ±0.1%)</p>
+    </div>
+  </section>
+
+  <section class="card" id="tsres" hidden>
+    <div class="khead"><h2>터틀 수프 백테스트 결과</h2><p class="sub" id="tsrsub"></p></div>
+    <div class="kbody">
+      <div class="qverdict" id="tsverdict"></div>
+      <div class="qmetrics" id="tsmetrics"></div>
+      <div class="qchart">
+        <div class="qi" id="tsinfo"></div>
+        <canvas id="tsc" aria-label="터틀 수프 계좌와 지수 누적 수익률 · 낙폭 차트" style="width:100%;height:340px;display:block"></canvas>
+      </div>
+      <div class="q2">
+        <div><h3>연도별 수익률 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">연도를 누르면 월별 수익률 · 매매 열은 신호 전부 기준</span></h3><div class="qscroll"><table class="qtbl qyear" id="tsyear"></table></div></div>
+        <div><h3 id="tsmtitle">월별 수익률</h3><div class="mchart" id="tsmonth"></div></div>
+      </div>
+      <h3 class="qlogh" id="tsnowh">오늘 기준</h3>
+      <div id="tsnow"></div>
+      <h3 class="qlogh">계좌 매매 내역 <span class="c" id="tslogn" style="font-weight:500;color:var(--muted);font-size:12px"></span></h3>
+      <div class="qscroll"><table class="qtbl" id="tslog"></table></div>
+      <button type="button" class="cbmore" id="tsmore" hidden>더 보기</button>
+      <p class="qnote">· '신호 전부'는 자리 제한 없이 모든 신호를 따랐을 때의 매매당 수익 · 계좌 곡선은 크기·한도 안에서 실제로 산 매매만 (같은 날 후보가 많으면 거래대금 등급 큰 순, 같으면 무작위 고정 순서)<br>
+      · 손절·익절이 같은 날 둘 다 닿으면 시가에서 가까운 쪽이 먼저 · 시가가 손절가 아래(익절가 위)면 시가 체결 · 플러스 원은 매수 날 같은 날 익절가에 닿으면 그 가격에 매도<br>
+      · 상한가 근처(+28.5%↑)에서는 사지 못함 · 하한가에 종일 묶이면 그날 못 팔고 다음 날 · 상장폐지는 마지막 종가로 청산</p>
     </div>
   </section>
 
@@ -901,18 +1033,19 @@ header .lnk,header .status{color:var(--hd-mu)}
     var b = e.target.closest("button"); if (!b || b.disabled) return;
     STRAT = b.getAttribute("data-s");
     [].forEach.call(this.children, function(x){ x.classList.toggle("on", x === b); });
-    var nh = STRAT === "nh", pns = STRAT === "panic", mas = STRAT === "ma", cbs = STRAT === "cb" || pns || mas;
+    var nh = STRAT === "nh", pns = STRAT === "panic", mas = STRAT === "ma", tts = STRAT === "tt", tss = STRAT === "ts", cbs = STRAT === "cb" || pns || mas || tts || tss;
     $("row-mode").style.display = nh || cbs ? "none" : "";
     $("box-mom").hidden = nh || cbs || MODE !== "mom"; $("box-pull").hidden = nh || cbs || MODE !== "pull"; $("box-nh").hidden = !nh;
-    $("box-cb").hidden = STRAT !== "cb"; $("box-pn").hidden = !pns; $("box-ma").hidden = !mas; $("box-wrs").hidden = cbs; $("q-common").hidden = cbs; $("box-guard").hidden = cbs; $("row-go").hidden = cbs;
-    $("cbres").hidden = STRAT !== "cb" || !CBR; $("pnres").hidden = !pns || !PNR; $("mares").hidden = !mas || !MAR;
+    $("box-cb").hidden = STRAT !== "cb"; $("box-pn").hidden = !pns; $("box-ma").hidden = !mas; $("box-tt").hidden = !tts; $("box-ts").hidden = !tss; $("box-wrs").hidden = cbs; $("q-common").hidden = cbs; $("box-guard").hidden = cbs; $("row-go").hidden = cbs;
+    $("cbres").hidden = STRAT !== "cb" || !CBR; $("pnres").hidden = !pns || !PNR; $("mares").hidden = !mas || !MAR; $("ttres").hidden = !tts || !TTR.tt; $("tsres").hidden = !tss || !TTR.ts;
     if (mas) { maLoad(); if (MAR) maDraw(); }
+    if (tts || tss) { ttLoad(); ttDraw(tts ? "tt" : "ts"); }
     ["qres", "qdecsec", "qpicksec"].forEach(function(id){ if (cbs) { if ($(id).style.display !== "none") $(id).setAttribute("data-was", "1"); $(id).style.display = "none"; } else if ($(id).getAttribute("data-was")) { $(id).style.display = ""; $(id).removeAttribute("data-was"); } });
-    if (cbs && !mas) cbLoad();
+    if (cbs && !mas && !tts && !tss) cbLoad();
     if (nh) $("dfac").value = $("nhsort").value;
     if (!cbs) desc();
   });
-  if (MKT.market !== "kr") { $("qstrat-cb").style.display = "none"; $("qstrat-pn").style.display = "none"; $("qstrat-ma").style.display = "none"; }
+  if (MKT.market !== "kr") { $("qstrat-cb").style.display = "none"; $("qstrat-pn").style.display = "none"; $("qstrat-ma").style.display = "none"; $("qstrat-tt").style.display = "none"; $("qstrat-ts").style.display = "none"; }
   if (COIN) { $("nhbothw").hidden = true; $("nhreg").value = "none"; }
   else if (US) { $("nhreg").options[0].text = "계단20 비중 — S&P 500·나스닥 중 약한 쪽이 60·90·120·180·250일선을 하나 깰 때마다 −20%"; $("nhreg").options[1].text = "S&P 500·나스닥 둘 다 60일선 위일 때만 편입 (아니면 현금)"; }
   $("nhreg").addEventListener("change", desc);   // 종가베팅·패닉 낙주는 한국 전 종목 데이터 전용
@@ -1576,6 +1709,261 @@ header .lnk,header .status{color:var(--hd-mu)}
   });
   $("mac").addEventListener("mouseleave", function(){ MAHOV = -1; maDraw(); });
   window.addEventListener("resize", maDraw);
+
+  // ======================================================================
+  // 터틀 트레이딩 · 터틀 수프 — turtle.bin (tools/closebet/export_turtle.py · 상장폐지 포함 전 종목 일봉) + turtle.js (계산 엔진, 처음 누를 때 불러옴)
+  //   계좌: 매일 종가 평가 · 비용은 사고팔 때 절반씩 · '신호 전부' = 자리 제한 없이 아주 작은 크기로 한 번 더 돌린 결과(규칙 자체의 매매당 수익)
+  // ======================================================================
+  var TT = null, TTLOADING = false, TTR = { tt: null, ts: null }, TTHOV = { tt: -1, ts: -1 }, TTLOGAX = { tt: true, ts: true }, TTSHOW = { tt: 200, ts: 200 }, TTSELY = { tt: null, ts: null };
+  var TVN = ["", "30억", "50억", "100억", "300억", "1,000억"], MKN = { none: "", b60: "두 지수 60일선 위", b120: "두 지수 120일선 위" }, TRN = { none: "", ema: "25>350일 지수이평", ma200: "200일선 위" };
+  function ttNum(id, d){ var v = parseFloat($(id).value); return isFinite(v) ? v : d; }
+  function ttClamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+  function ttLoad(){
+    if (TT || TTLOADING) return;
+    TTLOADING = true; $("ttgo").disabled = true; $("tsgo").disabled = true;
+    $("ttdesc").textContent = $("tsdesc").textContent = "전 종목 일봉을 불러오는 중… (약 9MB · 처음 한 번만)";
+    var eng = window.TTE ? Promise.resolve() : new Promise(function(res, rej){
+      var s = document.createElement("script"); s.src = "turtle.js?t=" + Date.now(); s.onload = res; s.onerror = function(){ rej(new Error("계산 엔진")); }; document.head.appendChild(s);
+    });
+    var dat = fetch("turtle.bin", { cache: "no-cache" }).then(function(r){ if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }).then(function(b){
+      var u8 = new Uint8Array(b);
+      if (u8[0] !== 0x1f || u8[1] !== 0x8b) return u8;                               // 서버가 이미 풀어 준 경우
+      if (typeof DecompressionStream === "undefined") throw new Error("이 브라우저는 압축 풀기를 지원하지 않습니다 — 최신 크롬·엣지·사파리에서 열어 주세요");
+      return new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer().then(function(x){ return new Uint8Array(x); });
+    });
+    Promise.all([eng, dat]).then(function(a){
+      TT = TTE.decode(a[1]);
+      var last = iso(TT.dates[TT.T - 1]), first = iso(TT.dates[Math.min(60, TT.T - 1)]);
+      ["ttto", "tsto"].forEach(function(id){ $(id).value = last; $(id).max = last; });
+      ["ttfrom", "tsfrom"].forEach(function(id){ $(id).min = iso(TT.dates[0]); $(id).max = last; if (!$(id).value) $(id).value = first; });
+      TTLOADING = false; $("ttgo").disabled = false; $("tsgo").disabled = false; ttDesc(); tsDesc();
+    }).catch(function(e){ TTLOADING = false; $("ttdesc").textContent = $("tsdesc").textContent = "데이터를 불러오지 못했습니다 (" + e.message + "). 새로고침해 보세요."; });
+  }
+  function ttCfg(){
+    var E = +$("tte").value;
+    return { E: E, skip: $("ttskip").checked && E < 55, X: +$("ttx").value, stop: +$("ttstop").value, U: +$("ttu").value, add: 0.5, fill: $("ttfill").value,
+             tvc: +$("tttv").value, mkt: $("ttmkt").value, trend: $("tttr").value, near: $("ttnear").checked,
+             size: $("ttsz").value, szv: ttClamp(ttNum("ttszv", 1), 0.05, 100) / 100,
+             capS: ttClamp(ttNum("ttcaps", 100), 5, 100) / 100, capT: ttClamp(ttNum("ttcapt", 100), 10, 100) / 100, maxU: Math.max(1, Math.round(ttNum("ttmaxu", 12))),
+             ddr: $("ttddr").checked, cost: Math.max(0, ttNum("ttcost", 0.5)) / 100,
+             from: fromIso($("ttfrom").value || "2015-01-01"), to: fromIso($("ttto").value || "2999-12-31"), bench: $("ttbench").value };
+  }
+  function ttPct(v){ return +(v * 100).toFixed(2) + "%"; }
+  function ttRule(c){
+    return [c.E + "일 최고가 돌파" + (c.fill === "c" ? "(종가)" : "(장중)") + (c.skip ? " · 건너뛰기 규칙(+55일)" : ""), c.X + "일 최저가 청산",
+            c.stop ? "손절 −" + (c.stop === 0.5 ? "½" : c.stop) + "N" : "손절 없음", c.U > 1 ? "½N마다 최대 " + c.U + "유닛" : "불타기 없음",
+            (c.size === "risk" ? "1유닛 = 1N에 계좌 " : "1유닛 = 계좌 ") + ttPct(c.szv), "종목당 " + Math.round(c.capS * 100) + "% · 전체 " + Math.round(c.capT * 100) + "% · 유닛 " + c.maxU + "개",
+            c.ddr ? "낙폭 축소" : "", "거래대금 " + TVN[c.tvc] + "↑", MKN[c.mkt], TRN[c.trend], c.near ? "깊은 눌림 제외" : "", "비용 " + (c.cost * 100).toFixed(2) + "%"].filter(Boolean).join(" · ");
+  }
+  function ttDesc(){
+    var e55 = +$("tte").value >= 55;
+    $("ttskip").disabled = e55; $("ttskipw").style.opacity = e55 ? 0.45 : 1;
+    var c = ttCfg();
+    $("ttszd").textContent = c.size === "risk" ? "예: N이 주가의 4%인 종목이면 1유닛 = 계좌의 " + Math.round(c.szv / 0.04 * 100) + "% (변동성이 클수록 적게 삼 · 손절 −2N이면 계좌 " + ttPct(c.szv * 2) + " 손실)" : "모든 종목을 같은 금액으로 (변동성과 무관)";
+    if (TT) $("ttdesc").textContent = ttRule(c) + " — 데이터 " + ymd(TT.dates[0]) + " ~ " + ymd(TT.dates[TT.T - 1]);
+  }
+  function tsCfg(){
+    return { mode: $("tsm").value, tvc: +$("tstv").value, mkt: $("tsmkt").value, trend: $("tstr").value, vol: $("tsvol").checked,
+             k: +$("tsk").value, hold: +$("tsh").value, size: $("tssz").value, szv: ttClamp(ttNum("tsszv", 10), 0.05, 100) / 100,
+             capS: ttClamp(ttNum("tscaps", 10), 1, 100) / 100, capT: ttClamp(ttNum("tscapt", 100), 10, 100) / 100, cost: Math.max(0, ttNum("tscost", 0.5)) / 100,
+             from: fromIso($("tsfrom").value || "2015-01-01"), to: fromIso($("tsto").value || "2999-12-31"), bench: $("tsbench").value };
+  }
+  function tsRule(c){
+    return [c.mode === "a" ? "20일 신저가 뒤 그날 종가 회복 → 종가 매수" : "20일 신저가 마감 → 다음 날 직전 저가 회복 시 매수", "손절 신호 저가",
+            c.k ? "익절 " + c.k + "R" : "익절 없음", c.hold ? "최대 " + c.hold + "거래일" : "다음 날 시가 매도",
+            (c.size === "risk" ? "손절 시 계좌 " : "1회 계좌 ") + ttPct(c.szv), "종목당 " + Math.round(c.capS * 100) + "% · 전체 " + Math.round(c.capT * 100) + "%",
+            "거래대금 " + TVN[c.tvc] + "↑", MKN[c.mkt], TRN[c.trend], c.vol ? "거래량 2배" : "", "비용 " + (c.cost * 100).toFixed(2) + "%"].filter(Boolean).join(" · ");
+  }
+  function tsDesc(){ if (TT) $("tsdesc").textContent = tsRule(tsCfg()) + " — 데이터 " + ymd(TT.dates[0]) + " ~ " + ymd(TT.dates[TT.T - 1]); }
+  ["tte", "ttskip", "ttfill", "tttv", "ttmkt", "tttr", "ttnear", "ttx", "ttstop", "ttu", "ttszv", "ttcaps", "ttcapt", "ttmaxu", "ttddr", "ttcost", "ttfrom", "ttto", "ttbench"].forEach(function(id){ $(id).addEventListener("change", ttDesc); });
+  ["tsm", "tstv", "tsmkt", "tstr", "tsvol", "tsk", "tsh", "tsszv", "tscaps", "tscapt", "tscost", "tsfrom", "tsto", "tsbench"].forEach(function(id){ $(id).addEventListener("change", tsDesc); });
+  $("ttsz").addEventListener("change", function(){ $("ttszv").value = this.value === "risk" ? 1 : 10; ttDesc(); });
+  $("tssz").addEventListener("change", function(){ $("tsszv").value = this.value === "risk" ? 1 : 10; tsDesc(); });
+  var TTPRE = {
+    s1: { tte: "20", ttskip: true,  ttx: "10", ttstop: "2", ttu: "4", ttfill: "i", tttv: "1", ttmkt: "none", tttr: "none", ttnear: false, ttsz: "risk", ttszv: 1,   ttcaps: 100, ttcapt: 100, ttmaxu: 12, ttddr: true },
+    s2: { tte: "55", ttskip: false, ttx: "20", ttstop: "2", ttu: "4", ttfill: "i", tttv: "1", ttmkt: "none", tttr: "none", ttnear: false, ttsz: "risk", ttszv: 1,   ttcaps: 100, ttcapt: 100, ttmaxu: 12, ttddr: true },
+    dc: { tte: "20", ttskip: false, ttx: "20", ttstop: "0", ttu: "1", ttfill: "i", tttv: "1", ttmkt: "none", tttr: "none", ttnear: false, ttsz: "eq",   ttszv: 10,  ttcaps: 100, ttcapt: 100, ttmaxu: 10, ttddr: false },
+    kr: { tte: "55", ttskip: false, ttx: "20", ttstop: "2", ttu: "4", ttfill: "i", tttv: "1", ttmkt: "b120", tttr: "none", ttnear: true, ttsz: "risk", ttszv: 0.5, ttcaps: 25,  ttcapt: 100, ttmaxu: 20, ttddr: false }
+  };
+  var TSPRE = {
+    a:  { tsm: "a", tstv: "1", tsmkt: "none", tstr: "none",  tsvol: false, tsk: "2", tsh: "5", tssz: "eq", tsszv: 10, tscaps: 10, tscapt: 100 },
+    b:  { tsm: "b", tstv: "1", tsmkt: "none", tstr: "none",  tsvol: false, tsk: "2", tsh: "5", tssz: "eq", tsszv: 10, tscaps: 10, tscapt: 100 },
+    o1: { tsm: "a", tstv: "1", tsmkt: "none", tstr: "none",  tsvol: false, tsk: "0", tsh: "0", tssz: "eq", tsszv: 10, tscaps: 10, tscapt: 100 },
+    tr: { tsm: "a", tstv: "1", tsmkt: "b60",  tstr: "ma200", tsvol: false, tsk: "2", tsh: "5", tssz: "eq", tsszv: 10, tscaps: 10, tscapt: 100 }
+  };
+  function ttApply(P0){ Object.keys(P0).forEach(function(id){ var el = $(id); if (el.type === "checkbox") el.checked = P0[id]; else el.value = P0[id]; }); }
+  $("ttpre").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-p]"); if (!b) return;
+    ttApply(TTPRE[b.getAttribute("data-p")]); $("ttcost").value = 0.5;
+    if (TT) { $("ttfrom").value = iso(TT.dates[Math.min(60, TT.T - 1)]); $("ttto").value = iso(TT.dates[TT.T - 1]); }
+    ttDesc(); if (TT) ttRun();
+  });
+  $("tspre").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-p]"); if (!b) return;
+    ttApply(TSPRE[b.getAttribute("data-p")]); $("tscost").value = 0.5;
+    if (TT) { $("tsfrom").value = iso(TT.dates[Math.min(60, TT.T - 1)]); $("tsto").value = iso(TT.dates[TT.T - 1]); }
+    tsDesc(); if (TT) tsRun();
+  });
+  function ttExec(kd){
+    if (!TT) return;
+    var soup = kd === "ts", c = soup ? tsCfg() : ttCfg(), go = $(kd + "go"), desc = $(kd + "desc");
+    go.disabled = true; desc.textContent = "계산 중… (전 종목 · 매일)";
+    setTimeout(function(){
+      try {
+        var run = soup ? TTE.runSoup : TTE.runTurtle, R = run(TT, c);
+        if (R.eq.length < 120) { desc.textContent = "기간이 너무 짧습니다 (최소 반년)."; return; }
+        R.all = run(TT, Object.assign({}, c, { size: "eq", szv: 0.00002, capS: 1, capT: 1, maxU: 1e9, ddr: false }));
+        if (!soup && R.t1 === TT.T - 1) { R.next = TTE.turtleNext(TT, c, R, 0.05); R.hold = TTE.turtleHold(TT, c, R); }
+        TTR[kd] = R; TTHOV[kd] = -1; TTSHOW[kd] = 200;
+        ttRender(kd);
+        (soup ? tsDesc : ttDesc)();
+      } catch (err) { desc.textContent = "계산 중 오류: " + err.message; }
+      finally { go.disabled = false; }
+    }, 30);
+  }
+  function ttRun(){ ttExec("tt"); }
+  function tsRun(){ ttExec("ts"); }
+  function ttName(j){ var s = TT.st[j]; return esc(s.n) + (s.x ? '<span class="c">상폐</span>' : ""); }
+  function ttR(v){ return isFinite(v) ? (v >= 0 ? "+" : "") + v.toFixed(2) + "R" : "-"; }
+  function ttRender(kd){
+    var R = TTR[kd], c = R.c, soup = kd === "ts", S = cbStats(R.eq), B = cbStats(R.bq);
+    var A = R.all.trades.slice().sort(function(a, b){ return a.t - b.t; }), Tr = A.map(function(x){ return x.r; }), ac = R.trades;
+    var bname = c.bench === "kq" ? "코스닥" : "코스피";
+    $(kd + "res").hidden = false;
+    $(kd + "rsub").textContent = ymd(R.dts[0]) + " ~ " + ymd(R.dts[R.dts.length - 1]) + " · " + S.yrs.toFixed(1) + "년 · " + (soup ? tsRule(c) : ttRule(c));
+    var m = function(lbl, v, sub){ return '<div class="qm"><span>' + lbl + "</span><b>" + v + "</b>" + (sub ? "<small>" + sub + "</small>" : "") + "</div>"; };
+    var nT = Tr.length, mean = nT ? avgOf(Tr) : NaN, win = Tr.filter(function(x){ return x > 0; }).length, tst = nT > 2 ? tstat(Tr) : 0;
+    var Rs = A.map(function(x){ return x.R; }).filter(isFinite), avgR = Rs.length ? avgOf(Rs) : NaN, hold = nT ? avgOf(A.map(function(x){ return x.te - x.t; })) : NaN;
+    var srt = Tr.slice().sort(function(a, b){ return a - b; }), medv = nT ? srt[Math.floor(nT / 2)] : NaN;
+    var half = Math.floor(nT / 2), h1 = half ? avgOf(Tr.slice(0, half)) : NaN, h2 = nT - half ? avgOf(Tr.slice(half)) : NaN;
+    var K = {}; A.forEach(function(x){ K[x.kind] = (K[x.kind] || 0) + 1; });
+    var kp = function(k){ return nT ? Math.round((K[k] || 0) / nT * 100) + "%" : "-"; };
+    var acR = ac.map(function(x){ return x.r; }), acMean = acR.length ? avgOf(acR) : NaN;
+    var exitTxt = soup ? (c.hold ? "익절 " + kp("익절") + " · 손절 " + kp("손절") : "다음날 시가 " + kp("다음날 시가")) : "손절 " + kp("손절") + " · 채널 청산 " + kp("청산");
+    var exitSub = soup ? (c.hold ? "기간 " + kp("기간") : "") : "";
+    if (K["상폐 청산"]) exitSub += (exitSub ? " · " : "") + "상폐 " + K["상폐 청산"] + "건";
+    $(kd + "metrics").innerHTML =
+      m("매매당 평균 — 신호 전부", cpc(mean, 2), "비용 후 · t값 " + tst.toFixed(1) + " · 중앙값 " + pc(medv, 1)) +
+      m("승률 — 신호 전부", nT ? Math.round(win / nT * 100) + "%" : "-", win.toLocaleString() + " / " + nT.toLocaleString() + "건 · 평균 " + ttR(avgR)) +
+      m("신호 수", nT.toLocaleString() + "건", "연 " + (nT / Math.max(0.1, S.yrs)).toFixed(0) + "건 · 평균 보유 " + (isFinite(hold) ? hold.toFixed(0) : "-") + "일") +
+      m("청산 비율", '<span style="white-space:nowrap">' + exitTxt + "</span>", exitSub) +
+      m("누적 수익률 (계좌)", cpc(S.tot, 0), bname + " " + pc(B.tot, 0) + " · 계좌 매매 " + ac.length.toLocaleString() + "건 (평균 " + pc(acMean, 2) + ")") +
+      m("연평균 (CAGR)", cpc(S.cagr), bname + " " + pc(B.cagr)) +
+      m("최대 낙폭 (MDD)", '<span style="color:var(--dn)">' + pc(S.mdd) + "</span>", bname + " " + pc(B.mdd)) +
+      m("앞 절반 / 뒤 절반", '<span style="white-space:nowrap">' + cpc(h1, 2) + " / " + cpc(h2, 2) + "</span>", "매매당 평균 (신호를 시간순으로 반으로)") +
+      m("평균 투자 비중", Math.round(R.inv * 100) + "%", (soup ? "" : "불타기 " + R.st.add.toLocaleString() + "회 · ") + "자리 없어 못 산 신호 " + R.st.skip.toLocaleString() + "건");
+    var items = [], score = 0;
+    items.push([mean > 0.005 ? "g" : mean > 0 ? "n" : "b", "신호 전부 매매당 " + pc(mean, 2) + " (비용 " + (c.cost * 100).toFixed(2) + "% 뺀 뒤) · t값 " + tst.toFixed(1) +
+      (tst >= 3 ? " — 우연으로 보기 어려움" : tst >= 2 ? " — 의미 있는 수준" : tst <= -2 ? " — 우연이 아니라 꾸준한 손해" : " — 우연일 수 있음")]);
+    score += mean > 0.005 && tst >= 2 ? 2 : mean > 0 ? 0 : -2;
+    items.push([h1 > 0 && h2 > 0 ? "g" : "b", "앞 절반 " + pc(h1, 2) + " · 뒤 절반 " + pc(h2, 2) + (h1 > 0 && h2 > 0 ? " — 기간이 바뀌어도 유지" : h1 <= 0 && h2 <= 0 ? " — 두 기간 모두 손해" : " — 한쪽 기간에 쏠림")]);
+    score += h1 > 0 && h2 > 0 ? 1 : -1;
+    var beat = S.cagr > B.cagr;
+    items.push([beat ? "g" : "b", "계좌 연평균 " + pc(S.cagr) + " · 최대 낙폭 " + pc(S.mdd) + " (" + bname + " 연 " + pc(B.cagr) + " · " + pc(B.mdd) + ")" + (beat ? " — 지수보다 나음" : " — 지수보다 못함")]);
+    score += beat ? 1 : -1;
+    if (!soup && c.size === "risk" && c.szv >= 0.0075) items.push(["n", "1유닛 위험이 계좌 " + ttPct(c.szv) + " — 한국 주식은 N이 주가의 3~6%라 1유닛이 계좌의 " + Math.round(c.szv / 0.06 * 100) + "~" + Math.round(c.szv / 0.03 * 100) +
+      "%나 됩니다. 원조(선물)와 달리 서너 종목에 계좌가 다 들어가 한 종목 손절이 크게 아프니, 0.25~0.5%나 종목당 한도 25%로도 비교해 보세요"]);
+    if (nT && win / nT < 0.4) items.push(["n", "승률 " + Math.round(win / nT * 100) + "% — 작은 손실이 잦고 드문 큰 추세가 평균을 만드는 구조입니다. 연속 손절 10번 안팎이 흔합니다"]);
+    if (nT < 100) items.push(["n", "신호가 " + nT + "건뿐 — 표본이 작아 결과가 크게 흔들릴 수 있음"]);
+    items.push(["n", soup
+      ? "검증 메모 (2015~2026-10 · 비용 0.5% · 신호 전부): 종가 회복 매수 → 다음 날 시가 매도 −0.46%(비용 전 +0.04%) · 5일 보유 −0.74% · 플러스 원 10일 −0.48%, 200일선·시장 필터·거래량 2배를 붙여도 마이너스였습니다. 남의 손절 물량을 받는 것만으론 엣지가 없고, 이 사이트의 다른 연구에선 '주목 종목(거래대금 상위·급등 뒤)'이 '깊게(이평 −4%↓) 거래량 2배로' 이탈한 날처럼 대상을 좁혀야 하룻밤 반등이 나타났습니다"
+      : "검증 메모 (2015~2026-10 · 비용 0.5% · 신호 전부, 파이썬으로 따로 계산해 같은 값 확인): 손절·불타기 없이 돌파만 봐도 55일→20일 청산 매매당 −2.3%, 20일→10일 −1.1%, 20일→20일 −1.9%(승률 27~30%) — 한국 주식은 돌파 뒤 되밀리는 경우가 많아 원조 규칙 그대로는 손해였습니다. 두 지수 120일선·장기 추세·깊은 눌림 제외를 모두 켜면 +1.1%지만 2025년(+10%) 덕이고 9년 중 5년은 마이너스. 이 사이트의 추세추종 연구(52주 신고가+거래량+수급·이평각도)처럼 '주도 종목'으로 좁혀야 플러스가 났습니다"]);
+    var v = score >= 3 ? ["유효", "var(--ok)"] : score >= 1 ? ["보통", "var(--warn)"] : ["약함", "var(--up)"];
+    $(kd + "verdict").innerHTML = '<div class="badge" style="background:' + v[1] + '">' + v[0] + "</div><ul>" + items.map(function(x){ return '<li class="' + x[0] + '">' + esc(x[1]) + "</li>"; }).join("") + "</ul>";
+    var yr = periodYears(R), Y = {};
+    A.forEach(function(x){ var y = Math.floor(TT.dates[x.t] / 10000); if (!Y[y]) Y[y] = { n: 0, s: 0, w: 0 }; Y[y].n++; Y[y].s += x.r; if (x.r > 0) Y[y].w++; });
+    $(kd + "year").innerHTML = '<thead><tr><th class="l">연도</th><th>계좌</th><th>' + bname + "</th><th>신호</th><th>매매당</th><th>승률</th></tr></thead><tbody>" +
+      yr.map(function(y){ var a = Y[y.k] || { n: 0, s: 0, w: 0 };
+        return '<tr data-y="' + y.k + '"><td class="l">' + y.k + (y.part ? '<span class="c">일부</span>' : "") + "</td><td>" + cpc(y.s) + "</td><td>" + cpc(y.b) + "</td><td>" + a.n.toLocaleString() + "</td><td>" + (a.n ? cpc(a.s / a.n, 2) : "-") + "</td><td>" + (a.n ? Math.round(a.w / a.n * 100) + "%" : "-") + "</td></tr>"; }).join("") + "</tbody>";
+    R.M = periodYears(R, 100); R.bname = bname;
+    var keepY = yr.filter(function(y){ return y.k === TTSELY[kd]; })[0];
+    ttMonth(kd, keepY ? TTSELY[kd] : yr[yr.length - 1].k);
+    ttLog(kd); if (soup) tsNow(); else ttNow(); ttDraw(kd);
+  }
+  function ttMonth(kd, y){ var R = TTR[kd]; if (!R || !R.M) return; TTSELY[kd] = y; renderMonths(R, y, kd + "year", kd + "mtitle", kd + "month"); }
+  function ttLog(kd){
+    var R = TTR[kd], soup = kd === "ts", L = R.trades.slice().sort(function(a, b){ return b.t - a.t || b.te - a.te; }), show = L.slice(0, TTSHOW[kd]);
+    $(kd + "logn").textContent = L.length.toLocaleString() + "건 · 최근 매수 순 · 수익은 비용 뺀 뒤 · R = 첫 매수 손절폭 대비";
+    $(kd + "log").innerHTML = '<thead><tr><th class="l">매수일</th><th class="l">종목</th><th>' + (soup ? "매수가" : "첫 매수가") + "</th>" + (soup ? "" : "<th>유닛</th><th>평균가</th>") +
+      '<th class="l">결과</th><th>매도가</th><th>수익</th><th>R</th><th>보유</th></tr></thead><tbody>' +
+      show.map(function(x){
+        return '<tr><td class="l">' + ymd(TT.dates[x.t]) + '</td><td class="l">' + ttName(x.j) + "</td><td>" + px(x.e) + "</td>" + (soup ? "" : "<td>" + x.u + "</td><td>" + px(x.avg) + "</td>") +
+          '<td class="l">' + x.kind + ' <span class="c">' + ymd(TT.dates[x.te]).slice(2) + "</span>" + (!soup && R.c.skip && x.via === 55 ? ' <span class="c">55일 돌파</span>' : "") +
+          "</td><td>" + px(x.px) + "</td><td>" + cpc(x.r, 1) + "</td><td>" + (isFinite(x.R) ? (x.R >= 0 ? "+" : "") + x.R.toFixed(1) + "R" : "-") + "</td><td>" + (x.te - x.t) + "일</td></tr>";
+      }).join("") + "</tbody>";
+    $(kd + "more").hidden = L.length <= TTSHOW[kd];
+  }
+  function ttOld(R){
+    if (R.t1 === TT.T - 1) return false;
+    return '<p class="cbnote" style="margin-top:0">백테스트 끝 날짜가 데이터 마지막 날(' + ymd(TT.dates[TT.T - 1]) + ")이 아니어서 오늘 기준 목록은 보여 주지 않습니다.</p>";
+  }
+  function ttNow(){
+    var R = TTR.tt, c = R.c, T = TT.T, old = ttOld(R), intra = c.fill !== "c";
+    $("ttnowh").textContent = "오늘 기준 — " + ymd(TT.dates[T - 1]) + " 장 마감 뒤";
+    if (old) { $("ttnow").innerHTML = old; return; }
+    var N = R.next, H = R.hold;
+    var mk = c.mkt === "none" ? "" : N.mkt ? '<span class="chip up">시장 필터 켜짐 — ' + MKN[c.mkt] + "</span> " : '<span class="chip dn">시장 필터 꺼짐 — ' + MKN[c.mkt] + " 아님 → 새로 사지 않음</span> ";
+    var h = '<p class="cbnote" style="margin-top:0">' + mk + "이 설정대로 굴린 계좌가 지금 들고 있는 종목과, 내일 " + (intra ? "장중에 돌파 가격을 넘으면 사는" : "종가가 돌파 가격 위면 사는") +
+      " 후보입니다. 데이터는 평일 저녁(18:37 작업)에 그날 종가까지 갱신됩니다.</p>";
+    h += '<h3 class="qlogh" style="margin-top:12px">보유 중 ' + H.length + '종목 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">내일 이 가격을 깨면 전량 매도 · 불타기 가격을 넘으면 1유닛 추가</span></h3>';
+    h += H.length ? '<div class="qscroll"><table class="qtbl"><thead><tr><th class="l">종목</th><th class="l">첫 매수</th><th>유닛</th><th>평균가</th><th>종가</th><th>수익</th><th>손절가</th><th>' + c.X + "일 최저가</th><th>다음 불타기</th></tr></thead><tbody>" +
+      H.map(function(x){ return '<tr><td class="l">' + ttName(x.j) + '</td><td class="l">' + ymd(TT.dates[x.t]) + "</td><td>" + x.u + "</td><td>" + px(x.avg) + "</td><td>" + px(x.cl) + "</td><td>" + cpc(x.r, 1) +
+        "</td><td>" + (isFinite(x.stop) ? px(x.stop) + ' <span class="c">' + pc(x.stop / x.cl - 1, 1) + "</span>" : "-") + "</td><td>" + (isFinite(x.chan) ? px(x.chan) + ' <span class="c">' + pc(x.chan / x.cl - 1, 1) + "</span>" : "-") +
+        "</td><td>" + (isFinite(x.next) ? px(x.next) + ' <span class="c">' + pc(x.next / x.cl - 1, 1) + "</span>" : "-") + "</td></tr>"; }).join("") + "</tbody></table></div>"
+      : '<p class="cbnote" style="margin-top:0">없음</p>';
+    var L = N.list.slice(0, 20);
+    h += '<h3 class="qlogh" style="margin-top:12px">내일 매수 후보 — 돌파 가격까지 5% 이내 ' + N.list.length + '종목 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">가까운 순 20개 · 1유닛 = 지금 크기 설정 기준(종목당 한도 적용 전)</span></h3>';
+    h += L.length ? '<div class="qscroll"><table class="qtbl"><thead><tr><th class="l">종목</th><th>종가</th><th>돌파 가격</th><th>N (주가 대비)</th><th>1유닛</th><th>손절 예정</th><th class="l">비고</th></tr></thead><tbody>' +
+      L.map(function(x){ var u = c.size === "risk" ? c.szv / (x.n / x.lvl) : c.szv, sp = c.stop ? x.lvl - c.stop * x.n : NaN;
+        return '<tr><td class="l">' + ttName(x.j) + "</td><td>" + px(x.cl) + "</td><td>" + px(x.lvl) + ' <span class="c">' + pc(x.gap, 1) + "</span></td><td>" + pc(x.n / x.cl, 1).replace("+", "") + "</td><td>계좌 " + Math.round(Math.min(u, c.capS) * 100) + "%</td><td>" +
+          (isFinite(sp) ? px(sp) + ' <span class="c">' + pc(sp / x.lvl - 1, 1) + "</span>" : "-") + '</td><td class="l">' + (x.E !== c.E ? x.E + "일 돌파 · " : "") + esc(x.note || "") + "</td></tr>"; }).join("") + "</tbody></table></div>"
+      : '<p class="cbnote" style="margin-top:0">조건을 통과하고 돌파 가격 5% 안에 있는 종목이 없습니다.</p>';
+    $("ttnow").innerHTML = h;
+  }
+  function tsNow(){
+    var R = TTR.ts, c = R.c, T = TT.T, old = ttOld(R);
+    $("tsnowh").textContent = "오늘 기준 — " + ymd(TT.dates[T - 1]) + " 장 마감 뒤";
+    if (old) { $("tsnow").innerHTML = old; return; }
+    var O = R.open.map(function(o){ return o.p; }), today = O.filter(function(p){ return p.t === T - 1; }), hold = O.filter(function(p){ return p.t < T - 1; });
+    var row = function(p){ return '<tr><td class="l">' + ttName(p.j) + '</td><td class="l">' + ymd(TT.dates[p.t]) + "</td><td>" + px(p.e0) + "</td><td>" + px(p.lc) + "</td><td>" + cpc(p.lc / p.e0 - 1 - c.cost, 1) +
+      "</td><td>" + px(p.stop) + ' <span class="c">' + pc(p.stop / p.lc - 1, 1) + "</span></td><td>" + (isFinite(p.tgt) ? px(p.tgt) + ' <span class="c">' + pc(p.tgt / p.lc - 1, 1) + "</span>" : "-") +
+      "</td><td>" + (c.hold ? Math.max(0, c.hold - p.nb) + "일" : "내일 시가") + "</td></tr>"; };
+    var head = '<div class="qscroll"><table class="qtbl"><thead><tr><th class="l">종목</th><th class="l">매수일</th><th>매수가</th><th>종가</th><th>수익</th><th>손절가</th><th>익절가</th><th>남은 보유</th></tr></thead><tbody>';
+    var MK = TTE.mktOK(TT, c.mkt), on = !MK || MK[T - 1] === 1;
+    var mk = c.mkt === "none" ? "" : on ? '<span class="chip up">시장 필터 켜짐 — ' + MKN[c.mkt] + "</span> " : '<span class="chip dn">시장 필터 꺼짐 — ' + MKN[c.mkt] + " 아님 → 새로 사지 않음</span> ";
+    var h = '<p class="cbnote" style="margin-top:0">' + mk + "이 설정대로 굴린 계좌 기준입니다. 데이터는 평일 저녁(18:37 작업)에 그날 종가까지 갱신됩니다.</p>";
+    if (c.mode === "a") {
+      h += '<h3 class="qlogh" style="margin-top:12px">오늘 종가 매수 ' + today.length + '종목 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">20일 신저가를 냈다가 종가가 직전 20일 최저가 위로 돌아온 종목 (규칙대로라면 오늘 종가에 매수)</span></h3>';
+      h += today.length ? head + today.map(row).join("") + "</tbody></table></div>" : '<p class="cbnote" style="margin-top:0">없음</p>';
+    } else {
+      var P = R.pending.slice().sort(function(a, b){ return a.lv / a.cl - b.lv / b.cl; });
+      h += '<h3 class="qlogh" style="margin-top:12px">내일 매수 대기 ' + P.length + '종목 <span class="c" style="font-weight:500;color:var(--muted);font-size:12px">오늘 20일 신저가로 마감 · 내일 이 가격을 다시 넘으면 매수 (시가가 더 높으면 시가)</span></h3>';
+      h += P.length ? '<div class="qscroll"><table class="qtbl"><thead><tr><th class="l">종목</th><th>종가</th><th>매수 가격</th><th>오늘 저가 (손절 기준)</th></tr></thead><tbody>' +
+        P.slice(0, 30).map(function(x){ return '<tr><td class="l">' + ttName(x.j) + "</td><td>" + px(x.cl) + "</td><td>" + px(x.lv) + ' <span class="c">' + pc(x.lv / x.cl - 1, 1) + "</span></td><td>" + px(x.lo) + "</td></tr>"; }).join("") + "</tbody></table></div>"
+        : '<p class="cbnote" style="margin-top:0">없음</p>';
+    }
+    h += '<h3 class="qlogh" style="margin-top:12px">보유 중 ' + hold.length + "종목</h3>";
+    h += hold.length ? head + hold.map(row).join("") + "</tbody></table></div>" : '<p class="cbnote" style="margin-top:0">없음</p>';
+    $("tsnow").innerHTML = h;
+  }
+  function ttDraw(kd){
+    var R = TTR[kd]; if (!R) return;
+    eqDraw({ R: R, sec: kd + "res", cv: kd + "c", info: kd + "info", name: kd === "ts" ? "터틀 수프 계좌" : "터틀 계좌", hov: TTHOV[kd], log: TTLOGAX[kd], logId: kd + "logax",
+             setLog: function(v){ TTLOGAX[kd] = v; ttDraw(kd); } });
+  }
+  ["tt", "ts"].forEach(function(kd){
+    $(kd + "c").addEventListener("mousemove", function(e){
+      var R = TTR[kd]; if (!R) return; var r = this.getBoundingClientRect(), n = R.eq.length;
+      TTHOV[kd] = Math.max(0, Math.min(n - 1, Math.round((e.clientX - r.left - 8) / (r.width - 70) * (n - 1)))); ttDraw(kd);
+    });
+    $(kd + "c").addEventListener("mouseleave", function(){ TTHOV[kd] = -1; ttDraw(kd); });
+    $(kd + "year").addEventListener("click", function(e){ var tr = e.target.closest("tr[data-y]"); if (tr) ttMonth(kd, +tr.getAttribute("data-y")); });
+    $(kd + "more").addEventListener("click", function(){ TTSHOW[kd] += 500; ttLog(kd); });
+  });
+  window.addEventListener("resize", function(){ ttDraw("tt"); ttDraw("ts"); });
+  $("ttgo").addEventListener("click", ttRun);
+  $("tsgo").addEventListener("click", tsRun);
+  ttDesc();
 
   var HI = [], LO = [], NHF = [], LS = [], LQ = [], LN = [], CS = [], CN = [];
   function prepFactors(){                                // 52주 최고·최저(종가) · 신고가 표시 · 수익률 누적합 (한 번만 계산)
