@@ -113,6 +113,10 @@ header .lnk,header .status{color:var(--hd-mu)}
   :root{ --up:#ff5d68; --dn:#5aa2ff; --ok:#3fcf86; --warn:#f0a83a; --acc:#9a8cff; --hover:#26292f; --band:#232325;
     --t-up:#3d1a1d; --t-dn:#16263f; --t-ok:#123524; --t-warn:#3a2c10; --t-acc:#26224a; --t-un:#252a33; }
 }
+:root{color-scheme:light dark}
+/* 입력창은 브라우저 기본 글자색(검정)을 쓰므로 다크모드에서 안 보임 → 페이지 글자색을 따르게 */
+input,select,textarea{color:var(--fg);font-family:inherit}
+input::placeholder,textarea::placeholder{color:var(--muted);opacity:1}
 .mu{color:var(--muted)}
 .wrap{max-width:1440px;margin:0 auto;padding:14px 18px 70px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--card-shadow);padding:16px 18px;margin:12px 0}
