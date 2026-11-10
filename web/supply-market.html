@@ -460,11 +460,11 @@ header .lnk,header .status{color:var(--hd-mu)}
     for (j = a; j <= b; j++) { lo = Math.min(lo, x.l[j]); hi = Math.max(hi, x.h[j]); [20, 60].forEach(function(w){ var m = ma[w][j]; if (m !== null) { lo = Math.min(lo, m); hi = Math.max(hi, m); } }); }
     var pad = (hi - lo) * 0.06 || hi * 0.01; lo -= pad; hi += pad;
     var PY = function(val){ return T + (hi - val) / (hi - lo) * ph; };
-    var st = nice(hi - lo, 5);
+    var st = nice(hi - lo, 5), tagY = b === N - 1 ? PY(x.c[b]) : -99;
     ctx.textAlign = "left";
     for (var tv = Math.ceil(lo / st) * st; tv <= hi; tv += st) {
       var py = Math.round(PY(tv)) + 0.5; ctx.strokeStyle = C.grid; ctx.beginPath(); ctx.moveTo(L, py); ctx.lineTo(R, py); ctx.stroke();
-      ctx.fillStyle = C.mu; ctx.fillText(num(tv, st < 1 ? 2 : st < 10 ? 1 : 0), R + 6, py);
+      ctx.fillStyle = C.mu; if (Math.abs(py - tagY) > 12) ctx.fillText(num(tv, st < 1 ? 2 : st < 10 ? 1 : 0), R + 6, py);
     }
     ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
     var cw = Math.max(1, Math.min(bw * 0.7, 14));
