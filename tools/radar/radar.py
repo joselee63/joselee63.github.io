@@ -1359,6 +1359,41 @@ def news_push(dispatch=True, always=False):
         log(f"뉴스 올리기 실패: {e!r}"[:160])
 
 
+_FLOW_TRIED = {}
+
+
+def _flow_mod():
+    sys.path.insert(0, str(ROOT / "tools" / "market"))
+    import flow_kiwoom
+    return flow_kiwoom
+
+
+def flow_due(t=None):
+    """사이트 '시장 수급'에 들어 있어야 할 마지막 거래일 — 거래일 20:12(NXT 확정 뒤)부터 그날, 그 전엔 앞 거래일"""
+    t = t or now()
+    d = t.date()
+    return d if is_trading(d) and t.time() >= dt.time(20, 12) else prev_trading(d)
+
+
+def flow_push(force=False):
+    """키움 '통합(KRX+NXT)' 시장 수급 → 릴리스 flow-data → flow.yml (tools/market/flow_kiwoom.py) · 끄려면 RADAR_FLOW=0
+    받을 날이 남았을 때만 (같은 기준일은 3번까지만 시도 — 임시 휴장 등으로 그날 값이 없을 때 계속 부르지 않게)"""
+    if os.environ.get("RADAR_FLOW") == "0" or not KW.credentials():
+        return
+    try:
+        fk = _flow_mod()
+        want = str(flow_due())
+        have = fk.cached_asof() or ""
+        if not force and have >= want:
+            return
+        if not force and _FLOW_TRIED.get(want, 0) >= 3:
+            return
+        _FLOW_TRIED[want] = _FLOW_TRIED.get(want, 0) + 1
+        fk.collect(log=log, upload=os.environ.get("RADAR_SITE_TRIGGER") != "0")
+    except Exception as e:  # noqa: BLE001
+        log(f"시장 수급 수집 실패: {e!r}"[:200])
+
+
 def scheduler():
     fired = set()
     try:
@@ -1367,6 +1402,7 @@ def scheduler():
         log(str(e))
     threading.Thread(target=prebuild_themes, daemon=True).start()
     threading.Thread(target=refresh, args=("start",), daemon=True).start()
+    threading.Thread(target=lambda: (time.sleep(90), flow_push()), daemon=True).start()   # 켜자마자 빠진 날 채움 (시작 갱신과 겹치지 않게 90초 뒤)
     while True:
         t = now()
         if is_trading(t.date()):
@@ -1405,6 +1441,12 @@ def scheduler():
             if key not in fired:
                 fired.add(key)
                 threading.Thread(target=news_push, args=(live, live and t.minute % 30 == 0), daemon=True).start()
+        # 사이트 '시장 수급': 거래일 20:12 · 그 뒤로도 빠진 날이 있으면 15분마다 (tools/market/flow_kiwoom.py)
+        if hm == "20:12" or t.minute % 15 == 0:
+            key = (str(t.date()), "flow", hm)
+            if key not in fired:
+                fired.add(key)
+                threading.Thread(target=flow_push, daemon=True).start()
         nx = [f"{x}" for times in SCHEDULE.values() for x in times if x > f"{t:%H:%M}"]
         STATE["next"] = min(nx) if nx and is_trading(t.date()) else None
         time.sleep(15)
@@ -1556,4 +1598,4 @@ if __name__ == "__main__":
         tg.setup(OUT)
     {"serve": serve, "run": lambda: refresh("manual"), "nxt": lambda: refresh_nxt("manual"), "am": lambda: refresh_am("manual"),
      "setup-kiwoom": setup_kiwoom, "setup-naver": setup_naver, "setup-telegram": _setup_tg,
-     "check": check, "results": fill_all}.get(cmd, serve)()
+     "check": check, "results": fill_all, "flow": lambda: flow_push(force=True)}.get(cmd, serve)()

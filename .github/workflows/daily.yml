@@ -54,6 +54,7 @@ jobs:
           gh release download closebet-data -p maangle.json -D cbnew || echo "이평각도 데이터(maangle.json) 없음"
           gh release download closebet-data -p turtle.bin -D cbnew || echo "터틀 데이터(turtle.bin) 없음"
           gh release download reports-data -p data.json -p ai.json -D rpnew || echo "리포트 요약 데이터 없음 (내 PC 의 tools/report_digest 가 하루 두 번 올림)"
+          gh release download flow-data -p market.json -D fwnew || echo "시장 수급 데이터 없음 (내 PC 의 tools/market/flow_kiwoom.py 가 거래일 20:12 에 올림)"
 
       - name: 배포된 기준일 읽기
         id: prev
@@ -149,6 +150,8 @@ jobs:
           [ -f prev/news.json ] && [ ! -f site/news.json ] && cp prev/news.json site/news.json && echo "시황판 뉴스 유지 (news.yml 이 따로 갱신)"
           if [ -f rpnew/data.json ]; then mkdir -p site/reports && cp rpnew/*.json site/reports/ && echo "리포트 요약 데이터 반영 (릴리스 reports-data)" || true;
           elif [ -d prev/reports ] && [ ! -d site/reports ]; then cp -r prev/reports site/reports && echo "리포트 요약 데이터 유지 (이전 배포)"; fi
+          if [ -f fwnew/market.json ]; then mkdir -p site/flow && cp fwnew/market.json site/flow/market.json && echo "시장 수급 데이터 반영 (릴리스 flow-data)";
+          elif [ -d prev/flow ] && [ ! -d site/flow ]; then cp -r prev/flow site/flow && echo "시장 수급 데이터 유지 (이전 배포)"; fi
           echo "deploy=true" >> "$GITHUB_OUTPUT"
 
       - name: gh-pages 브랜치에 배포
