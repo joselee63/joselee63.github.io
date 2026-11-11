@@ -6,6 +6,7 @@
   radar.bat setup-kiwoom  키움 앱키 등록 (입력값은 화면에 안 보이고 Windows 자격 증명 관리자에 저장)
   radar.bat setup-naver   네이버 검색 API 키 등록 (선택 — 없으면 뉴스는 '검색 링크'만)
   radar.bat check         연결 점검 (키 값은 출력하지 않음)
+  radar.bat min1          KODEX 200·인버스 1분봉 새 봉 받기 한 번 (radar-out/min1/ · 보드가 켜져 있으면 거래일 16:10 자동)
 
 데이터
   기초(전날 밤): 릴리스 closebet-data/radar_base.json  ← closebet.yml 18:37 (tools/closebet/radar_base.py)
@@ -1394,6 +1395,42 @@ def flow_push(force=False):
         log(f"시장 수급 수집 실패: {e!r}"[:200])
 
 
+_MIN1_TRIED = {}
+_MIN1_LOCK = threading.Lock()
+
+
+def min1_due(t=None):
+    """1분봉 저장소에 들어 있어야 할 마지막 거래일 — 거래일 16:10(장후 시간외 끝난 뒤)부터 그날, 그 전엔 앞 거래일"""
+    t = t or now()
+    d = t.date()
+    return d if is_trading(d) and t.time() >= dt.time(16, 10) else prev_trading(d)
+
+
+def min1_save(force=False):
+    """KODEX 200·인버스 1분봉 쌓기 (tools/radar/min1_etf.py → radar-out/min1/, 로컬 전용) · 끄려면 RADAR_MIN1=0
+    키움은 1분봉을 약 1년치만 줌 → 매일 덧붙여 장중 전략 재검증용 기록을 길게. 받을 날이 남았을 때만 (같은 기준일은 3번까지만)"""
+    if os.environ.get("RADAR_MIN1") == "0" or not KW.credentials():
+        if force:
+            log("1분봉: 키움 앱키가 없거나 RADAR_MIN1=0 이라 건너뜀")
+        return
+    if not _MIN1_LOCK.acquire(blocking=False):                    # 이미 받는 중
+        return
+    try:
+        import min1_etf
+        out = OUT / "min1"
+        want = min1_due().strftime("%Y%m%d")
+        if not force and min1_etf.last_complete(out) >= want:
+            return
+        if not force and _MIN1_TRIED.get(want, 0) >= 3:
+            return
+        _MIN1_TRIED[want] = _MIN1_TRIED.get(want, 0) + 1
+        min1_etf.collect(out, log=log)
+    except Exception as e:  # noqa: BLE001
+        log(f"1분봉 저장 실패: {e!r}"[:200])
+    finally:
+        _MIN1_LOCK.release()
+
+
 def scheduler():
     fired = set()
     try:
@@ -1403,6 +1440,7 @@ def scheduler():
     threading.Thread(target=prebuild_themes, daemon=True).start()
     threading.Thread(target=refresh, args=("start",), daemon=True).start()
     threading.Thread(target=lambda: (time.sleep(90), flow_push()), daemon=True).start()   # 켜자마자 빠진 날 채움 (시작 갱신과 겹치지 않게 90초 뒤)
+    threading.Thread(target=lambda: (time.sleep(150), min1_save()), daemon=True).start()  # 1분봉도 빠진 거래일이 있으면 채움
     while True:
         t = now()
         if is_trading(t.date()):
@@ -1447,6 +1485,12 @@ def scheduler():
             if key not in fired:
                 fired.add(key)
                 threading.Thread(target=flow_push, daemon=True).start()
+        # KODEX 200·인버스 1분봉 쌓기: 거래일 16:10 · 그 뒤로도 빠진 날이 있으면 15분마다 (tools/radar/min1_etf.py, 로컬 전용)
+        if hm == "16:10" or t.minute % 15 == 0:
+            key = (str(t.date()), "min1", hm)
+            if key not in fired:
+                fired.add(key)
+                threading.Thread(target=min1_save, daemon=True).start()
         nx = [f"{x}" for times in SCHEDULE.values() for x in times if x > f"{t:%H:%M}"]
         STATE["next"] = min(nx) if nx and is_trading(t.date()) else None
         time.sleep(15)
@@ -1598,4 +1642,5 @@ if __name__ == "__main__":
         tg.setup(OUT)
     {"serve": serve, "run": lambda: refresh("manual"), "nxt": lambda: refresh_nxt("manual"), "am": lambda: refresh_am("manual"),
      "setup-kiwoom": setup_kiwoom, "setup-naver": setup_naver, "setup-telegram": _setup_tg,
-     "check": check, "results": fill_all, "flow": lambda: flow_push(force=True)}.get(cmd, serve)()
+     "check": check, "results": fill_all, "flow": lambda: flow_push(force=True),
+     "min1": lambda: min1_save(force=True)}.get(cmd, serve)()
