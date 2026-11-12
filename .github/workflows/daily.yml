@@ -150,6 +150,7 @@ jobs:
           [ -f prev/news.json ] && [ ! -f site/news.json ] && cp prev/news.json site/news.json && echo "시황판 뉴스 유지 (news.yml 이 따로 갱신)"
           if [ -f rpnew/data.json ]; then mkdir -p site/reports && cp rpnew/*.json site/reports/ && echo "리포트 요약 데이터 반영 (릴리스 reports-data)" || true;
           elif [ -d prev/reports ] && [ ! -d site/reports ]; then cp -r prev/reports site/reports && echo "리포트 요약 데이터 유지 (이전 배포)"; fi
+          if [ -d prev/reports/px ] && [ ! -d site/reports/px ]; then mkdir -p site/reports && cp -r prev/reports/px site/reports/px && echo "리포트 종목 일봉 차트 유지 (reports.yml 이 갱신)"; fi
           if [ -f fwnew/market.json ]; then mkdir -p site/flow && cp fwnew/market.json site/flow/market.json && echo "시장 수급 데이터 반영 (릴리스 flow-data)";
           elif [ -d prev/flow ] && [ ! -d site/flow ]; then cp -r prev/flow site/flow && echo "시장 수급 데이터 유지 (이전 배포)"; fi
           echo "deploy=true" >> "$GITHUB_OUTPUT"

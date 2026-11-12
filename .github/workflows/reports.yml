@@ -25,6 +25,15 @@ jobs:
           gh release download reports-data -p data.json -p ai.json -D rp -R "$GITHUB_REPOSITORY"
           python3 -c "import json; d=json.load(open('rp/data.json')); print('리포트', len(d['recs']), '건 ·', d['built'])"
 
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: tools/report_digest
+          path: src
+
+      - name: 종목 상세 일봉 차트 데이터 (네이버 차트, 최근 2년)
+        continue-on-error: true
+        run: python3 src/tools/report_digest/px_charts.py rp/data.json rp/px
+
       - name: gh-pages 에 reports/ 만 반영
         run: |
           for i in 1 2 3; do
@@ -32,6 +41,7 @@ jobs:
             git clone -q --depth 1 --filter=blob:none --sparse -b gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages
             git -C pages sparse-checkout set reports
             mkdir -p pages/reports && cp rp/data.json rp/ai.json pages/reports/
+            [ -d rp/px ] && mkdir -p pages/reports/px && cp rp/px/*.json pages/reports/px/ 2>/dev/null || true
             cd pages
             git add -A reports
             if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
