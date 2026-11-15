@@ -1878,7 +1878,7 @@ header .lnk,header .status{color:var(--hd-mu)}
       });
       if (IND.bo || IND.ts) {
         var am = IND.bo ? ATRP.boM : ATRP.tsM, at = atrArr(S, am)[i];
-        h += '<span class="k">ATR' + am + " " + (at === null ? "-" : num(at, dec)) + "</span> ";
+        h += '<span class="k">ATR' + am + " " + (at === null ? "-" : num(at, dec)) + " (어제까지 · 오늘 봉은 내일 반영)</span> ";
       }
     }
     if (i !== G.cur) h += '<span class="k">' + (i - G.cur) + "일</span>";
