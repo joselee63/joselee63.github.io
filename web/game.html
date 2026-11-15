@@ -11,14 +11,14 @@
   --bg:#f4f5f7; --fg:#1d2127; --muted:#6b7280; --line:#e2e5ea; --soft:#f1f3f5; --card:#ffffff;
   --accent:#1f2937; --accent-fg:#ffffff; --hoverline:#c5cbd4; --grid:#eef0f3;
   --up:#E5383B; --dn:#1D63D8; --ok:#16a34a; --warn:#d97706;
-  --ma5:#E64980; --ma10:#22A35A; --ma20:#F4A100; --ma60:#9B5DE5; --ma120:#2A9D8F; --res:#E0479E; --sup:#00A6C8; --rf:#C77700;
+  --ma5:#E64980; --ma10:#22A35A; --ma20:#F4A100; --ma60:#9B5DE5; --ma120:#2A9D8F; --res:#E0479E; --sup:#00A6C8; --rf:#C77700; --bo:#E8590C; --ts:#7048E8;
   --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
   --ch:min(500px,46vh);                  /* 종목 차트 높이 (코스피 차트는 이것의 2/3) → 두 차트가 한 화면에 */
 }
 @media (prefers-color-scheme: dark){
   :root{ --bg:#0f1114; --fg:#e7e9ec; --muted:#9aa1ab; --line:#2a2f36; --soft:#1c1f24; --card:#171a1e;
          --accent:#e7e9ec; --accent-fg:#121417; --hoverline:#4a515c; --grid:#22262c;
-         --up:#ff5a5f; --dn:#4b8dff; --ma5:#f06595; --ma10:#3ccf78; --shadow:none; }
+         --up:#ff5a5f; --dn:#4b8dff; --ma5:#f06595; --ma10:#3ccf78; --bo:#ff8a3d; --ts:#9775fa; --shadow:none; }
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
@@ -69,6 +69,7 @@ canvas{display:block;width:100%;touch-action:none;cursor:crosshair}
 .tbtn svg{width:16px;height:16px;display:block;margin:auto}
 .tsep{height:1px;background:var(--line);margin:2px 4px}
 .tbtn[hidden],.tsep[hidden]{display:none}
+@media (max-height:900px){ .tools{gap:3px;padding-top:3px} .tbtn{height:24px} }   /* 낮은 화면: 버튼 12개가 차트(46vh) 안에 들어가게 */
 #cv.drawing{cursor:crosshair}
 #cv{height:var(--ch)}
 #cv.ext1{height:calc(var(--ch) + 84px)}           /* 보조 지표 칸(72px + 간격 12px)만큼 아래로 늘림 → 위 차트 크기는 그대로 */
@@ -223,7 +224,7 @@ h3{font-size:13.5px;margin:0 0 8px}
   .info{font-size:11.5px;padding:0 4px;min-height:40px}
   .info.kinfo{min-height:20px}
   .top .meta{display:none}
-  .tools{gap:4px;padding-top:4px} .tbtn{height:26px}   /* 휴대폰: 지표 버튼 10개가 차트 높이 안에 들어가게 */
+  .tools{gap:3px;padding-top:3px} .tbtn{height:22px} .tsep{margin:1px 4px}   /* 휴대폰: 지표·그리기 버튼 12개가 차트 높이 안에 들어가게 */
 }
 @media (max-width:520px){ .tab svg,.tab .sl{display:none} }
 
@@ -375,7 +376,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     </div>
     <div class="pane">
       <div class="info" id="info"></div>
-      <div class="prow"><div class="tools" id="tools" role="toolbar" aria-label="차트 지표"><button class="tbtn" type="button" data-ind="ma" title="이동평균선 (5·10·20·60·120일)">MA</button><button class="tbtn" type="button" data-ind="rf" title="라운드 피겨 — 심리적 가격대">RF</button><div class="tsep" id="tsep"></div><button class="tbtn" type="button" data-ind="disp" title="이격도 — 종가 ÷ 이동평균 × 100 (거래량 아래 칸 · 기준 이동평균은 오른쪽 패널에서 설정)">이격</button><button class="tbtn" type="button" data-ind="angle" title="이평각도점수 (100점 만점) — 5·7·10·12·15·20·25·30·40·60일선 중 어제보다 오른 선의 점수 합 · 짧은 선일수록 큰 점수 (60일선 1점 → 5일선 5.5점, 0.5점씩) · 눌림(20점 이하) 뒤 80점 돌파 = ▲ 표시">각도</button><button class="tbtn" type="button" data-ind="hl" title="N일 고가·M일 저가 — 어제까지 N일의 최고가(빨강) · 어제까지 M일의 최저가(파랑) · 오늘 고가·저가를 새로 써도 오늘 선은 그대로, 내일부터 반영 · N·M은 오른쪽 패널에서 따로 설정">고저</button><div class="tsep"></div><button class="tbtn" type="button" data-draw="line" title="직선 — 두 점을 잇고 상승·하락률 표시 (끌거나 두 번 클릭 · Esc 취소)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 13L13 3"/><circle cx="3" cy="13" r="1.4" fill="currentColor"/><circle cx="13" cy="3" r="1.4" fill="currentColor"/></svg></button><button class="tbtn" type="button" data-draw="div3" title="3등분 선 — 두 가격 사이를 3등분">⅓</button><button class="tbtn" type="button" data-draw="div4" title="4등분 선 — 두 가격 사이를 4등분">¼</button><button class="tbtn" type="button" data-draw="undo" title="마지막 그림 지우기">↶</button><button class="tbtn" type="button" data-draw="clear" title="그림 모두 지우기">✕</button></div><canvas id="cv" aria-label="종목 일봉 차트"></canvas></div>
+      <div class="prow"><div class="tools" id="tools" role="toolbar" aria-label="차트 지표"><button class="tbtn" type="button" data-ind="ma" title="이동평균선 (5·10·20·60·120일)">MA</button><button class="tbtn" type="button" data-ind="rf" title="라운드 피겨 — 심리적 가격대">RF</button><div class="tsep" id="tsep"></div><button class="tbtn" type="button" data-ind="disp" title="이격도 — 종가 ÷ 이동평균 × 100 (거래량 아래 칸 · 기준 이동평균은 오른쪽 패널에서 설정)">이격</button><button class="tbtn" type="button" data-ind="angle" title="이평각도점수 (100점 만점) — 5·7·10·12·15·20·25·30·40·60일선 중 어제보다 오른 선의 점수 합 · 짧은 선일수록 큰 점수 (60일선 1점 → 5일선 5.5점, 0.5점씩) · 눌림(20점 이하) 뒤 80점 돌파 = ▲ 표시">각도</button><button class="tbtn" type="button" data-ind="hl" title="N일 고가·M일 저가 — 어제까지 N일의 최고가(빨강) · 어제까지 M일의 최저가(파랑) · 오늘 고가·저가를 새로 써도 오늘 선은 그대로, 내일부터 반영 · N·M은 오른쪽 패널에서 따로 설정">고저</button><button class="tbtn" type="button" data-ind="bo" title="돌파선 — 어제까지 N일 최고가(주황 실선) · 거기에 ATR(M일) × j 를 더한 값(주황 점선) · 기본 240일 + 1×ATR(20일) · 오른쪽 패널에서 설정">돌파</button><button class="tbtn" type="button" data-ind="ts" title="추적 손절선 — 어제까지 N일 최고가 − k × ATR(M일) (보라 점선) · 기본 55일 − 2×ATR(20일) · 오른쪽 패널에서 설정">추적</button><div class="tsep"></div><button class="tbtn" type="button" data-draw="line" title="직선 — 두 점을 잇고 상승·하락률 표시 (끌거나 두 번 클릭 · Esc 취소)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 13L13 3"/><circle cx="3" cy="13" r="1.4" fill="currentColor"/><circle cx="13" cy="3" r="1.4" fill="currentColor"/></svg></button><button class="tbtn" type="button" data-draw="div3" title="3등분 선 — 두 가격 사이를 3등분">⅓</button><button class="tbtn" type="button" data-draw="div4" title="4등분 선 — 두 가격 사이를 4등분">¼</button><button class="tbtn" type="button" data-draw="undo" title="마지막 그림 지우기">↶</button><button class="tbtn" type="button" data-draw="clear" title="그림 모두 지우기">✕</button></div><canvas id="cv" aria-label="종목 일봉 차트"></canvas></div>
       <div class="gbub" id="gbub" hidden aria-live="polite"></div>
     </div>
     <div class="loading" id="loading">종목을 고르는 중…</div>
@@ -436,6 +437,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       <label class="gtog" title="포지션이 없을 때 매도(S)를 누르면 공매도(숏)로 진입 · 숏은 매수(B)로 환매해 청산 · 숏 한도는 자산의 100%"><input type="checkbox" id="shortOn"> 숏(공매도) 허용</label>
       <label class="gtog" title="이격도 = 종가 ÷ N일 이동평균 × 100 (100 위 = 이동평균보다 위) · 차트 툴바 '이격' 버튼으로 켜고 끄기">이격도 기준 <input type="number" id="dispN" min="2" max="240" step="1" value="20" style="width:52px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit"> 일 이동평균</label>
       <label class="gtog" title="N일 고가 = 어제까지 N일의 최고가 · M일 저가 = 어제까지 M일의 최저가 (오늘 봉은 내일부터 반영) · 차트 툴바 '고저' 버튼으로 켜고 끄기">고가 <input type="number" id="hlN" min="2" max="240" step="1" value="20" style="width:52px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit"> 일 · 저가 <input type="number" id="hlM" min="2" max="240" step="1" value="20" style="width:52px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit"> 일 (어제까지)</label>
+      <label class="gtog" title="돌파선 = 어제까지 N일 최고 고가 + j × 어제 ATR(M일) · ATR = M일 평균 진폭(고가·전일 종가 중 큰 값 − 저가·전일 종가 중 작은 값) · 차트 툴바 '돌파' 버튼으로 켜고 끄기">돌파선 고가 <input type="number" id="boN" min="2" max="250" step="1" value="240" style="width:52px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit"> 일 + <input type="number" id="boJ" min="0" max="5" step="0.1" value="1" style="width:44px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit"> × ATR <input type="number" id="boM" min="2" max="120" step="1" value="20" style="width:52px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit"> 일</label>
+      <label class="gtog" title="추적 손절선 = 어제까지 N일 최고 고가 − k × 어제 ATR(M일) · 보유 중 손절선으로 쓸 때는 올라가기만 함 (차트에는 그날그날 값 그대로) · 차트 툴바 '추적' 버튼으로 켜고 끄기">추적선 고가 <input type="number" id="tsN" min="2" max="250" step="1" value="55" style="width:52px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit"> 일 − <input type="number" id="tsK" min="0" max="10" step="0.1" value="2" style="width:44px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit"> × ATR <input type="number" id="tsM" min="2" max="120" step="1" value="20" style="width:52px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit"> 일</label>
       <div class="keys"><span><kbd>B</kbd>매수·환매</span><span><kbd>H</kbd>다음</span><span><kbd>S</kbd>매도·공매도</span><span><kbd>N</kbd>다음 종목</span><span><kbd>1</kbd>~<kbd>5</kbd>비중</span></div>
     </div>
 
@@ -468,13 +471,20 @@ header .lnk,header .status{color:var(--hd-mu)}
   var IDX_MAS = [10, 20, 60, 120];                    // 위쪽 시장 지수 차트 이동평균
   var RF = MKT.rf || [];                              // 라운드 피겨 가격 (한국만 설정됨)
   var IND_KEY = "krsc_game_ind" + (MKT.market === "kr" ? "" : "_" + MKT.market);
-  var IND = { ma: true, rf: false, disp: false, angle: false, hl: false };
+  var IND = { ma: true, rf: false, disp: false, angle: false, hl: false, bo: false, ts: false };
   var ANG_P = [5, 7, 10, 12, 15, 20, 25, 30, 40, 60];      // 이평각도점수 이평선 10개 (검증한 개선판)
   var ANG_W = ANG_P.map(function(_, k){ return 1 + 0.5 * (ANG_P.length - 1 - k); });   // 가중치: 60일선 1점 … 5일선 5.5점 (짧을수록 +0.5)
   var ANG_WS = ANG_W.reduce(function(x, y){ return x + y; }, 0);                          // 합 32.5 → 100점 만점으로 환산
   var DISP_KEY = "krsc_game_dispn", DISP_N = Math.max(2, Math.min(240, +store(function(){ return localStorage.getItem(DISP_KEY); }) || 20));                  // 종목 차트 오버레이 지표 (툴바 토글, 브라우저에 기억)
   var HL_KEY = "krsc_game_hln", HL_N = Math.max(2, Math.min(240, +store(function(){ return localStorage.getItem(HL_KEY); }) || 20));                         // N일 고가 기간
   var LO_KEY = "krsc_game_lom", LO_M = Math.max(2, Math.min(240, +store(function(){ return localStorage.getItem(LO_KEY); }) || 20));                         // M일 저가 기간
+  // 돌파선(N일 최고가 + j×ATR) · 추적 손절선(N일 최고가 − k×ATR) — 기본값은 연구 '정배열 240일 돌파' (240일 + 1ATR · 55일 − 2ATR, ATR 20일)
+  var ATRP_KEY = "krsc_game_atrp", ATRP_LIM = { boN: [2, 250], boJ: [0, 5], boM: [2, 120], tsN: [2, 250], tsK: [0, 10], tsM: [2, 120] };
+  var ATRP = (function(){
+    var d = { boN: 240, boJ: 1, boM: 20, tsN: 55, tsK: 2, tsM: 20 }, sv = store(function(){ return JSON.parse(localStorage.getItem(ATRP_KEY) || "{}"); }) || {};
+    for (var k in d) { var v = +sv[k]; if (sv[k] !== null && sv[k] !== undefined && sv[k] !== "" && isFinite(v) && v >= ATRP_LIM[k][0] && v <= ATRP_LIM[k][1]) d[k] = v; }
+    return d;
+  })();
   // 규칙 도우미 — 매수 경고 · 손절선 · 추적 손절선 (수치는 여기서 조정)
   var RULE = {
     chaseK: 2,           // 추격 = 오늘 상승 ≥ 평소 하루 변동(σ)의 2배, 또는 5일 상승 ≥ 평소 5일 변동(σ√5)의 2배
@@ -591,6 +601,8 @@ header .lnk,header .status{color:var(--hd-mu)}
       f: function(P, i){ return P.d.c[i] > hiN(P.d.c, i - 1, (MKT.bpy || 252) - 1); } },
     { id: "brk60", g: "종목", t: "60일 신고가 돌파한 날 (종가가 직전 60일 최고 종가 위로 마감)",
       f: function(P, i){ return P.d.c[i] > hiN(P.d.c, i - 1, 59); } },
+    { id: "brkN", g: "종목", t: "N일 최고가 돌파한 날 (종가가 어제까지 N일 최고 고가 위로 마감)", inp: { def: 240, min: 2, max: 250, suf: "일 (차트 '돌파' 지표의 실선과 같은 기준)" },
+      f: function(P, i){ var h = chanArr(P.d, condVal("brkN"), true)[i]; return h !== null && P.d.c[i] > h; } },
     { id: "pull", g: "종목", t: "상승 중 눌림목 (20일 고점 대비 −10% 이상, 60일선 위)",
       f: function(P, i){ return P.d.c[i] <= hiN(P.d.h, i, 20) * 0.9 && P.d.c[i] > P.ma[60][i]; } },
     { id: "vol", g: "종목", t: "거래량 급증 (20일 평균의 2배 이상)",
@@ -599,12 +611,15 @@ header .lnk,header .status{color:var(--hd-mu)}
       f: function(P, i){ return (hiN(P.d.h, i, 20) - loN(P.d.l, i, 20)) / P.d.c[i] <= 0.12; } },
     { id: "tlbreak", g: "종목", t: "저항 추세선을 돌파한 날 (종가가 장기 저항선 +1% 위로 처음 마감)",
       f: function(P, i){ return aboveRes(P, i) && !aboveRes(P, i - 1); } },
+    { id: "earn", g: "실적 (DART 분기 공시)", t: "영업이익 성장률 상위", inp: { def: 40, min: 1, max: 99, suf: "% 안 + 흑자 (그 시점에 공시된 최신 분기 · 전년 같은 분기 대비 · 전월 말 시총 5000억↑ 종목과 비교 · 흑자 = 영업이익·최근 4분기 순이익 모두 +)" },
+      f: function(P, i){ var e = P.d.eg ? P.d.eg[i] : 0; return e > 0 && e - 1 >= 100 - condVal("earn"); } },
     { id: "kbull", g: "시장 (" + MKT.index_label + ")", t: MKT.index_name + " 60·120일선 정배열 (상승장)", x: "kbear",
       f: function(P, i){ return !!P.k && P.k.ma[60][i] > P.k.ma[120][i]; } },
     { id: "kbear", g: "시장 (" + MKT.index_label + ")", t: MKT.index_name + " 60·120일선 역배열 (하락장)", x: "kbull",
       f: function(P, i){ return !!P.k && P.k.ma[60][i] < P.k.ma[120][i]; } }
   ];
   if (MKT.market === "coin") CONDS = CONDS.filter(function(c){ return c.id !== "cap1t"; });   // 코인은 시가총액 자료 없음
+  if (MKT.market !== "kr") CONDS = CONDS.filter(function(c){ return c.id !== "earn"; });      // 실적 자료(DART)는 한국만
   var COND_KEY = "krsc_game_conds" + KEY_SUFFIX;
   var condOn = (store(function(){ return JSON.parse(localStorage.getItem(COND_KEY) || "[]"); }) || []);
   function activeConds(){ return CONDS.filter(function(c){ return condOn.indexOf(c.id) >= 0; }); }
@@ -624,7 +639,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     });
     $("condlist").innerHTML = h;
     var a = activeConds();
-    $("condsum").textContent = a.length ? "조건 " + a.length + "개 적용" + (condOn.indexOf("rs") >= 0 ? " · RS " + condVal("rs") + "↑" : "") : "조건 없음 · 전체 랜덤";
+    $("condsum").textContent = a.length ? "조건 " + a.length + "개 적용" + (condOn.indexOf("rs") >= 0 ? " · RS " + condVal("rs") + "↑" : "") + (condOn.indexOf("earn") >= 0 ? " · 영업이익 상위 " + condVal("earn") + "%" : "") + (condOn.indexOf("brkN") >= 0 ? " · " + condVal("brkN") + "일 돌파" : "") : "조건 없음 · 전체 랜덤";
     $("condsum").classList.toggle("on", a.length > 0);
   }
   function setCond(id, on){
@@ -642,7 +657,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     var n = d.c.length, k = null, sc = (pool && pool.scale) || 1;
     if (sc !== 1) {                                      // 미국: 센트(×100) 정수로 저장된 가격 되돌림
       var un = function(a){ return a.map(function(x){ return x / sc; }); };
-      d = { o: un(d.o), h: un(d.h), l: un(d.l), c: un(d.c), v: d.v, r: d.r, ko: d.ko, kh: d.kh, kl: d.kl, kc: d.kc, sh: d.sh, rs: d.rs };
+      d = { o: un(d.o), h: un(d.h), l: un(d.l), c: un(d.c), v: d.v, r: d.r, ko: d.ko, kh: d.kh, kl: d.kl, kc: d.kc, sh: d.sh, rs: d.rs, eg: d.eg };
     }
     if (d.kc && d.kc.length === n) {                     // 같은 날짜로 맞춘 코스피 (×100 정수로 저장됨)
       var dv = function(a){ return a.map(function(x){ return x / 100; }); };
@@ -1402,7 +1417,7 @@ header .lnk,header .status{color:var(--hd-mu)}
   }
   function colors(){
     return { up: css("--up"), dn: css("--dn"), fg: css("--fg"), mu: css("--muted"), grid: css("--grid"), line: css("--line"),
-             card: css("--card"), warn: css("--warn"), ok: css("--ok"), stop: css("--res"), trail: css("--sup"), ma: { 5: css("--ma5"), 10: css("--ma10"), 20: css("--ma20"), 60: css("--ma60"), 120: css("--ma120") } };
+             card: css("--card"), warn: css("--warn"), ok: css("--ok"), stop: css("--res"), trail: css("--sup"), bo: css("--bo"), ts: css("--ts"), ma: { 5: css("--ma5"), 10: css("--ma10"), 20: css("--ma20"), 60: css("--ma60"), 120: css("--ma120") } };
   }
 
   function draw(){
@@ -1412,7 +1427,7 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (G.k) drawChart(kcv, G.k, G.k.ma, C, { dec: 2, mas: IDX_MAS });
     var nExt = (IND.disp ? 1 : 0) + (IND.angle ? 1 : 0);
     cv.classList.toggle("ext1", nExt === 1); cv.classList.toggle("ext2", nExt === 2);
-    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, drawings: true, avg: G.qty ? G.avg : null, guide: GUIDE && !G.done ? guideLines() : null, dec: PDEC, mas: RF.length && !IND.ma ? [] : MAS, rf: RF.length && IND.rf ? RF : null, disp: IND.disp ? DISP_N : 0, angle: !!IND.angle, hl: IND.hl ? { n: HL_N, m: LO_M } : 0 });
+    drawChart(cv, G.d, G.ma, C, { vol: true, trades: true, drawings: true, avg: G.qty ? G.avg : null, guide: GUIDE && !G.done ? guideLines() : null, dec: PDEC, mas: RF.length && !IND.ma ? [] : MAS, rf: RF.length && IND.rf ? RF : null, disp: IND.disp ? DISP_N : 0, angle: !!IND.angle, hl: IND.hl ? { n: HL_N, m: LO_M } : 0, atr: (IND.bo || IND.ts) ? { bo: IND.bo, ts: IND.ts } : 0 });
     renderInfo(hover >= 0 ? hover : G.cur);
     placeGuide();
   }
@@ -1456,6 +1471,34 @@ header .lnk,header .status{color:var(--hd-mu)}
     return (S._hl[key] = out);
   }
   function hlArr(S, n, m){ return { h: chanArr(S, n, true), l: chanArr(S, m, false) }; }
+  function atrArr(S, m){                                 // 하루 밀린 ATR: i번째 봉 값 = i−m ~ i−1 봉 진폭(True Range)의 평균 → 오늘 봉은 내일부터 반영
+    var key = "a" + m; S._hl = S._hl || {};
+    if (S._hl[key]) return S._hl[key];
+    var len = S.c.length, tr = new Array(len), out = new Array(len).fill(null), sum = 0, i;
+    for (i = 0; i < len; i++) tr[i] = i ? Math.max(S.h[i], S.c[i - 1]) - Math.min(S.l[i], S.c[i - 1]) : S.h[i] - S.l[i];
+    for (i = 1; i < len; i++) {
+      sum += tr[i - 1]; if (i - 1 >= m) sum -= tr[i - 1 - m];
+      if (i >= m + 1) out[i] = sum / m;                  // 전일 종가가 있는 진폭 m개 (첫 봉 제외)
+    }
+    return (S._hl[key] = out);
+  }
+  function atrLine(S, n, m, k){                          // 어제까지 N일 최고가 + k × 어제 ATR(M일)  (k 음수 = 추적 손절선)
+    var key = "L" + n + "_" + m + "_" + k; S._hl = S._hl || {};
+    if (S._hl[key]) return S._hl[key];
+    var h = chanArr(S, n, true), a = atrArr(S, m), out = new Array(h.length).fill(null);
+    for (var i = 0; i < h.length; i++) if (h[i] !== null && a[i] !== null) out[i] = h[i] + k * a[i];
+    return (S._hl[key] = out);
+  }
+  function atrLines(S, o){                               // 켜진 돌파선·추적선 → [{ arr, c(색 이름), dash, lab }]
+    var L = [];
+    if (!o) return L;
+    if (o.bo) {
+      L.push({ arr: chanArr(S, ATRP.boN, true), c: "bo", dash: null, lab: ATRP.boN + "일 고가" });
+      if (ATRP.boJ > 0) L.push({ arr: atrLine(S, ATRP.boN, ATRP.boM, ATRP.boJ), c: "bo", dash: [5, 3], lab: "+" + ATRP.boJ + "ATR" });
+    }
+    if (o.ts) L.push({ arr: atrLine(S, ATRP.tsN, ATRP.tsM, -ATRP.tsK), c: "ts", dash: [5, 3], lab: ATRP.tsN + "일 고가 −" + ATRP.tsK + "ATR" });
+    return L;
+  }
   function drawChart(canvas, S, ma, C, opt){
     var L_MAS = opt.mas || MAS;                          // 이 차트에 그릴 이동평균
     var ctx = canvas.getContext("2d");
@@ -1481,6 +1524,8 @@ header .lnk,header .status{color:var(--hd-mu)}
     if (opt.avg) { hi = Math.max(hi, opt.avg); lo = Math.min(lo, opt.avg); }
     var hlv = opt.hl ? hlArr(S, opt.hl.n, opt.hl.m) : null;
     if (hlv) for (i = a; i <= b; i++) { if (hlv.h[i] !== null) hi = Math.max(hi, hlv.h[i]); if (hlv.l[i] !== null) lo = Math.min(lo, hlv.l[i]); }
+    var atl = atrLines(S, opt.atr);
+    atl.forEach(function(z){ for (var q = a; q <= b; q++) if (z.arr[q] !== null) { hi = Math.max(hi, z.arr[q]); lo = Math.min(lo, z.arr[q]); } });
     if (opt.guide) { lo = Math.min(lo, opt.guide.stop); hi = Math.max(hi, opt.guide.stop); if (opt.guide.target) { hi = Math.max(hi, opt.guide.target); lo = Math.min(lo, opt.guide.target); } }
     var fe = opt.trades && G.focus !== null && G.evals ? G.evals.entries.filter(function(e){ return e.idx === G.focus; })[0] : null;
     if (fe) { lo = Math.min(lo, fe.L.sup.v); if (fe.L.res) hi = Math.max(hi, fe.L.res.v); }
@@ -1632,6 +1677,22 @@ header .lnk,header .status{color:var(--hd-mu)}
       });
       ctx.restore();
     }
+    // 돌파선 · 추적 손절선 (어제까지 기준) — 같은 계단선, 실선 = N일 고가 · 점선 = ±ATR
+    if (atl.length) {
+      ctx.save(); ctx.lineWidth = 1.5; ctx.globalAlpha = .9;
+      atl.forEach(function(z){
+        var on3 = false;
+        ctx.strokeStyle = C[z.c]; ctx.setLineDash(z.dash || []); ctx.beginPath();
+        for (var q = a; q <= b; q++) {
+          if (z.arr[q] === null) { on3 = false; continue; }
+          var yq = Math.round(Y(z.arr[q])) + 0.5, x0 = X(q) - sw / 2;
+          on3 ? ctx.lineTo(x0, yq) : ctx.moveTo(x0, yq);
+          ctx.lineTo(x0 + sw, yq); on3 = true;
+        }
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
 
     // 캔들
     for (i = a; i <= b; i++) {
@@ -1726,6 +1787,14 @@ header .lnk,header .status{color:var(--hd-mu)}
       });
       ctx.lineWidth = 1;
     }
+    atl.forEach(function(z){                             // 돌파선·추적선 오늘 값 라벨 (테두리만 색칠, 점선 = ±ATR 선)
+      var v = z.arr[b]; if (v === null) return;
+      var yt = Math.round(Y(v)), cz = C[z.c];
+      ctx.fillStyle = C.card; ctx.fillRect(plotW + 1, yt - 9, AX - 4, 18);
+      ctx.strokeStyle = cz; ctx.lineWidth = 1.2; ctx.setLineDash(z.dash ? [3, 2] : []); ctx.strokeRect(plotW + 1.5, yt - 8.5, AX - 5, 17); ctx.setLineDash([]);
+      ctx.fillStyle = cz; ctx.textAlign = "left"; ctx.font = bold; ctx.fillText(num(v, opt.dec), plotW + 6, yt);
+      ctx.lineWidth = 1;
+    });
     dashed(last, lc, .8, [3, 3]);
     if (opt.avg) {                                       // 현재가 라벨과 겹치면 평단 라벨을 비켜 그림
       var gapY = Y(opt.avg) - Y(last);
@@ -1803,6 +1872,13 @@ header .lnk,header .status{color:var(--hd-mu)}
         var hv = hlArr(S, HL_N, LO_M);
         h += '<span style="color:var(--up)">' + HL_N + "일 고가 " + (hv.h[i] === null ? "-" : num(hv.h[i], dec)) + "</span> " +
              '<span style="color:var(--dn)">' + LO_M + "일 저가 " + (hv.l[i] === null ? "-" : num(hv.l[i], dec)) + '</span> <span class="k">(어제까지)</span>';
+      }
+      atrLines(S, { bo: IND.bo, ts: IND.ts }).forEach(function(z){
+        h += '<span style="color:var(--' + z.c + ')">' + z.lab + " " + (z.arr[i] === null ? "-" : num(z.arr[i], dec)) + "</span> ";
+      });
+      if (IND.bo || IND.ts) {
+        var am = IND.bo ? ATRP.boM : ATRP.tsM, at = atrArr(S, am)[i];
+        h += '<span class="k">ATR' + am + " " + (at === null ? "-" : num(at, dec)) + "</span> ";
       }
     }
     if (i !== G.cur) h += '<span class="k">' + (i - G.cur) + "일</span>";
@@ -1989,9 +2065,21 @@ header .lnk,header .status{color:var(--hd-mu)}
       if (G) draw();
     });
   });
+  Object.keys(ATRP).forEach(function(id){
+    $(id).value = ATRP[id];
+    $(id).addEventListener("change", function(){
+      var lim = ATRP_LIM[id], dec = id === "boJ" || id === "tsK", v = +this.value;
+      v = this.value !== "" && isFinite(v) ? (dec ? Math.round(v * 10) / 10 : Math.round(v)) : ATRP[id];
+      v = Math.max(lim[0], Math.min(lim[1], v)); this.value = v; this.blur(); ATRP[id] = v;
+      store(function(){ localStorage.setItem(ATRP_KEY, JSON.stringify(ATRP)); });
+      var ind = id.slice(0, 2);
+      if (!IND[ind]) { IND[ind] = true; store(function(){ localStorage.setItem(IND_KEY, JSON.stringify(IND)); }); syncTools(); }   // 값을 바꾸면 바로 보이게
+      if (G) draw();
+    });
+  });
   {
     var saved = store(function(){ return JSON.parse(localStorage.getItem(IND_KEY) || "null"); });
-    if (saved) { IND.ma = saved.ma !== false; IND.rf = !!saved.rf; IND.disp = !!saved.disp; IND.angle = !!saved.angle; IND.hl = !!saved.hl; }
+    if (saved) { IND.ma = saved.ma !== false; IND.rf = !!saved.rf; IND.disp = !!saved.disp; IND.angle = !!saved.angle; IND.hl = !!saved.hl; IND.bo = !!saved.bo; IND.ts = !!saved.ts; }
     $("chartcard").classList.add("has-tools");
     var syncTools = function(){
       var bs = document.querySelectorAll("#tools .tbtn");

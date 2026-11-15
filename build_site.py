@@ -733,6 +733,46 @@ def bench_of(code, listing=None, exch=None):
     return MK["index"]
 
 
+GAME_EARN = os.path.join(ROOT, "data-game", "earn_kr.json")   # 차트 게임 '영업이익 필터' 조건용 실적 (tools/game_earn.py 로 내 PC 에서 만듦)
+
+
+def load_game_earn():
+    if MARKET != "kr" or not os.path.exists(GAME_EARN):
+        return None
+    with open(GAME_EARN, encoding="utf-8") as f:
+        e = json.load(f)
+    e["thr"] = {k: np.array(v) for k, v in e["thr"].items()}
+    return e
+
+
+def game_earn_series(earn, code, idx):
+    """
+    봉마다 영업이익 값 하나 (정수): 0 = 자료 없음 · 양수 = 흑자 · 음수 = 흑자 아님, 절댓값 − 1 = 성장률 백분위(0~99)
+      · 그날 알 수 있는 최신 분기(알게 된 날 < 그날)의 성장률을 전월 말 시총 5000억↑ 종목 분포와 비교
+      · 흑자 = 영업이익 > 0 · 최근 4분기 순이익 합 > 0 (판단 못 하면 0)
+    """
+    q = earn["q"].get(code)
+    if not q:
+        return None
+    kn = np.array([r[0] for r in q])
+    d8 = np.array([int(x.strftime("%Y%m%d")) for x in idx])
+    js = np.searchsorted(kn, d8, side="left") - 1
+    gq = np.array([np.nan if r[1] is None else r[1] for r in q] + [np.nan])
+    pq = np.array([np.nan if r[2] is None else r[2] for r in q] + [np.nan])
+    g, p = gq[js], pq[js]                                  # j = −1 → 마지막 칸(NaN) = 자료 없음
+    mk = d8 // 100
+    out = np.zeros(len(d8), dtype=int)
+    for m in np.unique(mk):
+        t = earn["thr"].get(str(m))
+        if t is None:
+            continue
+        sel = (mk == m) & np.isfinite(g) & np.isfinite(p)
+        pct = np.searchsorted(t, g[sel], side="right")    # 분위값(1~99%) 중 g 이하인 개수 → 'g ≥ 60% 분위' 이면 60 이상
+        out[sel] = (pct + 1) * np.where(p[sel] == 1, 1, -1)
+    out = out.tolist()
+    return out if any(out) else None
+
+
 def write_game_data(data, sections, build_id, listing=None, exch=None, caps=None):
     """
     차트 게임용 데이터: site/game/{번호}.json (종목마다 하나) + site/game/pool.json (개수)
@@ -763,6 +803,7 @@ def write_game_data(data, sections, build_id, listing=None, exch=None, caps=None
     cnt = sc_.notna().sum(axis=1)
     rs_all = (sc_.rank(axis=1, pct=True) * 98 + 1).round()
     rs_all = rs_all.where(cnt >= 30, axis=0)
+    earn = load_game_earn()
     gdir = os.path.join(SITE_DIR, "game")
     os.makedirs(gdir, exist_ok=True)
     for i, (c, nm, s) in enumerate(pool):
@@ -776,6 +817,10 @@ def write_game_data(data, sections, build_id, listing=None, exch=None, caps=None
                for k, col in [("o", "Open"), ("h", "High"), ("l", "Low"), ("c", "Close")]}
         rec["v"] = [int(round(x)) for x in df["Volume"].values]
         rec["rs"] = [0 if pd.isna(x) else int(x) for x in rs_all[c].reindex(df.index).values]
+        if earn:
+            ev = game_earn_series(earn, c, df.index)
+            if ev is not None:
+                rec["eg"] = ev
         if kospi is not None:
             k = kospi.reindex(df.index).ffill().bfill()          # 지수에 없는 날은 직전 값으로
             if k["Close"].notna().all():
