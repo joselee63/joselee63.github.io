@@ -1,6 +1,12 @@
 [
 {
 "date": "2026-11-20",
+"kind": "close",
+"file": "2026-11-20_close.html",
+"v": 1795162197
+},
+{
+"date": "2026-11-20",
 "kind": "morning",
 "file": "2026-11-20_morning.html",
 "v": 1795127319
