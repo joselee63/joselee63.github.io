@@ -1,0 +1,450 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>☀️ 모닝브리핑 — 2026-11-12 (목)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+/* 사이트(joselee63.github.io) '섹터 강도' 화면과 같은 디자인: 블랙·화이트·그레이, 둥근 카드, 회색 머리띠, 빨강 상승·파랑 하락 */
+:root{
+  --bg:#fbfbfd; --card:#ffffff; --ink:#1d1d1f; --sub:#6e6e73; --line:rgba(0,0,0,.07); --soft:#f2f2f4; --band:#f5f5f7;
+  --up:#E5383B; --down:#1D63D8; --accent:#1d1d1f; --accent-fg:#ffffff; --accent-soft:#f2f2f4; --pill-hover:rgba(0,0,0,.05);
+  --th:#f5f5f7; --zebra:#fafafb; --badge:rgba(217,119,6,.13); --badge-ink:#b45309;
+  --judge:rgba(22,163,74,.08); --judge-line:#16a34a;
+  --in-bg:rgba(229,56,59,.12); --in-ink:#E5383B; --out-bg:rgba(29,99,216,.12); --out-ink:#1D63D8; --imp-bg:rgba(217,119,6,.13); --imp-ink:#b45309;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 10px 32px rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#000000; --card:#1c1c1e; --ink:#f5f5f7; --sub:#98989d; --line:rgba(255,255,255,.09); --soft:#2c2c2e; --band:#232325;
+    --up:#ff5a5f; --down:#4b8dff; --accent:#f5f5f7; --accent-fg:#1d1d1f; --accent-soft:#2c2c2e; --pill-hover:rgba(255,255,255,.08);
+    --th:#232325; --zebra:#202022; --badge:rgba(251,191,36,.15); --badge-ink:#fbbf24;
+    --judge:rgba(63,207,134,.10); --judge-line:#3fcf86;
+    --in-bg:rgba(255,90,95,.16); --in-ink:#ff8a8e; --out-bg:rgba(75,141,255,.16); --out-ink:#8cb6ff; --imp-bg:rgba(251,191,36,.14); --imp-ink:#fbbf24;
+    --shadow:0 0 0 1px rgba(255,255,255,.05),0 10px 32px rgba(0,0,0,.55);
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  font-size:15px;line-height:1.65;letter-spacing:-.01em;-webkit-font-smoothing:antialiased}
+.wrap{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+.hero{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:18px;
+  padding:24px 26px 20px;box-shadow:var(--shadow)}
+.hero .kind{font-size:12px;letter-spacing:.08em;color:var(--sub);font-weight:700}
+.hero h1{margin:4px 0 14px;font-size:26px;line-height:1.3;letter-spacing:-.6px}
+.hero .summary{background:var(--band);border-radius:14px;padding:14px 18px}
+.hero .summary p,.hero .summary li{margin:4px 0}
+.hero .summary ol,.hero .summary ul{margin:0;padding-left:20px}
+.hero .summary blockquote{margin:0;padding:0;border:0;background:none}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0 4px}
+nav.toc a{font-size:13px;text-decoration:none;color:var(--ink);background:var(--card);box-shadow:inset 0 0 0 1px var(--line);
+  padding:6px 13px;border-radius:980px;font-weight:600;white-space:nowrap;transition:background .15s}
+@media (hover:hover){ nav.toc a:hover{background:var(--pill-hover)} }
+section.card{background:var(--card);border:1px solid var(--line);border-radius:18px;
+  padding:0 24px 20px;margin-top:16px;box-shadow:var(--shadow);scroll-margin-top:12px}
+section.card h2{font-size:17px;font-weight:700;letter-spacing:-.3px;line-height:1.4;margin:0 -24px 14px;padding:14px 24px 12px;
+  background:var(--band);border-bottom:1px solid var(--line);border-radius:17px 17px 0 0;display:flex;align-items:center;gap:10px}
+section.card h2 .num{display:inline-grid;place-items:center;min-width:26px;height:26px;border-radius:8px;
+  background:var(--accent);color:var(--accent-fg);font-size:13px}
+section.card h3{font-size:16px;margin:18px 0 6px}
+p{margin:8px 0} ul,ol{padding-left:22px;margin:6px 0} li{margin:4px 0}
+li::marker{color:var(--sub)}
+a{color:inherit;text-decoration:underline;text-decoration-color:rgba(127,127,127,.55);text-underline-offset:3px}
+a:hover{text-decoration-color:currentColor}
+.tbl{overflow-x:auto;margin:10px 0;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th{background:var(--th);color:var(--ink);font-weight:600;text-align:left;font-size:12.5px}
+th,td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:nth-child(even) td{background:var(--zebra)}
+tr:last-child td{border-bottom:0}
+td:first-child{font-weight:600}
+.up{color:var(--up);font-weight:700}.down{color:var(--down);font-weight:700}
+.src{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:6px;
+  background:var(--badge);color:var(--badge-ink);vertical-align:1px;white-space:nowrap}
+.yt{font-size:12px;margin-left:3px;opacity:.8;cursor:help;vertical-align:1px}
+.fold{padding-bottom:0}
+.fold details[open]{padding-bottom:20px}
+.fold details:not([open]) h2{border-radius:17px;border-bottom:0;margin-bottom:0}
+.fold summary{list-style:none;cursor:pointer}
+.fold summary::-webkit-details-marker{display:none}
+.fold h2 .hint{margin-left:auto;font-size:12px;font-weight:600;color:var(--sub)}
+.fold h2 .hint::after{content:" ▾"}
+.fold details[open] h2 .hint{font-size:0}
+.fold details[open] h2 .hint::after{content:"접기 ▴";font-size:12px}
+.judge{background:var(--judge);border-left:4px solid var(--judge-line);border-radius:10px;
+  padding:10px 14px;margin:12px 0}
+blockquote{margin:12px 0;padding:10px 16px;border-left:4px solid var(--sub);
+  background:var(--band);border-radius:10px}
+blockquote p{margin:4px 0}
+hr{border:0;border-top:1px solid var(--line);margin:24px 0}
+.foot{color:var(--sub);font-size:12.5px;margin-top:20px;text-align:center}
+.star{color:#f59e0b;letter-spacing:-1px;white-space:nowrap}
+/* ---- 가독성: 카드형 항목 · 라벨 · 소제목 ---- */
+section.card h3{font-size:15.5px;margin:22px 0 10px;padding:0 0 8px;border-bottom:1px solid var(--line)}
+section.card h3.flow{border:0;display:inline-block;padding:5px 12px;border-radius:999px;font-size:14.5px}
+section.card h3.flow.in{background:var(--in-bg);color:var(--in-ink)}
+section.card h3.flow.out{background:var(--out-bg);color:var(--out-ink)}
+ul.blks{list-style:none;padding:0;margin:10px 0;display:grid;grid-template-columns:1fr;gap:10px}
+.s-grid ul.blks{grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
+ul.blks>li{background:var(--band);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0}
+ul.blks>li>strong:first-child{font-size:15px}
+li.blk>ul,li.blk>ol{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:5px}
+li.blk>ul>li,li.blk>ol>li{margin:0;font-size:14px;line-height:1.6;color:var(--ink);padding-left:0;border:0}
+li.blk>ul>li::before{content:none}
+.lb{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.02em;padding:1px 7px;border-radius:6px;margin-right:7px;
+  vertical-align:1px;background:var(--soft);color:var(--sub);white-space:nowrap}
+.lb-1{background:var(--soft);color:var(--ink)}
+.lb-2{background:var(--imp-bg);color:var(--imp-ink)}
+.imp{margin-top:6px}
+section.card ol:not(.blks){list-style:none;padding:0;margin:8px 0;counter-reset:n}
+section.card ol:not(.blks)>li{counter-increment:n;position:relative;padding:12px 0 12px 38px;margin:0;border-bottom:1px solid var(--line)}
+section.card ol:not(.blks)>li:last-child{border-bottom:0}
+section.card ol:not(.blks)>li::before{content:counter(n);position:absolute;left:0;top:12px;width:26px;height:26px;border-radius:8px;
+  background:var(--soft);color:var(--ink);font-weight:800;font-size:13px;display:grid;place-items:center}
+section.card ol.blks{counter-reset:none}
+ul.blks>li.judge{background:var(--judge);border-color:var(--judge-line);border-left-width:4px}
+blockquote.judgeq{background:var(--judge);border-left-color:var(--judge-line)}
+section.card>ul:not(.blks)>li{margin:7px 0}
+@media (max-width:600px){
+  ul.blks{grid-template-columns:1fr}
+}
+@media (max-width:600px){
+  .wrap{padding:14px 12px 48px} .hero{padding:20px 18px 16px;border-radius:16px}
+  .hero h1{font-size:22px} section.card{padding:0 16px 16px}
+  section.card h2{margin:0 -16px 12px;padding:12px 16px 10px}
+  table{font-size:13px} th,td{padding:7px 9px}
+}
+@media print{body{background:#fff} section.card,.hero{box-shadow:none;break-inside:avoid}}
+</style></head><body><div class="wrap">
+<header class="hero"><div class="kind">MORNING BRIEFING</div><h1>☀️ 모닝브리핑 — 2026-11-12 (목)</h1>
+<div class="summary"><p><strong>3줄 요약</strong></p>
+<ol>
+<li>코어위브가 실적 호조와 매출 전망 상향으로 <span class="up">+24.7%</span> 오르고 필라델피아 반도체지수가 <span class="up">+5.66%</span> 뛰었다. 반도체 중심의 갭 상승 출발이 예상된다.</li>
+<li>코스피는 이틀 동안 약 7% 반등해 5,375p에 닿았다. 5,500p·20일선이 첫 저항이다. 외국인이 사흘째 순매수를 이어 가는지, 오늘 옵션 만기 물량이 어떻게 소화되는지가 관건이다.</li>
+<li>미 10년물 금리가 5.00%로 높다. 12월 금리 인상 우려(일부는 0.5%p 인상까지 거론)도 남아 있다. 반도체만 오르는 쏠림 장세가 다른 업종으로 퍼지는지 확인해야 한다.</li>
+</ol></div></header>
+<nav class="toc"><a href="#s1">시장 데이터</a><a href="#s2">수급</a><a href="#s3">중요 뉴스</a><a href="#s4">돈이 몰린 섹터</a><a href="#s5">향후 주요 일정</a><a href="#s6">선취매 관찰 후보 (투자 권유 아님</a></nav>
+<section class="card" id="s1"><h2><span class="num">1</span>시장 데이터</h2><div class="tbl"><table>
+<thead>
+<tr>
+<th>지표</th>
+<th>종가</th>
+<th>등락</th>
+<th>국내 연결고리</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>다우</td>
+<td>52,486.49</td>
+<td><span class="up">+0.49%</span></td>
+<td>경기·가치주 투자심리 무난</td>
+</tr>
+<tr>
+<td>S&amp;P500</td>
+<td>7,619.38</td>
+<td><span class="up">+1.31%</span></td>
+<td>11개 업종 중 10개 상승</td>
+</tr>
+<tr>
+<td>나스닥</td>
+<td>25,466.19</td>
+<td><span class="up">+1.60%</span></td>
+<td>이틀 하락 뒤 기술주 반등</td>
+</tr>
+<tr>
+<td>필라델피아 반도체</td>
+<td>10,564.11</td>
+<td><span class="up">+5.66%</span></td>
+<td>삼성전자·SK하이닉스·장비주 직접 수혜</td>
+</tr>
+<tr>
+<td>VIX</td>
+<td>17.49</td>
+<td><span class="down">−10.12%</span></td>
+<td>공포 진정, 위험선호 회복</td>
+</tr>
+<tr>
+<td>미 10년물</td>
+<td>5.00% (11/10)</td>
+<td><span class="up">+13.8bp</span></td>
+<td>CPI 충격 뒤 고금리 부담 지속</td>
+</tr>
+<tr>
+<td>달러인덱스</td>
+<td>102.90</td>
+<td><span class="up">+0.65%</span></td>
+<td>19개월 만의 최고, 신흥국 자금에 부담</td>
+</tr>
+<tr>
+<td>WTI / 브렌트</td>
+<td>86.53 / 92.63달러</td>
+<td><span class="up">+0.57%</span> / <span class="up">+1.25%</span></td>
+<td>정유 소폭 우호, 항공 부담</td>
+</tr>
+<tr>
+<td>금</td>
+<td>4,000.50달러</td>
+<td><span class="down">−0.74%</span></td>
+<td>안전자산 선호 약화</td>
+</tr>
+<tr>
+<td>비트코인</td>
+<td>약 7.6만 달러 <span class="src">추정</span></td>
+<td>11월 초 급락 뒤 약세권</td>
+<td>가상자산 관련주 반등 제한</td>
+</tr>
+<tr>
+<td>원/달러</td>
+<td>1,337.50원</td>
+<td><span class="down">−7.00원</span></td>
+<td>원화 강세, 외국인 매수에 우호</td>
+</tr>
+<tr>
+<td>코스피(전일)</td>
+<td>5,375.36</td>
+<td><span class="up">+2.60%</span></td>
+<td>5일선 돌파, 5,500p 저항</td>
+</tr>
+<tr>
+<td>코스닥(전일)</td>
+<td>705.10</td>
+<td><span class="up">+5.62%</span></td>
+<td>이틀 약 10% 급반등</td>
+</tr>
+</tbody>
+</table></div>
+<ul class="blks">
+<li class="blk"><strong>유가:</strong> 이란 관련 긴장으로 올랐다가, 미국·이란 대면 협상 추진 보도가 나오자 오름폭이 줄었다.</li>
+<li class="blk"><strong>금리:</strong> 10월 CPI가 높게 나오면서 10년물이 5%대에 올라섰다. 연준 위원들의 인상 발언이 이어지지만 이번 상승장에서는 주가에 크게 반영되지 않았다.</li>
+<li class="blk judge"><strong>판단:</strong> 오늘 국내 증시는 반도체를 앞세운 강세 출발이 예상된다. 다만 5,500p 부근에서는 매물을 소화해야 할 것으로 보인다.<ul>
+<li><span class="lb lb-3">근거</span>필라델피아 반도체 <span class="up">+5.66%</span>, 마이크론 <span class="up">+11.89%</span>, 원/달러 <span class="down">−7원</span></li>
+<li><span class="lb lb-6">체크</span>오늘은 옵션 만기일이라 장 막판 프로그램 물량에 변동성이 생길 수 있다</li>
+<li><span class="lb lb-4">리스크</span>외국인 매도 비중이 아직 30% 넘게 남아 있어, 순매수가 순매도로 돌아서면 급락할 수 있다</li>
+</ul>
+</li>
+</ul></section><section class="card" id="s2"><h2><span class="num">2</span>수급</h2><ul class="blks">
+<li class="blk"><strong>미국:</strong> AI 인프라(반도체·데이터센터)로 매수가 몰렸고, 대형 플랫폼주에서는 돈이 빠졌다.<ul>
+<li><span class="lb lb-3">근거</span>마이크론 <span class="up">+11.89%</span>, AMD <span class="up">+7.32%</span>, 오라클 <span class="up">+8.82%</span>, 브로드컴 <span class="up">+3.99%</span></li>
+<li><span class="lb lb-3">근거</span>마이크로소프트 <span class="down">−2.26%</span>, 메타 <span class="down">−1.97%</span>, 아마존 <span class="down">−1.74%</span> → 내년에도 대규모 설비투자(capex)가 이어질 것이라는 부담</li>
+<li><span class="lb lb-6">체크</span>코어위브 급등에는 공매도 청산(숏커버) 성격도 섞여 있다</li>
+</ul>
+</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>시장</th>
+<th>개인</th>
+<th>외국인</th>
+<th>기관</th>
+<th>기타법인<span class="src">추정</span></th>
+<th>프로그램 합계</th>
+<th>차익</th>
+<th>비차익</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>코스피</td>
+<td><span class="down">−7,145</span></td>
+<td><span class="up">+6,729</span></td>
+<td><span class="down">−5,034</span></td>
+<td><span class="up">+5,450</span></td>
+<td><span class="up">+2,569</span></td>
+<td><span class="down">−1,328</span></td>
+<td><span class="up">+3,897</span></td>
+</tr>
+<tr>
+<td>코스닥</td>
+<td><span class="down">−1,838</span></td>
+<td><span class="down">−1,354</span></td>
+<td><span class="up">+3,130</span></td>
+<td><span class="up">+62</span></td>
+<td><span class="down">−814</span></td>
+<td><span class="down">−9</span></td>
+<td><span class="down">−805</span></td>
+</tr>
+</tbody>
+</table></div>
+<ul class="blks">
+<li class="blk judge"><strong>판단:</strong> 외국인은 코스피 전기·전자를 중심으로 사흘째 순매수할 가능성이 크다. 다만 그 규모가 5,500p를 넘을 수 있느냐가 관건이다.<ul>
+<li><span class="lb lb-3">근거</span>비차익 <span class="up">+3,897억</span> 순매수, 원화 강세, 미국 반도체 급등</li>
+<li><span class="lb lb-6">체크</span>코스닥은 금융투자를 중심으로 기관이 거의 매일 순매수하고 있다. 기관이 차익실현에 나설 때 외국인이 그 물량을 받아 주는지 봐야 한다</li>
+<li><span class="lb lb-4">리스크</span>지수보다 많이 오른 업종이 반도체 계열뿐이어서, 상승이 넓게 퍼지지 못했다</li>
+</ul>
+</li>
+</ul></section><section class="card" id="s3"><h2><span class="num">3</span>중요 뉴스</h2><ol>
+<li><strong>코어위브, 3분기 매출 <span class="up">+168%</span>·연간 전망 상향에 <span class="up">+24.7%</span>.</strong> 수주잔고는 1,330억 달러로 늘었다. 회사는 내년 수요가 공급 능력의 약 10배라고 밝혔고, 고금리 자금 조달은 하지 않겠다고 해 부채 우려를 누그러뜨렸다(CNBC·한국경제).<br class="ib"><span class="lb lb-2 imp">영향</span>HBM·반도체 장비·기판·전력기기 — SK하이닉스, 한미반도체, 이수페타시스</li>
+<li><strong>엔비디아, 이틀 급락 뒤 <span class="up">+2.87%</span> 반등.</strong> 그러나 베어드는 CEO 관련 불확실성(의회 조사·정부 조치 가능성)을 이유로 투자의견을 중립으로 낮추고 목표가를 크게 내렸다(이데일리).<br class="ib"><span class="lb lb-2 imp">영향</span>엔비디아 공급망 전반의 변동성. 미 의회의 대중국 반도체 수출통제 법안 3건도 부담이다(한국경제TV)</li>
+<li><strong>달러인덱스 102.9, 19개월 만의 최고.</strong> CPI 충격 뒤 12월 금리 인상 전망이 커졌다. 일부 투자은행은 0.5%p 인상 가능성까지 언급했다(한국경제TV).<br class="ib"><span class="lb lb-2 imp">영향</span>원/달러 반등 여부. 성장주 밸류에이션에 부담</li>
+<li><strong>앤트로픽 상장 수요 강세.</strong> 기대 시가총액이 1.5조 달러까지 다시 거론되며 AI 투자심리를 지탱하고 있다. 상장 직후 지나치게 오르면 이후 후유증이 클 수 있다는 지적도 있다.<br class="ib"><span class="lb lb-2 imp">영향</span>AI 소프트웨어·데이터센터 관련주(전일 삼성전자·SK하이닉스 3거래일 반등, 아이뉴스24)</li>
+<li><strong>한진칼, 호반그룹과 경영권 분쟁에 <span class="down">−17.91%</span>.</strong> 보통주·우선주·대한항공이 하루에만 큰 폭으로 오르내렸다(국민일보·헤럴드경제).<br class="ib"><span class="lb lb-2 imp">영향</span>한진칼·한진칼우·대한항공 — 변동성이 커 단기 추격은 주의</li>
+<li><strong>공정위, 국고채 입찰 담합에 역대 최대 과징금.</strong> 증권사 10곳의 과징금이 1조 3,760억원이고, 일부는 3분기 실적을 적자로 수정했다(블로터·뉴스1).<br class="ib"><span class="lb lb-2 imp">영향</span>KB·NH·미래에셋 등 증권주 실적 부담</li>
+<li><strong>증권사들, 코스피 목표치 잇따라 하향.</strong> 지난 6월 '1만피'를 내걸었던 증권사들이 목표치를 4,000p 넘게 낮췄다(조선일보·데일리안).<br class="ib"><span class="lb lb-2 imp">영향</span>지수 상단 기대가 낮아져, 반등이 나와도 저항 매물에 부딪히기 쉽다</li>
+<li><strong>정부 자본시장 관련 회의, 13일 개최 보도.</strong> 일부 언론 보도여서 실제로 열릴지는 확인이 필요하다 <span class="src">예정·확인 필요</span>.<br class="ib"><span class="lb lb-2 imp">영향</span>증권·지주·코스닥 제도 관련주</li>
+</ol></section><section class="card s-grid" id="s4"><h2><span class="num">4</span>돈이 몰린 섹터</h2><h3>🇺🇸 미국</h3>
+<ul class="blks">
+<li class="blk"><strong>메모리 반도체</strong><ul>
+<li><span class="lb lb-0">종목</span>마이크론 <span class="up">+11.89%</span>, 샌디스크 약 <span class="up">+15%</span> <span class="src">추정</span></li>
+<li><span class="lb lb-1">이유</span>코어위브 수주잔고와 수요 발언으로 AI 데이터센터 투자가 내년까지 이어진다는 확신이 커졌다</li>
+<li>SK하이닉스·삼성전자로 바로 연결된다</li>
+</ul>
+</li>
+<li class="blk"><strong>AI 연산 칩·파운드리</strong><ul>
+<li><span class="lb lb-0">종목</span>AMD <span class="up">+7.32%</span>, TSMC <span class="up">+4.25%</span>, 브로드컴 <span class="up">+3.99%</span>, 엔비디아 <span class="up">+2.87%</span></li>
+<li><span class="lb lb-1">이유</span>AI 수요 우려가 누그러지면서 이틀간 낙폭이 컸던 종목에 반발 매수가 들어왔다</li>
+</ul>
+</li>
+<li class="blk"><strong>클라우드·데이터센터</strong><ul>
+<li><span class="lb lb-0">종목</span>코어위브 <span class="up">+24.7%</span>, 오라클 <span class="up">+8.82%</span></li>
+<li><span class="lb lb-1">이유</span>수주잔고 증가와 흑자 전환 계획 발표로 부채 우려가 줄었다</li>
+</ul>
+</li>
+<li class="blk"><strong>대형 플랫폼(자금 이탈)</strong><ul>
+<li><span class="lb lb-0">종목</span>마이크로소프트 <span class="down">−2.26%</span>, 메타 <span class="down">−1.97%</span>, 아마존 <span class="down">−1.74%</span></li>
+<li><span class="lb lb-1">이유</span><span class="src">추정</span> 설비투자 부담이 계속될 것이라는 우려에 차익실현이 겹쳤다</li>
+</ul>
+</li>
+</ul>
+<h3>🇰🇷 국내 (전일 11/11)</h3>
+<ul class="blks">
+<li class="blk">🟢 <strong>반도체 기판·PCB</strong><ul>
+<li><span class="lb lb-0">종목</span>코리아써키트 <span class="up">+28.20%</span>, 대덕전자 <span class="up">+16.88%</span>, 심텍 <span class="up">+16.51%</span></li>
+<li><span class="lb lb-1">이유</span>AI 서버용 기판 수요 기대와 미국 반도체 반등이 맞물렸다. 테마 상승률 <span class="up">+16.52%</span>로 1위</li>
+</ul>
+</li>
+<li class="blk">🟢 <strong>반도체 장비·HBM</strong><ul>
+<li><span class="lb lb-0">종목</span>원익IPS <span class="up">+19.44%</span>, 주성엔지니어링 <span class="up">+19.37%</span>, HPSP <span class="up">+13.31%</span>, 한미반도체 <span class="up">+7.67%</span></li>
+<li><span class="lb lb-1">이유</span>그동안 낙폭이 컸던 장비주에 반발 매수가 들어왔고, 메모리 설비투자 기대가 되살아났다</li>
+</ul>
+</li>
+<li class="blk">🟢 <strong>반도체 대형주·MLCC</strong><ul>
+<li><span class="lb lb-0">종목</span>SK하이닉스 <span class="up">+6.52%</span>, 삼성전기 <span class="up">+7.03%</span>, 삼성전자 <span class="up">+4.58%</span></li>
+<li><span class="lb lb-1">이유</span>외국인이 전기·전자 업종을 집중 매수했다. 대신증권은 삼성전기 목표가 280만원을 유지했다</li>
+</ul>
+</li>
+<li class="blk">🟢 <strong>2차전지</strong><ul>
+<li><span class="lb lb-0">종목</span>에코프로비엠 <span class="up">+11.76%</span>, 에코프로 <span class="up">+9.88%</span>, 삼성SDI <span class="up">+5.26%</span></li>
+<li><span class="lb lb-1">이유</span><span class="src">추정</span> 코스닥 급반등 속에서 낙폭과대 업종으로 순환매가 들어왔다</li>
+</ul>
+</li>
+<li class="blk">🔴 <strong>항공·지주</strong><ul>
+<li><span class="lb lb-0">종목</span>한진칼 <span class="down">−17.91%</span>, 대한항공 <span class="down">−2.77%</span></li>
+<li><span class="lb lb-1">이유</span>경영권 분쟁 기대가 꺾이며 급락했다. 항공 업종은 <span class="down">−9.74%</span>로 최하위</li>
+</ul>
+</li>
+<li class="blk">🔴 <strong>바이오·의료AI·보험</strong><ul>
+<li><span class="lb lb-0">종목</span>바로팜 <span class="down">−28.41%</span>, 루닛 <span class="down">−17.52%</span>, 삼성화재 <span class="down">−5.18%</span></li>
+<li><span class="lb lb-1">이유</span>미확인 (반도체로 자금이 쏠리면서 매도가 나온 것으로 보인다)</li>
+</ul>
+</li>
+</ul>
+<div class="judge"><strong>판단</strong>: 오늘도 돈은 메모리·장비·기판 등 반도체 밸류체인으로 먼저 갈 가능성이 크다. 오후까지 강세가 이어지면 전력기기·소프트웨어로 순환매가 번지는지 확인하자.</div></section><section class="card" id="s5"><h2><span class="num">5</span>향후 주요 일정</h2><div class="tbl"><table>
+<thead>
+<tr>
+<th>날짜</th>
+<th>일정</th>
+<th>중요도</th>
+<th>관련 섹터</th>
+<th>관전 포인트</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>11/12(목)</td>
+<td>국내 옵션 만기</td>
+<td><span class="star">⭐⭐⭐</span></td>
+<td>대형주 전반</td>
+<td>장 막판 프로그램 물량, 외국인 사흘째 순매수 여부</td>
+</tr>
+<tr>
+<td>11/13(금)</td>
+<td>정부 자본시장 관련 회의 <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐⭐</span></td>
+<td>증권·지주·코스닥</td>
+<td>특정 종목 쏠림을 부르는 대책이 나오는지</td>
+</tr>
+<tr>
+<td>11/16~20</td>
+<td>앤트로픽 나스닥 상장 <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐⭐⭐⭐</span></td>
+<td>AI·반도체·데이터센터</td>
+<td>공모가 수준과 상장 첫날 주가</td>
+</tr>
+<tr>
+<td>11/19(목)</td>
+<td>대학수학능력시험, 국내 개장 시간 변경 <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐</span></td>
+<td>전 시장</td>
+<td>개장·마감 시각 확인</td>
+</tr>
+<tr>
+<td>11월 하순</td>
+<td>엔비디아 3분기 실적 <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐⭐⭐⭐</span></td>
+<td>반도체·HBM</td>
+<td>가이던스, CEO 이슈 대응</td>
+</tr>
+<tr>
+<td>11/21(토)</td>
+<td>11월 1~20일 수출 <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐⭐</span></td>
+<td>반도체·자동차</td>
+<td>반도체 수출 증가율</td>
+</tr>
+<tr>
+<td>11/26(목)</td>
+<td>한국은행 금통위 <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐⭐⭐</span></td>
+<td>금융·건설</td>
+<td>원화·금리 경로</td>
+</tr>
+<tr>
+<td>12월 초</td>
+<td>미 FOMC <span class="src">예정·확인 필요</span></td>
+<td><span class="star">⭐⭐⭐⭐⭐</span></td>
+<td>전 시장</td>
+<td>0.25%p 인상인지 0.5%p 인상인지</td>
+</tr>
+</tbody>
+</table></div></section><section class="card" id="s6"><h2><span class="num">6</span>선취매 관찰 후보 (투자 권유 아님 — 관찰용)</h2><div class="tbl"><table>
+<thead>
+<tr>
+<th>종목</th>
+<th>연결 이벤트(날짜)</th>
+<th>근거(데이터·뉴스)</th>
+<th>리스크 / 무효화 조건</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SK하이닉스</td>
+<td>엔비디아 실적 (11월 하순·확인 필요)</td>
+<td>마이크론 <span class="up">+11.89%</span>, 외국인 전기·전자 집중 매수</td>
+<td>코스피 5,500p에서 막히고 외국인이 순매도로 돌아서면 무효</td>
+</tr>
+<tr>
+<td>삼성전기</td>
+<td>앤트로픽 상장 (11/16~20·확인 필요)</td>
+<td>기판·MLCC 테마 강세, 대신증권 목표가 유지</td>
+<td>한 달 <span class="down">−45%</span> 급락 이후라 변동성이 크다. 전일 저점을 깨면 무효</td>
+</tr>
+<tr>
+<td>원익IPS</td>
+<td>메모리 설비투자 확대</td>
+<td>장비 테마 <span class="up">+9.65%</span>, 이틀 급반등</td>
+<td>코스닥이 이틀 안에 추가 강세를 보이지 못하고 양봉이 깨지면 무효</td>
+</tr>
+<tr>
+<td>이수페타시스</td>
+<td>AI 서버 기판 수요</td>
+<td>반도체 기판 테마 <span class="up">+16.52%</span>로 1위</td>
+<td>기판주가 이미 급등했으므로 추격 매수 대신 눌림을 확인</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p>반등 폭은 크지만 아직 20일선 아래에 있는 '기술적 반등' 구간이다. 5,500p 돌파와 외국인 순매수 지속을 확인한 뒤 비중을 늘린다.</p>
+</blockquote></section>
+<div class="foot">투자 판단의 참고 자료이며 투자 권유가 아닙니다.</div>
+</div></body></html>
