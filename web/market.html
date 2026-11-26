@@ -258,6 +258,20 @@ tr.det td{background:var(--soft);padding:8px 10px;text-align:left;border-radius:
 .fp.p1.neg{background:var(--soft);background:color-mix(in srgb,var(--dn) 13%,var(--card))}
 .flow.dim .fp:not(.hl){opacity:.28}
 .fp.hl{box-shadow:inset 0 0 0 1.5px var(--fg)}
+details.memblk{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+details.memblk summary{flex-wrap:wrap}
+details.memblk .gsum{font-size:12.5px;font-weight:400;color:var(--mu)}
+.memg{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.memc{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--card)}
+.memc.sel{box-shadow:inset 0 0 0 1.5px var(--fg)}
+.memc .mh{font:inherit;display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;padding:0 0 6px;margin-bottom:4px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--fg);cursor:pointer;text-align:left}
+.memc .mh .nm{font-size:13.5px;font-weight:800}
+.memc .mh .v{font-size:11.5px;flex:none;font-variant-numeric:tabular-nums}
+.memc ul{list-style:none;margin:0;padding:0}
+.memc li{display:grid;grid-template-columns:1fr 54px 48px;gap:4px;font-size:13px;line-height:1.75;font-variant-numeric:tabular-nums}
+.memc li span:not(.sn){text-align:right}
+.memc li .sn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.memc li .r1{font-size:11.5px}
 #hmFlowSum{margin-top:8px;display:flex;flex-direction:column;gap:6px}
 #hmFlowSum .fsl{font-size:15px;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:14px;row-gap:4px}
 #hmFlowSum .fsl .k{font-weight:800;display:inline-flex;align-items:center;gap:4px}
@@ -417,6 +431,9 @@ textarea{width:100%;min-height:64px;font:inherit;border:1px solid var(--line);bo
     <div id="hmFlowSum"></div>
   </div>
   <div class="statrow" id="hmStats"></div>
+  <details class="interp memblk" id="memBlk"><summary>기준 섹터별 종목 리스트 <span class="gsum" id="memSum"></span></summary>
+    <div class="memg" id="memGrid"></div>
+  </details>
 </section>
 
 <div class="newsbar">
@@ -663,8 +680,25 @@ function renderHM() {
     }
   });
   $("hm").innerHTML = h + "</tbody>";
+  renderMem(idx);
   $("hm").querySelectorAll("tr.row").forEach(tr => tr.onclick = () => { const n = tr.dataset.s; openSec = openSec === n ? null : n; flowPin = openSec; selectSector(n, false); renderHM(); flowHL(flowPin); });
 }
+
+/* ---------- 기준 섹터별 종목 리스트 (히트맵과 같은 순서) ---------- */
+function renderMem(idx) {
+  const nAll = H.reduce((a, s) => a + s.mem.length, 0);
+  $("memSum").textContent = `${H.length}개 섹터 · ${nAll}종목 · 히트맵과 같은 순서 · 종목 옆 숫자 = 5일 / 1일 등락`;
+  $("memGrid").innerHTML = idx.map(i => {
+    const s = H[i];
+    return `<div class="memc${selSec === s.n ? " sel" : ""}"><button type="button" class="mh" data-s="${esc(s.n)}"><span class="nm">${esc(s.n)}</span><span class="v ${cls(s.rel5)}">5일 시장比 ${sgn(s.rel5)}%p</span></button>` +
+      `<ul>${s.mem.map(m => `<li><span class="sn">${esc(m.n)}</span><span class="${cls(m.r5)}">${m.r5 == null ? "–" : sgn(m.r5) + "%"}</span><span class="r1 ${cls(m.r1)}">${m.r1 == null ? "–" : sgn(m.r1) + "%"}</span></li>`).join("")}</ul></div>`;
+  }).join("");
+}
+$("memGrid").onclick = e => {
+  const b = e.target.closest(".mh"); if (!b) return;
+  const n = b.dataset.s; openSec = n; flowPin = n; selectSector(n, false); renderHM(); flowHL(n);
+  document.querySelector(`#hm tr.row[data-s="${CSS.escape(n)}"]`)?.scrollIntoView({behavior: "smooth", block: "center"});
+};
 
 /* ---------- 날짜별 1·2위 섹터 흐름 (히트맵 아래) ---------- */
 const top2 = hd.map((_, j) => H.map((s, i) => [s.d[j], i]).filter(x => x[0] != null).sort((a, b) => b[0] - a[0]).slice(0, 2));
