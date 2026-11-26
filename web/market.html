@@ -258,8 +258,16 @@ tr.det td{background:var(--soft);padding:8px 10px;text-align:left;border-radius:
 .fp.p1.neg{background:var(--soft);background:color-mix(in srgb,var(--dn) 13%,var(--card))}
 .flow.dim .fp:not(.hl){opacity:.28}
 .fp.hl{box-shadow:inset 0 0 0 1.5px var(--fg)}
-#hmFlowSum{margin-top:6px}
-#hmFlowSum button{font:inherit;font-size:12px;border:0;background:none;padding:0;color:var(--fg);font-weight:700;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+#hmFlowSum{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+#hmFlowSum .fsl{font-size:15px;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:14px;row-gap:4px}
+#hmFlowSum .fsl .k{font-weight:800;display:inline-flex;align-items:center;gap:4px}
+#hmFlowSum .fsl .it{white-space:nowrap}
+#hmFlowSum .fsl .mu{font-size:13.5px}
+#hmFlowSum .ii{position:relative;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--mu);color:var(--mu);font-size:10.5px;font-weight:700;font-style:italic;cursor:help;flex:none}
+#hmFlowSum .ii::after{content:attr(data-tip);display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:20;width:max-content;max-width:min(300px,80vw);white-space:normal;
+  padding:8px 10px;border-radius:8px;background:var(--fg);color:var(--bg);font-size:12.5px;line-height:1.5;font-weight:400;font-style:normal;text-align:left}
+#hmFlowSum .ii:hover::after,#hmFlowSum .ii:focus::after,#hmFlowSum .ii.open::after{display:block}
+#hmFlowSum button{font:inherit;border:0;background:none;padding:0;color:var(--fg);font-weight:700;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 @media (max-width:700px){
   .flow{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px}
 }
@@ -406,7 +414,7 @@ textarea{width:100%;min-height:64px;font:inherit;border:1px solid var(--line);bo
   <div class="flowbox">
     <div class="flowh"><b>날짜별 1·2위 섹터</b> <span class="small">위 칸 1위 · 아래 칸 2위 · <b class="accc">진한 화살표</b> = 전날 1·2위 섹터가 다시 들어옴 · 섹터를 누르면 같은 섹터만 표시</span></div>
     <div class="flow" id="hmFlow"></div>
-    <div class="small" id="hmFlowSum"></div>
+    <div id="hmFlowSum"></div>
   </div>
   <div class="statrow" id="hmStats"></div>
 </section>
@@ -621,8 +629,6 @@ const adrx = D.adr ? `<div class="ex adrw" style="background:var(--soft)"><div s
   <div class="small">ADR = 20일 상승 종목 수 ÷ 하락 종목 수 × 100. 칸 경계는 11년 기록을 3등분(지수 20일 등락 · ADR 20일 변화). 칸에 마우스를 올리면 그 기간 모습과 다음 주 섹터 순환 정도</div></div>
   ${adrMap("KOSPI", D.adr.KOSPI)}${adrMap("KOSDAQ", D.adr.KOSDAQ)}</div>` : "";
 const g3x = adrx + `<div class="ex"><div class="h">거래대금 상위 (${md(D.asof)}, 전체 ${D.tvsum}조)</div><div class="lst">${tt.map(x => `<span>${esc(x.n)} ${x.tv}조 <span class="${cls(x.ret)}">${sgn(x.ret)}%</span></span>`).join("")}</div></div>
-  <div class="ex"><div class="h">다음 차례 후보 — 20일 상대강도는 위, 최근 5일은 쉼</div><div class="lst">${G3.next.map(n => { const s = G3.heat.find(h => h.n === n); return `<span>${esc(short(n))} <span class="mu">20일 ${sgn(s.rel20)}%p · 5일 ${sgn(s.rel5)}%p</span></span>`; }).join("")}</div>
-  <div class="small" style="margin-top:4px">순환 장세일 때만 의미 — 주도 집중 장세면 추격 대상이 아님</div></div>
   <div class="ex"><div class="h">최근 10일 일간 1위 섹터</div><div class="lst">${G3.tops.map((n, i) => `<span>${esc(short(n))}</span>`).join(" → ")}</div></div>`;
 const panels = [
   {g: G1, t: "계기 1 · 호재와 악재, 어디에 민감한가", q: "→ 진입·비중", x: g1x},
@@ -687,8 +693,12 @@ function renderFlow() {
   const cnt = new Map();
   top2.forEach(t => t.forEach(x => cnt.set(x[1], (cnt.get(x[1]) || 0) + 1)));
   const freq = [...cnt].filter(e => e[1] >= 2).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  $("hmFlowSum").innerHTML = (freq.length ? `자주 들어온 섹터: ${freq.map(([i, c]) => `<button type="button" data-s="${esc(H[i].n)}">${esc(short(H[i].n))}</button> ${c}번`).join(" · ")} · ` : "") +
-    `${hd.length}일 중 1·2위에 오른 섹터 ${cnt.size}개 · 전날 섹터가 이어진 날 ${keepN}번`;
+  const nx = (G3.next || []).map(n => [n, H.find(h => h.n === n)]).filter(x => x[1]);
+  const nxTip = `20일 상대강도는 위인데 최근 5일은 쉰 섹터. 순환 장세일 때만 의미 — 주도 집중 장세면 추격 대상이 아님. 지금 계기 3 판정: ${G3.verdict}`;
+  $("hmFlowSum").innerHTML =
+    `<div class="fsl"><span class="k">자주 들어온 섹터</span>${freq.length ? freq.map(([i, c]) => `<span class="it"><button type="button" data-s="${esc(H[i].n)}">${esc(short(H[i].n))}</button> <span class="mu">${c}번</span></span>`).join("") : '<span class="mu">없음</span>'}</div>` +
+    `<div class="fsl"><span class="k">다음 차례 후보<span class="ii" tabindex="0" data-tip="${esc(nxTip)}">i</span></span>${nx.length ? nx.map(([n, s]) => `<span class="it"><button type="button" data-s="${esc(n)}">${esc(short(n))}</button> <span class="mu">20일 <span class="${cls(s.rel20)}">${sgn(s.rel20)}%p</span> · 5일 <span class="${cls(s.rel5)}">${sgn(s.rel5)}%p</span></span></span>`).join("") : '<span class="mu">없음</span>'}</div>` +
+    `<div class="small">${hd.length}일 중 1·2위에 오른 섹터 ${cnt.size}개 · 전날 섹터가 이어진 날 ${keepN}번</div>`;
   const f = $("hmFlow");
   f.onmouseover = e => { const p = e.target.closest(".fp"); if (p) flowHL(p.dataset.s); };
   f.onmouseleave = () => flowHL(flowPin);
@@ -700,7 +710,7 @@ function renderFlow() {
     if (flowPin) selectSector(n, false);
   };
   f.onclick = pick;
-  $("hmFlowSum").onclick = pick;
+  $("hmFlowSum").onclick = e => { const t = e.target.closest(".ii"); if (t) { t.classList.toggle("open"); return; } pick(e); };
   $("hmFlowSum").onmouseover = e => { const b = e.target.closest("[data-s]"); if (b) flowHL(b.dataset.s); };
   $("hmFlowSum").onmouseleave = () => flowHL(flowPin);
   f.scrollLeft = f.scrollWidth;                          // 휴대폰(한 줄)에선 최근 날짜부터 보이게
