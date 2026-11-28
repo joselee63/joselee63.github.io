@@ -68,7 +68,7 @@ WEB_DIR   = os.path.join(ROOT, "web")               # 페이지 원본(index.htm
 KST       = dt.timezone(dt.timedelta(hours=9))
 MKT_TZ    = ZoneInfo(MK["tz"])                      # '오늘이 거래일인지' 판단할 때 쓰는 그 시장의 날짜
 
-DISPLAY_BARS = 150                    # 차트에 보여줄 거래일 수 (약 7개월)
+DISPLAY_BARS = 250                    # 차트에 보여줄 거래일 수 (약 1년)
 MA_LIST      = [5, 20, 60, 120]       # 이동평균. Finviz처럼 보려면 [20, 50, 200]
 TREND_LONG   = dict(lookback=120, recent=5, min_span=20)   # 장기 추세선 (실선)
 TREND_SHORT  = dict(lookback=45,  recent=3, min_span=8)    # 단기 추세선 (점선)
